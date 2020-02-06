@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import ctypes
+import sys
 
 from pyignite.constants import *
 from .base import IgniteDataType
@@ -48,13 +49,20 @@ class Primitive(IgniteDataType):
     def parse(cls, client: 'Client'):
         return cls.c_type, client.recv(ctypes.sizeof(cls.c_type))
 
-    @staticmethod
-    def to_python(ctype_object, *args, **kwargs):
+    @classmethod
+    def to_python(cls, ctype_object, *args, **kwargs):
         return ctype_object
 
     @classmethod
     def from_python(cls, value):
-        return bytes(cls.c_type(value))
+        return Primitive.fix_endianness(bytes(cls.c_type(value)))
+
+    @staticmethod
+    def fix_endianness(buf):
+        if len(buf) > 1 and sys.byteorder != PROTOCOL_BYTE_ORDER:
+            buf = buf[::-1]
+
+        return buf
 
 
 class Byte(Primitive):
@@ -122,4 +130,8 @@ class Char(Primitive):
 class Bool(Primitive):
     _type_name = NAME_BOOLEAN
     _type_id = TYPE_BOOLEAN
-    c_type = ctypes.c_bool
+    c_type = ctypes.c_byte  # Use c_byte because c_bool throws endianness conversion error on BE systems.
+
+    @classmethod
+    def to_python(cls, ctype_object, *args, **kwargs):
+        return ctype_object != 0

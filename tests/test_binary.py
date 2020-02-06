@@ -225,7 +225,7 @@ def test_nested_binary_objects(client):
 
 def test_add_schema_to_binary_object(client):
 
-    migrate_cache = client.create_cache('migrate_binary')
+    migrate_cache = client.get_or_create_cache('migrate_binary')
 
     class MyBinaryType(
         metaclass=GenericObjectMeta,

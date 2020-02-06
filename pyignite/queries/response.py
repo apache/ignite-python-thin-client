@@ -179,7 +179,7 @@ class SQLResponse(Response):
         )
         fields += body_class._fields_ + [
             ('data', data_class),
-            ('more', ctypes.c_bool),
+            ('more', ctypes.c_byte),
         ]
 
     def _create_parse_result(self, conn: Connection, header_class, fields: list, buffer: bytearray):
