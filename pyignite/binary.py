@@ -165,7 +165,7 @@ class GenericObjectMeta(GenericObjectPropsMeta):
                 + len(field_buffer)
             )
             header.length = header.schema_offset + ctypes.sizeof(schema_class)
-            header.hash_code = hashcode(field_buffer + bytes(schema))
+            header.hash_code = hashcode(field_buffer)
 
             # reuse the results
             self._buffer = bytes(header) + field_buffer + bytes(schema)

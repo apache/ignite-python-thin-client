@@ -113,7 +113,7 @@ def hashcode(string: Union[str, bytes]) -> int:
     :param string: UTF-8-encoded string identifier of binary buffer,
     :return: hash code.
     """
-    result = 0
+    result = 1 if isinstance(string, (bytes, bytearray)) else 0
     for char in string:
         try:
             char = ord(char)
