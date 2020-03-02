@@ -65,6 +65,9 @@ from pyignite.utils import unsigned
 
         # array of bool
         ([True, False, True], None),
+        ([True, False], BoolArrayObject),
+        ([False, True], BoolArrayObject),
+        ([True, False, True, False], BoolArrayObject),
 
         # string
         ('Little Mary had a lamb', None),
@@ -139,6 +142,10 @@ def test_put_get_data(client, cache, value, value_hint):
     result = cache_get(conn, cache, 'my_key')
     assert result.status == 0
     assert result.value == value
+
+    if isinstance(result.value, list):
+        for res, val in zip(result.value, value):
+            assert type(res) == type(val)
 
 
 @pytest.mark.parametrize(

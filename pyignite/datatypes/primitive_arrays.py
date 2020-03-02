@@ -297,3 +297,10 @@ class BoolArrayObject(PrimitiveArrayObject):
     _type_id = TYPE_BOOLEAN_ARR
     primitive_type = Bool
     type_code = TC_BOOL_ARRAY
+
+    @classmethod
+    def to_python(cls, ctype_object, *args, **kwargs):
+        result = []
+        for i in range(ctype_object.length):
+            result.append(ctype_object.data[i] != 0)
+        return result
