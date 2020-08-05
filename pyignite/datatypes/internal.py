@@ -17,7 +17,7 @@ from collections import OrderedDict
 import ctypes
 import decimal
 from datetime import date, datetime, timedelta
-from typing import Any, Tuple, Union
+from typing import Any, Tuple, Union, Callable
 import uuid
 
 import attr
@@ -111,6 +111,20 @@ def tc_map(key: bytes, _memo_map: dict = {}):
     return _memo_map[key]
 
 
+class Conditional:
+
+    def __init__(self, predicate1: Callable[[any], bool], predicate2: Callable[[any], bool], var1, var2):
+        self.predicate1 = predicate1
+        self.predicate2 = predicate2
+        self.var1 = var1
+        self.var2 = var2
+
+    def parse(self, client: 'Client', context):
+        return self.var1.parse(client) if self.predicate1(context) else self.var2.parse(client)
+
+    def to_python(self, ctype_object, context, *args, **kwargs):
+        return self.var1.to_python(ctype_object, *args, **kwargs) if self.predicate2(context) else self.var2.to_python(ctype_object, *args, **kwargs)
+
 @attr.s
 class StructArray:
     """ `counter_type` counter, followed by count*following structure. """
@@ -193,12 +207,16 @@ class Struct:
     ) -> Tuple[ctypes.BigEndianStructure, bytes]:
         buffer = b''
         fields = []
+        values = {}
 
         for name, c_type in self.fields:
-            c_type, buffer_fragment = c_type.parse(client)
+            is_cond = isinstance(c_type, Conditional)
+            c_type, buffer_fragment = c_type.parse(client, values) if is_cond else c_type.parse(client)
             buffer += buffer_fragment
 
             fields.append((name, c_type))
+
+            values[name] = buffer_fragment
 
         data_class = type(
             'Struct',
@@ -216,7 +234,12 @@ class Struct:
     ) -> Union[dict, OrderedDict]:
         result = self.dict_type()
         for name, c_type in self.fields:
+            is_cond = isinstance(c_type, Conditional)
             result[name] = c_type.to_python(
+                getattr(ctype_object, name),
+                result,
+                *args, **kwargs
+            ) if is_cond else c_type.to_python(
                 getattr(ctype_object, name),
                 *args, **kwargs
             )

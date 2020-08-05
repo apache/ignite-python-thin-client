@@ -282,7 +282,8 @@ class Cache:
                 # calculate the number of partitions
                 parts = sum(
                     [len(p) for _, p in self.affinity['node_mapping'].items()]
-                )
+                ) if 'node_mapping' in self.affinity else 0
+
                 self.affinity['number_of_partitions'] = parts
             else:
                 # get number of partitions
