@@ -304,3 +304,54 @@ def test_complex_object_names(client):
     obj = cache.get(key)
     assert obj.type_name == type_name, 'Complex type name mismatch'
     assert obj.field == data, 'Complex object data failure'
+
+
+def test_complex_object_hash(client):
+    """
+    Test that Python client correctly calculates hash of the binary
+    object that contains negative bytes.
+    """
+    class Internal(
+        metaclass=GenericObjectMeta,
+        type_name='Internal',
+        schema=OrderedDict([
+            ('id', IntObject),
+            ('str', String),
+        ])
+    ):
+        pass
+
+    class TestObject(
+        metaclass=GenericObjectMeta,
+        type_name='TestObject',
+        schema=OrderedDict([
+            ('id', IntObject),
+            ('str', String),
+            ('internal', BinaryObject),
+        ])
+    ):
+        pass
+
+    obj_ascii = TestObject()
+    obj_ascii.id = 1
+    obj_ascii.str = 'test_string'
+
+    obj_ascii.internal = Internal()
+    obj_ascii.internal.id = 2
+    obj_ascii.internal.str = 'lorem ipsum'
+
+    hash_ascii = BinaryObject.hashcode(obj_ascii, client=client)
+
+    assert hash_ascii == -1314567146, 'Invalid hashcode value for object with ASCII strings'
+
+    obj_utf8 = TestObject()
+    obj_utf8.id = 1
+    obj_utf8.str = 'юникод'
+
+    obj_utf8.internal = Internal()
+    obj_utf8.internal.id = 2
+    obj_utf8.internal.str = 'ユニコード'
+
+    hash_utf8 = BinaryObject.hashcode(obj_utf8, client=client)
+
+    assert hash_utf8 == -1945378474, 'Invalid hashcode value for object with UTF-8 strings'
