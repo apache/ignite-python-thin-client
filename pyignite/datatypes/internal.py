@@ -479,7 +479,10 @@ class AnyDataArray(AnyDataObject):
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
         result = []
-        for i in range(ctype_object.length):
+        length = getattr(ctype_object, "length", None)
+        if length is None:
+            return None
+        for i in range(length):
             result.append(
                 super().to_python(
                     getattr(ctype_object, 'element_{}'.format(i)),

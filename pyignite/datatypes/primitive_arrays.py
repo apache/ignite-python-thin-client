@@ -17,6 +17,7 @@ import ctypes
 from typing import Any
 
 from pyignite.constants import *
+from . import Null
 from .base import IgniteDataType
 from .primitive import *
 from .type_codes import *
@@ -61,8 +62,13 @@ class PrimitiveArray(IgniteDataType):
 
     @classmethod
     def parse(cls, client: 'Client'):
+        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+
+        if tc_type == TC_NULL:
+            return Null.build_c_type(), tc_type
+
         header_class = cls.build_header_class()
-        buffer = client.recv(ctypes.sizeof(header_class))
+        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
         header = header_class.from_buffer_copy(buffer)
         final_class = type(
             cls.__name__,
@@ -82,12 +88,18 @@ class PrimitiveArray(IgniteDataType):
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
         result = []
-        for i in range(ctype_object.length):
+        length = getattr(ctype_object, "length", None)
+        if length is None:
+            return None
+        for i in range(length):
             result.append(ctype_object.data[i])
         return result
 
     @classmethod
     def from_python(cls, value):
+        if value is None:
+            return Null.from_python()
+
         header_class = cls.build_header_class()
         header = header_class()
         if hasattr(header, 'type_code'):
@@ -112,7 +124,10 @@ class ByteArray(PrimitiveArray):
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
-        return bytearray(ctype_object.data)
+        data = getattr(ctype_object, "data", None)
+        if data is None:
+            return None
+        return bytearray(data)
 
     @classmethod
     def from_python(cls, value):
@@ -210,6 +225,9 @@ class ByteArrayObject(PrimitiveArrayObject):
 
     @classmethod
     def from_python(cls, value):
+        if value is None:
+            return Null.from_python()
+
         header_class = cls.build_header_class()
         header = header_class()
         header.type_code = int.from_bytes(
@@ -282,6 +300,8 @@ class CharArrayObject(PrimitiveArrayObject):
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
         values = super().to_python(ctype_object, *args, **kwargs)
+        if values is None:
+            return None
         return [
             v.to_bytes(
                 ctypes.sizeof(cls.primitive_type.c_type),
@@ -302,7 +322,10 @@ class BoolArrayObject(PrimitiveArrayObject):
     def to_python(cls, ctype_object, *args, **kwargs):
         if not ctype_object:
             return None
-        result = [False] * ctype_object.length
-        for i in range(ctype_object.length):
+        length = getattr(ctype_object, "length", None)
+        if length is None:
+            return None
+        result = [False] * length
+        for i in range(length):
             result[i] = ctype_object.data[i] != 0
         return result
