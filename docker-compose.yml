@@ -1,0 +1,19 @@
+services:
+  ignite:
+    image: apacheignite/ignite:2.9.0
+    ports:
+      - 10800:10800
+    restart: always
+    network_mode: host
+
+  ignite-ssl:
+    image: apacheignite/ignite:2.9.0
+    ports:
+      - 10800:10800
+    restart: always
+    network_mode: host
+    volumes:
+    - ./tests/config:/config
+    environment:
+      CONFIG_URI: /config/ssl.xml
+      PYTHON_TEST_CONFIG_PATH: /config

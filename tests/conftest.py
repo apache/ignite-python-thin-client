@@ -98,6 +98,18 @@ def cache(client):
     cache_destroy(client, cache_name)
 
 
+@pytest.fixture
+def examples(request):
+    return request.config.getoption("--examples")
+
+
+@pytest.fixture(autouse=True)
+def run_examples(request, examples):
+    if request.node.get_closest_marker('examples'):
+        if not examples:
+            pytest.skip('skipped examples: --examples is not passed')
+
+
 def pytest_addoption(parser):
     parser.addoption(
         '--ignite-host',
@@ -225,3 +237,9 @@ def pytest_generate_tests(metafunc):
             if type(param) is not list:
                 param = [param]
             metafunc.parametrize(param_name, param, scope='session')
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "examples: mark test to run only if --examples are set"
+    )
