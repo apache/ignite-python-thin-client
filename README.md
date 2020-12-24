@@ -3,7 +3,7 @@ Apache Ignite thin (binary protocol) client, written in Python 3.
 
 ## Prerequisites
 
-- Python 3.4 or above (3.6 is tested),
+- Python 3.4 or above (3.6, 3.7 and 3.8 are tested),
 - Access to Apache Ignite node, local or remote. The current thin client
   version was tested on Apache Ignite 2.7.0 (binary client protocol 1.2.0).
 
@@ -19,8 +19,7 @@ $ pip install pyignite
 If you want to run tests, examples or build documentation, clone
 the whole repository:
 ```
-$ git clone git@github.com:apache/ignite.git
-$ cd ignite/modules/platforms/python
+$ git clone git@github.com:apache/ignite-python-thin-client.git
 $ pip install -e .
 ```
 
@@ -64,12 +63,32 @@ This code implies that it is run in the environment with `pyignite` package
 installed, and Apache Ignite node is running on localhost:10800.
 
 ## Testing
-Run
+*NB!* All tests require Apache Ignite node running on localhost:10800. For the convenience, `docker-compose.yml` is present.
+So installing `docker` and `docker-compose` is recommended. Also, it is recommended installing `pyignite` in development
+mode. You can do that using following command:
 ```
-$ cd ignite/modules/platforms/python
-$ python setup.py pytest
+$ pip install -e .
+```
+### Run without ssl
+```
+$ docker-compose down && docker-compose up -d ignite
+$ pytest
+```
+### Run with examples
+```
+$ docker-compose down && docker-compose up -d ignite
+$ pytest --examples
+```
+### Run with ssl and not encrypted key
+```
+$ docker-compose down && docker-compose up -d ignite
+$ pytest --use-ssl=True --ssl-certfile=./tests/config/ssl/client_full.pem
+```
+### Run with ssl and password-protected key
+```
+$ docker-compose down && docker-compose up -d ignite
+$ pytest --use-ssl=True --ssl-certfile=./tests/config/ssl/client_with_pass_full.pem --ssl-keyfile-password=654321
 ```
 
-*NB!* All tests require Apache Ignite node running on localhost:10800.
 If you need to change the connection parameters, see the documentation on
 [testing](https://apache-ignite-binary-protocol-client.readthedocs.io/en/latest/readme.html#testing).
