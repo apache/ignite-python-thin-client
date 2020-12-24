@@ -20,29 +20,15 @@ services:
 env:
   COMPOSE_VERSION: 1.27.4
 
-_install-tox: &install-tox
-  before_install:
-    - curl -L https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
-    - chmod +x docker-compose
-    - sudo mv docker-compose /usr/local/bin
-  install: pip install tox
+before_install:
+ - curl -L https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
+ - chmod +x docker-compose
+ - sudo mv docker-compose /usr/local/bin
 
-matrix:
-  include:
-    - language: python
-      python: 3.6.12
-      <<: *install-tox
-      script:
-        - tox -e py36-no-ssl,py36-ssl,py36-ssl-password
-
-    - language: python
-      python: 3.7.9
-      <<: *install-tox
-      script:
-        - tox -e py37-no-ssl,py37-ssl,py37-ssl-password
-
-    - language: python
-      python: 3.8.5
-      <<: *install-tox
-      script:
-        - tox -e py38-no-ssl,py38-ssl,py38-ssl-password
+language: python
+python:
+  - "3.6"
+  - "3.7"
+  - "3.8"
+install: pip install tox-travis
+script: tox
