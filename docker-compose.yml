@@ -15,14 +15,14 @@
 
 services:
   ignite:
-    image: apacheignite/ignite:2.9.0
+    image: apacheignite/ignite:latest
     ports:
       - 10800:10800
     restart: always
     network_mode: host
 
   ignite-ssl:
-    image: apacheignite/ignite:2.9.0
+    image: apacheignite/ignite:latest
     ports:
       - 10800:10800
     restart: always
