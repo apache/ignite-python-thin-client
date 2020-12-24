@@ -19,17 +19,33 @@ services:
   - docker
 
 env:
-  COMPOSE_VERSION: 1.4.1
+  COMPOSE_VERSION: 1.27.4
 
 before_install:
  - curl -L https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
  - chmod +x docker-compose
  - sudo mv docker-compose /usr/local/bin
 
-language: python
-python:
-  - "3.6"
-  - "3.7"
-install: pip install tox-travis
-script: tox
 
+_install-tox: &install-tox
+  install: pip install tox
+
+matrix:
+  include:
+    - language: python
+      python: 3.6.12
+      <<: *install-tox
+      script:
+        - tox -e py36
+
+    - language: python
+      python: 3.7.9
+      <<: *install-tox
+      script:
+        - tox -e py37
+
+    - language: python
+      python: 3.8.5
+      <<: *install-tox
+      script:
+        - tox -e linter,codestyle,py38
