@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 sudo: required
 services:
   - docker
@@ -21,13 +20,11 @@ services:
 env:
   COMPOSE_VERSION: 1.27.4
 
-before_install:
- - curl -L https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
- - chmod +x docker-compose
- - sudo mv docker-compose /usr/local/bin
-
-
 _install-tox: &install-tox
+  before_install:
+    - curl -L https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
+    - chmod +x docker-compose
+    - sudo mv docker-compose /usr/local/bin
   install: pip install tox
 
 matrix:
@@ -36,16 +33,16 @@ matrix:
       python: 3.6.12
       <<: *install-tox
       script:
-        - tox -e py36
+        - tox -e py36-no-ssl,py36-ssl,py36-ssl-password
 
     - language: python
       python: 3.7.9
       <<: *install-tox
       script:
-        - tox -e py37
+        - tox -e py37-no-ssl,py37-ssl,py37-ssl-password
 
     - language: python
       python: 3.8.5
       <<: *install-tox
       script:
-        - tox -e linter,codestyle,py38
+        - tox -e tox -e py38-no-ssl,py38-ssl,py38-ssl-password
