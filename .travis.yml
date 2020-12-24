@@ -45,4 +45,4 @@ matrix:
       python: 3.8.5
       <<: *install-tox
       script:
-        - tox -e tox -e py38-no-ssl,py38-ssl,py38-ssl-password
+        - tox -e py38-no-ssl,py38-ssl,py38-ssl-password
