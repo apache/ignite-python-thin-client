@@ -1,6 +1,5 @@
 # these packages are used for testing
 
-pytest==6.0.1
-pytest-cov==2.10.1
-teamcity-messages==1.28
-tox==3.20.0
+pytest==3.6.1
+pytest-cov==2.5.1
+teamcity-messages==1.21
