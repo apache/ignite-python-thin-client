@@ -32,12 +32,10 @@
     </bean>
   
     <bean id="test.cfg" class="org.apache.ignite.configuration.IgniteConfiguration">
-        <property name="localHost" value="127.0.0.1"/>
         <property name="connectorConfiguration"><null/></property>
 
         <property name="clientConnectorConfiguration">
             <bean class="org.apache.ignite.configuration.ClientConnectorConfiguration">
-                <property name="host" value="127.0.0.1"/>
                 <property name="portRange" value="10"/>
                 <property name="sslEnabled" value="true"/>
                 <property name="useIgniteSslContextFactory" value="false"/>

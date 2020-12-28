@@ -39,13 +39,7 @@ def run_subprocess_35(script: str):
     ]).returncode
 
 
-@pytest.mark.skipif(
-    condition=not pytest.config.option.examples,
-    reason=(
-        'If you wish to test examples, invoke pytest with '
-        '`--examples` option.'
-    ),
-)
+@pytest.mark.examples
 def test_examples():
     for script in glob.glob1('../examples', '*.py'):
         if script not in SKIP_LIST:
