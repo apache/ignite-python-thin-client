@@ -13,20 +13,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pyignite.api import cache_create, cache_get_names
-
-
-def test_get_names(client):
-
-    conn = client.random_node
-
-    bucket_names = ['my_bucket', 'my_bucket_2', 'my_bucket_3']
-    for name in bucket_names:
-        cache_create(conn, name)
-
-    result = cache_get_names(conn)
-    assert result.status == 0
-    assert type(result.value) == list
-    assert len(result.value) >= len(bucket_names)
-    for i, name in enumerate(bucket_names):
-        assert name in result.value
+TYPE_BYTE = 1
+TYPE_SHORT = 2
+TYPE_INT = 3
+TYPE_LONG = 4
+TYPE_FLOAT = 5
+TYPE_DOUBLE = 6
+TYPE_CHAR = 7
+TYPE_BOOLEAN = 8
+TYPE_STRING = 9
+TYPE_UUID = 10
+TYPE_DATE = 11
+TYPE_BYTE_ARR = 12
+TYPE_SHORT_ARR = 13
+TYPE_INT_ARR = 14
+TYPE_LONG_ARR = 15
+TYPE_FLOAT_ARR = 16
+TYPE_DOUBLE_ARR = 17
+TYPE_CHAR_ARR = 18
+TYPE_BOOLEAN_ARR = 19
+TYPE_STRING_ARR = 20
+TYPE_UUID_ARR = 21
+TYPE_DATE_ARR = 22
+TYPE_OBJ_ARR = 23
+TYPE_COL = 24
+TYPE_MAP = 25
+TYPE_BINARY_OBJ = 27
+TYPE_ENUM = 28
+TYPE_ENUM_ARR = 29
+TYPE_DECIMAL = 30
+TYPE_DECIMAL_ARR = 31
+TYPE_CLASS = 32
+TYPE_TIMESTAMP = 33
+TYPE_TIMESTAMP_ARR = 34
+TYPE_PROXY = 35
+TYPE_TIME = 36
+TYPE_TIME_ARR = 37
+TYPE_BINARY_ENUM = 38

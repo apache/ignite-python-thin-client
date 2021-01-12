@@ -41,7 +41,9 @@ the local (class-wise) registry for Ignite Complex objects.
 """
 
 from collections import defaultdict, OrderedDict
-from typing import Iterable, Type, Union
+import random
+import re
+from typing import Dict, Iterable, List, Optional, Tuple, Type, Union
 
 from .api.binary import get_binary_type, put_binary_type
 from .api.cache_config import cache_get_names
@@ -51,15 +53,20 @@ from .connection import Connection
 from .constants import *
 from .datatypes import BinaryObject
 from .datatypes.internal import tc_map
-from .exceptions import BinaryTypeError, CacheError, SQLError
-from .utils import entity_id, schema_id, status_to_exception
+from .exceptions import (
+    BinaryTypeError, CacheError, ReconnectError, SQLError, connection_errors,
+)
+from .utils import (
+    capitalize, entity_id, schema_id, process_delimiter, select_version,
+    status_to_exception, is_iterable,
+)
 from .binary import GenericObjectMeta
 
 
 __all__ = ['Client']
 
 
-class Client(Connection):
+class Client:
     """
     This is a main `pyignite` class, that is build upon the
     :class:`~pyignite.connection.Connection`. In addition to the attributes,
@@ -72,14 +79,22 @@ class Client(Connection):
     """
 
     _registry = defaultdict(dict)
-    _compact_footer = None
+    _compact_footer: bool = None
+    _connection_args: Dict = None
+    _current_node: int = None
+    _nodes: List[Connection] = None
 
-    def _transfer_params(self, to: 'Client'):
-        super()._transfer_params(to)
-        to._registry = self._registry
-        to._compact_footer = self._compact_footer
+    # used for Complex object data class names sanitizing
+    _identifier = re.compile(r'[^0-9a-zA-Z_.+$]', re.UNICODE)
+    _ident_start = re.compile(r'^[^a-zA-Z_]+', re.UNICODE)
 
-    def __init__(self, compact_footer: bool=None, *args, **kwargs):
+    affinity_version: Optional[Tuple] = None
+    protocol_version: Optional[Tuple] = None
+
+    def __init__(
+        self, compact_footer: bool = None, partition_aware: bool = False,
+        **kwargs
+    ):
         """
         Initialize client.
 
@@ -88,9 +103,156 @@ class Client(Connection):
          Default is to use the same approach the server is using (None).
          Apache Ignite binary protocol documentation on this topic:
          https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-schema
+        :param partition_aware: (optional) try to calculate the exact data
+         placement from the key before to issue the key operation to the
+         server node:
+         https://cwiki.apache.org/confluence/display/IGNITE/IEP-23%3A+Best+Effort+Affinity+for+thin+clients
+         The feature is in experimental status, so the parameter is `False`
+         by default. This will be changed later.
         """
         self._compact_footer = compact_footer
-        super().__init__(*args, **kwargs)
+        self._connection_args = kwargs
+        self._nodes = []
+        self._current_node = 0
+        self._partition_aware = partition_aware
+        self.affinity_version = (0, 0)
+
+    def get_protocol_version(self) -> Optional[Tuple]:
+        """
+        Returns the tuple of major, minor, and revision numbers of the used
+        thin protocol version, or None, if no connection to the Ignite cluster
+        was not yet established.
+
+        This method is not a part of the public API. Unless you wish to
+        extend the `pyignite` capabilities (with additional testing, logging,
+        examining connections, et c.) you probably should not use it.
+        """
+        return self.protocol_version
+
+    @property
+    def partition_aware(self):
+        return self._partition_aware
+
+    def connect(self, *args):
+        """
+        Connect to Ignite cluster node(s).
+
+        :param args: (optional) host(s) and port(s) to connect to.
+        """
+        if len(args) == 0:
+            # no parameters − use default Ignite host and port
+            nodes = [(IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT)]
+        elif len(args) == 1 and is_iterable(args[0]):
+            # iterable of host-port pairs is given
+            nodes = args[0]
+        elif (
+            len(args) == 2
+            and isinstance(args[0], str)
+            and isinstance(args[1], int)
+        ):
+            # host and port are given
+            nodes = [args]
+        else:
+            raise ConnectionError('Connection parameters are not valid.')
+
+        # the following code is quite twisted, because the protocol version
+        # is initially unknown
+
+        # TODO: open first node in foregroung, others − in background
+        for i, node in enumerate(nodes):
+            host, port = node
+            conn = Connection(self, **self._connection_args)
+            conn.host = host
+            conn.port = port
+
+            try:
+                if (
+                    self.protocol_version is None
+                    or self.protocol_version >= (1, 4, 0)
+                ):
+                    # open connection before adding to the pool
+                    conn.connect(host, port)
+
+                    # now we have the protocol version
+                    if self.protocol_version < (1, 4, 0):
+                        # do not try to open more nodes
+                        self._current_node = i
+                    else:
+                        # take a chance to schedule the reconnection
+                        # for all the failed connections, that was probed
+                        # before this
+                        for failed_node in self._nodes[:i]:
+                            failed_node.reconnect()
+
+            except connection_errors:
+                conn._fail()
+                if (
+                    self.protocol_version
+                    and self.protocol_version >= (1, 4, 0)
+                ):
+                    # schedule the reconnection
+                    conn.reconnect()
+
+            self._nodes.append(conn)
+
+        if self.protocol_version is None:
+            raise ReconnectError('Can not connect.')
+
+    def close(self):
+        for conn in self._nodes:
+            conn.close()
+        self._nodes.clear()
+
+    @property
+    @select_version
+    def random_node(self) -> Connection:
+        """
+        Returns random usable node.
+
+        This method is not a part of the public API. Unless you wish to
+        extend the `pyignite` capabilities (with additional testing, logging,
+        examining connections, et c.) you probably should not use it.
+        """
+        try:
+            return random.choice(
+                list(n for n in self._nodes if n.alive)
+            )
+        except IndexError:
+            # cannot choose from an empty sequence
+            raise ReconnectError('Can not reconnect: out of nodes.') from None
+
+    def random_node_130(self):
+        # it actually returns the next usable node, but the name stands for
+        # the code unification reason
+        node = self._nodes[self._current_node]
+        if node.alive:
+            return node
+
+        # close current (supposedly failed) node
+        self._nodes[self._current_node].close()
+
+        # advance the node index
+        self._current_node += 1
+        if self._current_node >= len(self._nodes):
+            self._current_node = 0
+
+        # prepare the list of node indexes to try to connect to
+        seq = list(range(len(self._nodes)))
+        seq = seq[self._current_node:] + seq[:self._current_node]
+
+        for i in seq:
+            node = self._nodes[i]
+            try:
+                node.connect(node.host, node.port)
+            except connection_errors:
+                pass
+            else:
+                return node
+
+        # no nodes left
+        raise ReconnectError('Can not reconnect: out of nodes.')
+
+    random_node_120 = random_node_130
 
     @status_to_exception(BinaryTypeError)
     def get_binary_type(self, binary_type: Union[str, int]) -> dict:
@@ -135,7 +297,9 @@ class Client(Connection):
                 )
             return converted_schema
 
-        result = get_binary_type(self, binary_type)
+        conn = self.random_node
+
+        result = get_binary_type(conn, binary_type)
         if result.status != 0 or not result.value['type_exists']:
             return result
 
@@ -178,8 +342,8 @@ class Client(Connection):
 
     @status_to_exception(BinaryTypeError)
     def put_binary_type(
-        self, type_name: str, affinity_key_field: str=None,
-        is_enum=False, schema: dict=None
+        self, type_name: str, affinity_key_field: str = None,
+        is_enum=False, schema: dict = None
     ):
         """
         Registers binary type information in cluster. Do not update binary
@@ -197,11 +361,11 @@ class Client(Connection):
          Binary type with no fields is OK.
         """
         return put_binary_type(
-            self, type_name, affinity_key_field, is_enum, schema
+            self.random_node, type_name, affinity_key_field, is_enum, schema
         )
 
     @staticmethod
-    def _create_dataclass(type_name: str, schema: OrderedDict=None) -> Type:
+    def _create_dataclass(type_name: str, schema: OrderedDict = None) -> Type:
         """
         Creates default (generic) class for Ignite Complex object.
 
@@ -224,13 +388,42 @@ class Client(Connection):
             for schema in type_info['schemas']:
                 if not self._registry[type_id].get(schema_id(schema), None):
                     data_class = self._create_dataclass(
-                        type_info['type_name'],
+                        self._create_type_name(type_info['type_name']),
                         schema,
                     )
                     self._registry[type_id][schema_id(schema)] = data_class
 
+    @classmethod
+    def _create_type_name(cls, type_name: str) -> str:
+        """
+        Creates Python data class name from Ignite binary type name.
+
+        Handles all the special cases found in
+        `java.org.apache.ignite.binary.BinaryBasicNameMapper.simpleName()`.
+        Tries to adhere to PEP8 along the way.
+        """
+
+        # general sanitizing
+        type_name = cls._identifier.sub('', type_name)
+
+        # - name ending with '$' (Scala)
+        # - name + '$' + some digits (anonymous class)
+        # - '$$Lambda$' in the middle
+        type_name = process_delimiter(type_name, '$')
+
+        # .NET outer/inner class delimiter
+        type_name = process_delimiter(type_name, '+')
+
+        # Java fully qualified class name
+        type_name = process_delimiter(type_name, '.')
+
+        # start chars sanitizing
+        type_name = capitalize(cls._ident_start.sub('', type_name))
+
+        return type_name
+
     def register_binary_type(
-        self, data_class: Type, affinity_key_field: str=None,
+        self, data_class: Type, affinity_key_field: str = None,
     ):
         """
         Register the given class as a representation of a certain Complex
@@ -250,8 +443,8 @@ class Client(Connection):
         self._registry[data_class.type_id][data_class.schema_id] = data_class
 
     def query_binary_type(
-        self, binary_type: Union[int, str], schema: Union[int, dict]=None,
-        sync: bool=True
+        self, binary_type: Union[int, str], schema: Union[int, dict] = None,
+        sync: bool = True
     ):
         """
         Queries the registry of Complex object classes.
@@ -324,16 +517,16 @@ class Client(Connection):
 
         :return: list of cache names.
         """
-        return cache_get_names(self)
+        return cache_get_names(self.random_node)
 
     def sql(
-        self, query_str: str, page_size: int=1, query_args: Iterable=None,
-        schema: Union[int, str]='PUBLIC',
-        statement_type: int=0, distributed_joins: bool=False,
-        local: bool=False, replicated_only: bool=False,
-        enforce_join_order: bool=False, collocated: bool=False,
-        lazy: bool=False, include_field_names: bool=False,
-        max_rows: int=-1, timeout: int=0,
+        self, query_str: str, page_size: int = 1, query_args: Iterable = None,
+        schema: Union[int, str] = 'PUBLIC',
+        statement_type: int = 0, distributed_joins: bool = False,
+        local: bool = False, replicated_only: bool = False,
+        enforce_join_order: bool = False, collocated: bool = False,
+        lazy: bool = False, include_field_names: bool = False,
+        max_rows: int = -1, timeout: int = 0,
     ):
         """
         Runs an SQL query and returns its result.
@@ -384,7 +577,7 @@ class Client(Connection):
 
             while more:
                 inner_result = sql_fields_cursor_get_page(
-                    self, cursor, field_count
+                    conn, cursor, field_count
                 )
                 if inner_result.status != 0:
                     raise SQLError(result.message)
@@ -392,9 +585,11 @@ class Client(Connection):
                 for line in inner_result.value['data']:
                     yield line
 
+        conn = self.random_node
+
         schema = self.get_or_create_cache(schema)
         result = sql_fields(
-            self, schema.cache_id, query_str,
+            conn, schema.cache_id, query_str,
             page_size, query_args, schema.name,
             statement_type, distributed_joins, local, replicated_only,
             enforce_join_order, collocated, lazy, include_field_names,
