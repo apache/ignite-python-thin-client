@@ -112,7 +112,7 @@ def start_ignite(idx=1, debug=False):
 
     srv = subprocess.Popen(ignite_cmd, env=env, cwd=get_test_dir())
 
-    started = wait_for_condition(lambda: try_connect_client(idx), timeout=10)
+    started = wait_for_condition(lambda: try_connect_client(idx), timeout=20)
     if started:
         return srv
 
