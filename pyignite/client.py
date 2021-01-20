@@ -43,6 +43,7 @@ the local (class-wise) registry for Ignite Complex objects.
 from collections import defaultdict, OrderedDict
 import random
 import re
+from itertools import chain
 from typing import Dict, Iterable, List, Optional, Tuple, Type, Union
 
 from .api.binary import get_binary_type, put_binary_type
@@ -131,7 +132,14 @@ class Client:
 
     @property
     def partition_aware(self):
-        return self._partition_aware
+        return self._partition_aware and self.partition_awareness_supported_by_protocol
+
+    @property
+    def partition_awareness_supported_by_protocol(self):
+        # TODO: Need to re-factor this. I believe, we need separate class or
+        #  set of functions to work with protocol versions without manually
+        #  comparing versions with just some random tuples
+        return self.protocol_version is not None and self.protocol_version >= (1, 4, 0)
 
     def connect(self, *args):
         """
@@ -158,7 +166,7 @@ class Client:
         # the following code is quite twisted, because the protocol version
         # is initially unknown
 
-        # TODO: open first node in foregroung, others − in background
+        # TODO: open first node in foreground, others − in background
         for i, node in enumerate(nodes):
             host, port = node
             conn = Connection(self, **self._connection_args)
@@ -166,15 +174,12 @@ class Client:
             conn.port = port
 
             try:
-                if (
-                    self.protocol_version is None
-                    or self.protocol_version >= (1, 4, 0)
-                ):
+                if self.protocol_version is None or self.partition_aware:
                     # open connection before adding to the pool
                     conn.connect(host, port)
 
                     # now we have the protocol version
-                    if self.protocol_version < (1, 4, 0):
+                    if not self.partition_aware:
                         # do not try to open more nodes
                         self._current_node = i
                     else:
@@ -186,10 +191,7 @@ class Client:
 
             except connection_errors:
                 conn._fail()
-                if (
-                    self.protocol_version
-                    and self.protocol_version >= (1, 4, 0)
-                ):
+                if self.partition_aware:
                     # schedule the reconnection
                     conn.reconnect()
 
@@ -204,7 +206,6 @@ class Client:
         self._nodes.clear()
 
     @property
-    @select_version
     def random_node(self) -> Connection:
         """
         Returns random usable node.
@@ -213,46 +214,44 @@ class Client:
         extend the `pyignite` capabilities (with additional testing, logging,
         examining connections, et c.) you probably should not use it.
         """
-        try:
-            return random.choice(
-                list(n for n in self._nodes if n.alive)
-            )
-        except IndexError:
-            # cannot choose from an empty sequence
-            raise ReconnectError('Can not reconnect: out of nodes.') from None
-
-    def random_node_130(self):
-        # it actually returns the next usable node, but the name stands for
-        # the code unification reason
-        node = self._nodes[self._current_node]
-        if node.alive:
-            return node
-
-        # close current (supposedly failed) node
-        self._nodes[self._current_node].close()
-
-        # advance the node index
-        self._current_node += 1
-        if self._current_node >= len(self._nodes):
-            self._current_node = 0
-
-        # prepare the list of node indexes to try to connect to
-        seq = list(range(len(self._nodes)))
-        seq = seq[self._current_node:] + seq[:self._current_node]
-
-        for i in seq:
-            node = self._nodes[i]
+        if self.partition_aware:
+            # if partition awareness is used just pick a random connected node
             try:
-                node.connect(node.host, node.port)
-            except connection_errors:
-                pass
-            else:
+                return random.choice(
+                    list(n for n in self._nodes if n.alive)
+                )
+            except IndexError:
+                # cannot choose from an empty sequence
+                raise ReconnectError('Can not reconnect: out of nodes.') from None
+        else:
+            # if partition awareness is not used then just return the current
+            # node if it's alive or the next usable node if connection with the
+            # current is broken
+            node = self._nodes[self._current_node]
+            if node.alive:
                 return node
 
-        # no nodes left
-        raise ReconnectError('Can not reconnect: out of nodes.')
+            # close current (supposedly failed) node
+            self._nodes[self._current_node].close()
 
-    random_node_120 = random_node_130
+            # advance the node index
+            self._current_node += 1
+            if self._current_node >= len(self._nodes):
+                self._current_node = 0
+
+            # prepare the list of node indexes to try to connect to
+            num_nodes = len(self._nodes)
+            for i in chain(range(self._current_node, num_nodes), range(self._current_node)):
+                node = self._nodes[i]
+                try:
+                    node.connect(node.host, node.port)
+                except connection_errors:
+                    pass
+                else:
+                    return node
+
+            # no nodes left
+            raise ReconnectError('Can not reconnect: out of nodes.')
 
     @status_to_exception(BinaryTypeError)
     def get_binary_type(self, binary_type: Union[str, int]) -> dict:

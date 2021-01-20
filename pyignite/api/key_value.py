@@ -977,10 +977,7 @@ def cache_get_size(
      otherwise.
     """
     if not isinstance(peek_modes, (list, tuple)):
-        if peek_modes == 0:
-            peek_modes = []
-        else:
-            peek_modes = [peek_modes]
+        peek_modes = [peek_modes] if peek_modes else []
 
     query_struct = Query(
         OP_CACHE_GET_SIZE,
@@ -1035,10 +1032,7 @@ def cache_local_peek(
      (null if not found).
     """
     if not isinstance(peek_modes, (list, tuple)):
-        if peek_modes == 0:
-            peek_modes = []
-        else:
-            peek_modes = [peek_modes]
+        peek_modes = [peek_modes] if peek_modes else []
 
     query_struct = Query(
         OP_CACHE_LOCAL_PEEK,

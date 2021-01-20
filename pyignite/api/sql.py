@@ -416,10 +416,7 @@ def sql_fields_cursor_get_page(
             'cursor': cursor,
         },
         response_config=[
-            ('data', StructArray([
-                ('field_{}'.format(i), AnyDataObject)
-                for i in range(field_count)
-            ])),
+            ('data', StructArray([(f'field_{i}', AnyDataObject) for i in range(field_count)])),
             ('more', Bool),
         ]
     )

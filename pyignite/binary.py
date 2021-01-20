@@ -69,12 +69,10 @@ class GenericObjectProps(IgniteDataTypeProps):
     def __new__(cls, *args, **kwargs) -> Any:
         # allow all items in Binary Object schema to be populated as optional
         # arguments to `__init__()` with sensible defaults.
-        attributes = {
-            k: attr.ib(
-                type=getattr(v, 'pythonic', type(None)),
-                default=getattr(v, 'default', None),
-            ) for k, v in cls.schema.items()
-        }
+        attributes = {}
+        for k, v in cls.schema.items():
+            attributes[k] = attr.ib(type=getattr(v, 'pythonic', type(None)), default=getattr(v, 'default', None))
+
         attributes.update({'version': attr.ib(type=int, default=1)})
         cls = attr.s(cls, these=attributes)
         # skip parameters
@@ -151,10 +149,7 @@ class GenericObjectMeta(GenericObjectPropsMeta):
                 header.flags |= BinaryObject.OFFSET_ONE_BYTE
             elif max(offsets) < 65535:
                 header.flags |= BinaryObject.OFFSET_TWO_BYTES
-            schema_class = (
-                BinaryObject.schema_type(header.flags)
-                * len(offsets)
-            )
+            schema_class = BinaryObject.schema_type(header.flags) * len(offsets)
             schema = schema_class()
             if compact_footer:
                 for i, offset in enumerate(offsets):

@@ -234,7 +234,6 @@ class Cache:
 
         return result
 
-    @select_version
     def get_best_node(
         self, key: Any = None, key_hint: 'IgniteDataType' = None,
     ) -> 'Connection':
@@ -257,8 +256,6 @@ class Cache:
             if key_hint is None:
                 key_hint = AnyDataObject.map_python_type(key)
 
-            parts = -1
-
             if self.affinity['version'] < self._client.affinity_version:
                 # update partition mapping
                 while True:
@@ -280,9 +277,10 @@ class Cache:
                 del self.affinity['partition_mapping']
 
                 # calculate the number of partitions
-                parts = sum(
-                    [len(p) for _, p in self.affinity['node_mapping'].items()]
-                ) if 'node_mapping' in self.affinity else 0
+                parts = 0
+                if 'node_mapping' in self.affinity:
+                    for p in self.affinity['node_mapping'].values():
+                        parts += len(p)
 
                 self.affinity['number_of_partitions'] = parts
             else:
@@ -314,25 +312,23 @@ class Cache:
 
             # search for connection
             try:
-                node_uuid = next(
-                    u for u, p
-                    in self.affinity['node_mapping'].items()
-                    if part in p
-                )
-                best_conn = next(
-                    n for n in conn.client._nodes if n.uuid == node_uuid
-                )
-                if best_conn.alive:
-                    conn = best_conn
-            except (StopIteration, KeyError):
+                node_uuid, best_conn = None, None
+                for u, p in self.affinity['node_mapping'].items():
+                    if part in p:
+                        node_uuid = u
+                        break
+
+                if node_uuid:
+                    for n in conn.client._nodes:
+                        if n.uuid == node_uuid:
+                            best_conn = n
+                            break
+                    if best_conn and best_conn.alive:
+                        conn = best_conn
+            except KeyError:
                 pass
 
         return conn
-
-    def get_best_node_130(self, *args, **kwargs):
-        return self.client.random_node
-
-    get_best_node_120 = get_best_node_130
 
     @status_to_exception(CacheError)
     def get(self, key, key_hint: object = None) -> Any:
@@ -404,9 +400,7 @@ class Cache:
          to save. Each key or value can be an item of representable
          Python type or a tuple of (item, hint),
         """
-        return cache_put_all(
-            self.get_best_node(), self._cache_id, pairs
-        )
+        return cache_put_all(self.get_best_node(), self._cache_id, pairs)
 
     @status_to_exception(CacheError)
     def replace(

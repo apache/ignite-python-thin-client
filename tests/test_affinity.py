@@ -184,7 +184,7 @@ def test_affinity_for_generic_object(client_partition_aware):
 
 def test_affinity_for_generic_object_without_type_hints(client_partition_aware):
 
-    if client_partition_aware.protocol_version < (1, 4, 0):
+    if not client_partition_aware.partition_awareness_supported_by_protocol:
         pytest.skip(
             'Best effort affinity is not supported by the protocol {}.'.format(
                 client_partition_aware.protocol_version

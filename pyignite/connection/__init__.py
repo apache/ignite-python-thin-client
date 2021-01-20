@@ -148,7 +148,7 @@ class Connection:
         self.username = username
         self.password = password
         self._check_ssl_params(ssl_params)
-        if all([self.username, self.password, 'use_ssl' not in ssl_params]):
+        if self.username and self.password and 'use_ssl' not in ssl_params:
             ssl_params['use_ssl'] = True
         self.ssl_params = ssl_params
         self._failed = False
@@ -192,7 +192,6 @@ class Connection:
         self._failed = True
         self._in_use.release()
 
-    @select_version
     def read_response(self) -> Union[dict, OrderedDict]:
         """
         Processes server's response to the handshake request.
@@ -206,6 +205,7 @@ class Connection:
         start_class, start_buffer = response_start.parse(self)
         start = start_class.from_buffer_copy(start_buffer)
         data = response_start.to_python(start)
+        response_end = None
         if data['op_code'] == 0:
             response_end = Struct([
                 ('version_major', Short),
@@ -213,42 +213,15 @@ class Connection:
                 ('version_patch', Short),
                 ('message', String),
             ])
-        else:
+        elif self.get_protocol_version() >= (1, 4, 0):
             response_end = Struct([
                 ('node_uuid', UUIDObject),
             ])
-        end_class, end_buffer = response_end.parse(self)
-        end = end_class.from_buffer_copy(end_buffer)
-        data.update(response_end.to_python(end))
-        return data
-
-    def read_response_130(self):
-        """
-        Processes server's response to the handshake request (thin protocol
-        version 1.2.0).
-
-        :return: handshake data.
-        """
-        response_start = Struct([
-            ('length', Int),
-            ('op_code', Byte),
-        ])
-        start_class, start_buffer = response_start.parse(self)
-        start = start_class.from_buffer_copy(start_buffer)
-        data = response_start.to_python(start)
-        if data['op_code'] == 0:
-            response_end = Struct([
-                ('version_major', Short),
-                ('version_minor', Short),
-                ('version_patch', Short),
-                ('message', String),
-            ])
+        if response_end:
             end_class, end_buffer = response_end.parse(self)
             end = end_class.from_buffer_copy(end_buffer)
             data.update(response_end.to_python(end))
         return data
-
-    read_response_120 = read_response_130
 
     def connect(
         self, host: str = None, port: int = None
@@ -348,7 +321,6 @@ class Connection:
         self.host, self.port = host, port
         return hs_response
 
-    @select_version
     def reconnect(self, seq_no=0):
         """
         Tries to reconnect synchronously, then in background.
@@ -367,21 +339,13 @@ class Connection:
                 kwargs={'seq_no': seq_no + 1},
             ).start()
 
-    def reconnect_130(self):
-        """
-        Tries to reconnect synchronously.
-        """
-        self._reconnect()
-
-    reconnect_120 = reconnect_130
-
     def _reconnect(self):
         # do not reconnect if connection is already working
         # or was closed on purpose
         if not self.failed:
             return
 
-        # return connection to initial state regardles of use lock
+        # return connection to initial state regardless of use lock
         self.close(release=False)
         try:
             self._in_use.release()
