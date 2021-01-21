@@ -31,14 +31,8 @@
         <property name="clientConnectorConfiguration">
             <bean class="org.apache.ignite.configuration.ClientConnectorConfiguration">
                 <property name="host" value="127.0.0.1"/>
-                <property name="port" value="10803"/>
+                <property name="port" value="${IGNITE_CLIENT_PORT}"/>
                 <property name="portRange" value="0"/>
-            </bean>
-        </property>
-
-        <property name="gridLogger">
-            <bean class="org.apache.ignite.logger.log4j.Log4JLogger">
-              <constructor-arg type="java.lang.String" value="config/log4j-3.xml"/>
             </bean>
         </property>
     </bean>

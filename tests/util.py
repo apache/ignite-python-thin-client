@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import datetime
 import glob
 import os
 import psutil
@@ -21,9 +20,6 @@ import re
 import signal
 import subprocess
 import time
-
-from pyignite import Client
-from pyignite.exceptions import ReconnectError
 
 
 def wait_for_condition(condition, interval=0.1, timeout=10, error=None):
@@ -69,21 +65,31 @@ def get_ignite_runner():
         if os.path.exists(runner):
             return runner
 
-    raise Exception("Ignite not found.")
+    raise Exception(f"Ignite not found. IGNITE_HOME {os.getenv('IGNITE_HOME')}")
 
 
-def get_ignite_config_path(idx=1):
-    return os.path.join(get_test_dir(), "config", "ignite-config-{0}.xml".format(idx))
+def get_ignite_config_path(use_ssl=False):
+    if use_ssl:
+        file_name = "ignite-config-ssl.xml"
+    else:
+        file_name = "ignite-config.xml"
+
+    return os.path.join(get_test_dir(), "config", file_name)
 
 
-def try_connect_client(idx=1):
-    cli = Client()
-    try:
-        cli.connect('localhost', 10800 + idx)
-        cli.close()
-        return True
-    except ReconnectError:
+def check_server_started(idx=1):
+    log_file = os.path.join(get_test_dir(), "logs", f"ignite-log-{idx}.txt")
+    if not os.path.exists(log_file):
         return False
+
+    pattern = re.compile('^Topology snapshot.*')
+
+    with open(log_file) as f:
+        for line in f.readlines():
+            if pattern.match(line):
+                return True
+
+    return False
 
 
 def kill_process_tree(pid):
@@ -96,23 +102,25 @@ def kill_process_tree(pid):
         os.kill(pid, signal.SIGKILL)
 
 
-def start_ignite(idx=1, debug=False):
+def _start_ignite(idx=1, debug=False, use_ssl=False):
     clear_logs(idx)
 
     runner = get_ignite_runner()
 
     env = os.environ.copy()
+    env['IGNITE_INSTANCE_INDEX'] = str(idx)
+    env['IGNITE_CLIENT_PORT'] = str(10800 + idx)
 
     if debug:
         env["JVM_OPTS"] = "-Djava.net.preferIPv4Stack=true -Xdebug -Xnoagent -Djava.compiler=NONE " \
                           "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005 "
 
-    ignite_cmd = [runner, get_ignite_config_path(idx)]
+    ignite_cmd = [runner, get_ignite_config_path(use_ssl)]
     print("Starting Ignite server node:", ignite_cmd)
 
     srv = subprocess.Popen(ignite_cmd, env=env, cwd=get_test_dir())
 
-    started = wait_for_condition(lambda: try_connect_client(idx), timeout=20)
+    started = wait_for_condition(lambda: check_server_started(idx), timeout=30)
     if started:
         return srv
 
@@ -120,8 +128,8 @@ def start_ignite(idx=1, debug=False):
     raise Exception("Failed to start Ignite: timeout while trying to connect")
 
 
-def start_ignite_gen(idx=1):
-    srv = start_ignite(idx)
+def start_ignite_gen(idx=1, use_ssl=False):
+    srv = _start_ignite(idx, use_ssl=use_ssl)
     yield srv
     kill_process_tree(srv.pid)
 

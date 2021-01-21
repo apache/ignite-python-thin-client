@@ -19,9 +19,10 @@ import ssl
 
 import pytest
 
+from pyignite import Client
 from pyignite.constants import *
-from pyignite.api import cache_create, cache_get_names, cache_destroy
-from tests.util import *
+from pyignite.api import cache_create, cache_destroy
+from tests.util import _start_ignite, start_ignite_gen, get_request_grid_idx
 
 
 class BoolParser(argparse.Action):
@@ -65,18 +66,31 @@ class SSLVersionParser(argparse.Action):
 
 
 @pytest.fixture(scope='session', autouse=True)
-def server1():
-    yield from start_ignite_gen(1)
+def server1(request):
+    yield from start_ignite_server_gen(1, request)
 
 
 @pytest.fixture(scope='session', autouse=True)
-def server2():
-    yield from start_ignite_gen(2)
+def server2(request):
+    yield from start_ignite_server_gen(2, request)
 
 
 @pytest.fixture(scope='session', autouse=True)
-def server3():
-    yield from start_ignite_gen(3)
+def server3(request):
+    yield from start_ignite_server_gen(3, request)
+
+
+@pytest.fixture(scope='module')
+def start_ignite_server(use_ssl):
+    def start(idx=1):
+        return _start_ignite(idx, use_ssl=use_ssl)
+
+    return start
+
+
+def start_ignite_server_gen(idx, request):
+    use_ssl = request.config.getoption("--use-ssl")
+    yield from start_ignite_gen(idx, use_ssl)
 
 
 @pytest.fixture(scope='module')
@@ -126,6 +140,28 @@ def log_init():
     get_request_grid_idx()
 
 
+@pytest.fixture(scope='module')
+def start_client(use_ssl, ssl_keyfile, ssl_keyfile_password, ssl_certfile, ssl_ca_certfile, ssl_cert_reqs, ssl_ciphers,
+                 ssl_version,username, password):
+    def start(**kwargs):
+        cli_kw = kwargs.copy()
+        cli_kw.update({
+            'use_ssl': use_ssl,
+            'ssl_keyfile': ssl_keyfile,
+            'ssl_keyfile_password': ssl_keyfile_password,
+            'ssl_certfile': ssl_certfile,
+            'ssl_ca_certfile': ssl_ca_certfile,
+            'ssl_cert_reqs': ssl_cert_reqs,
+            'ssl_ciphers': ssl_ciphers,
+            'ssl_version': ssl_version,
+            'username': username,
+            'password': password
+        })
+        return Client(**cli_kw)
+
+    return start
+
+
 def client0(
     node, timeout, partition_aware, use_ssl, ssl_keyfile, ssl_keyfile_password,
     ssl_certfile, ssl_ca_certfile, ssl_cert_reqs, ssl_ciphers, ssl_version,
@@ -154,6 +190,7 @@ def client0(
     yield client
     client.close()
 
+
 @pytest.fixture
 def examples(request):
     return request.config.getoption("--examples")
@@ -164,6 +201,7 @@ def run_examples(request, examples):
     if request.node.get_closest_marker('examples'):
         if not examples:
             pytest.skip('skipped examples: --examples is not passed')
+
 
 def pytest_addoption(parser):
     parser.addoption(
