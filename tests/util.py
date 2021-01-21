@@ -65,7 +65,7 @@ def get_ignite_runner():
         if os.path.exists(runner):
             return runner
 
-    raise Exception("Ignite not found.")
+    raise Exception(f"Ignite not found. IGNITE_HOME {os.getenv('IGNITE_HOME')}")
 
 
 def get_ignite_config_path(use_ssl=False):
