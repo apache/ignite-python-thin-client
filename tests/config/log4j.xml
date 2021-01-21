@@ -19,10 +19,10 @@
 
 <Configuration>
     <Appenders>
-        <Console name="CONSOLE" target="SYSTEM_OUT" level="debug">
+        <Console name="CONSOLE" target="SYSTEM_OUT">
             <PatternLayout pattern="[%d{ISO8601}][%-5p][%t][%c{1}] %m%n"/>
         </Console>
-        <RollingFile name="FILE" level="debug" append="true"
+        <RollingFile name="FILE" append="true"
                      filePattern="logs/ignite-log-${env:IGNITE_INSTANCE_INDEX}-%i.log.gz"
                      fileName="logs/ignite-log-${env:IGNITE_INSTANCE_INDEX}.txt">
             <PatternLayout pattern="%m%n"/>
