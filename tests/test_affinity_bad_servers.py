@@ -15,20 +15,21 @@
 
 import pytest
 
+from pyignite.exceptions import ReconnectError
 from tests.util import *
 
 
-def test_client_with_multiple_bad_servers():
-    client = Client(partition_aware=True)
+def test_client_with_multiple_bad_servers(start_client):
+    client = start_client(partition_aware=True)
     with pytest.raises(ReconnectError) as e_info:
         client.connect([("127.0.0.1", 10900), ("127.0.0.1", 10901)])
     assert str(e_info.value) == "Can not connect."
 
 
-def test_client_with_failed_server(request):
-    srv = start_ignite(4)
+def test_client_with_failed_server(request, start_ignite_server, start_client):
+    srv = start_ignite_server(4)
     try:
-        client = Client()
+        client = start_client()
         client.connect([("127.0.0.1", 10804)])
         cache = client.get_or_create_cache(request.node.name)
         cache.put(1, 1)
@@ -39,17 +40,17 @@ def test_client_with_failed_server(request):
         kill_process_tree(srv.pid)
 
 
-def test_client_with_recovered_server(request):
-    srv = start_ignite(4)
+def test_client_with_recovered_server(request, start_ignite_server, start_client):
+    srv = start_ignite_server(4)
     try:
-        client = Client()
+        client = start_client()
         client.connect([("127.0.0.1", 10804)])
         cache = client.get_or_create_cache(request.node.name)
         cache.put(1, 1)
 
         # Kill and restart server
         kill_process_tree(srv.pid)
-        srv = start_ignite(4)
+        srv = start_ignite_server(4)
 
         # First request fails
         with pytest.raises(Exception):

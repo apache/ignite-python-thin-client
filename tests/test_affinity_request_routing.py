@@ -124,8 +124,8 @@ def test_cache_operation_on_custom_affinity_key_routes_request_to_primary_node(
     assert get_request_grid_idx("Put") == grid_idx
 
 
-def test_cache_operation_routed_to_new_cluster_node(request):
-    client = Client(partition_aware=True)
+def test_cache_operation_routed_to_new_cluster_node(request, start_ignite_server, start_client):
+    client = start_client(partition_aware=True)
     client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802), ("127.0.0.1", 10803), ("127.0.0.1", 10804)])
     cache = client.get_or_create_cache(request.node.name)
     key = 12
@@ -133,7 +133,7 @@ def test_cache_operation_routed_to_new_cluster_node(request):
     cache.put(key, key)
     assert get_request_grid_idx("Put") == 3
 
-    srv = start_ignite(4)
+    srv = start_ignite_server(4)
     try:
         # Wait for rebalance and partition map exchange
         def check_grid_idx():

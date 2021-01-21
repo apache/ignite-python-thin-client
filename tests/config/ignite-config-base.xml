@@ -25,6 +25,12 @@
         http://www.springframework.org/schema/beans/spring-beans.xsd
         http://www.springframework.org/schema/util
         http://www.springframework.org/schema/util/spring-util.xsd">
+
+    <bean id="propertyConfigurer" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+        <property name="systemPropertiesModeName" value="SYSTEM_PROPERTIES_MODE_FALLBACK"/>
+        <property name="searchSystemEnvironment" value="true"/>
+    </bean>
+
     <bean id="grid.cfg" abstract="true" class="org.apache.ignite.configuration.IgniteConfiguration">
         <property name="localHost" value="127.0.0.1"/>
 
@@ -61,6 +67,12 @@
                     </property>
                 </bean>
             </list>
+        </property>
+
+         <property name="gridLogger">
+            <bean class="org.apache.ignite.logger.log4j2.Log4J2Logger">
+              <constructor-arg type="java.lang.String" value="config/log4j.xml"/>
+            </bean>
         </property>
     </bean>
 </beans>

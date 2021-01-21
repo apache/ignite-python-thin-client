@@ -22,21 +22,16 @@
        xsi:schemaLocation="
         http://www.springframework.org/schema/beans
         http://www.springframework.org/schema/beans/spring-beans.xsd">
+    <import resource="ignite-config-base.xml"/>
 
-    <!--
-        Initialize property configurer so we can reference environment variables.
-    -->
-    <bean id="propertyConfigurer" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
-        <property name="systemPropertiesModeName" value="SYSTEM_PROPERTIES_MODE_FALLBACK"/>
-        <property name="searchSystemEnvironment" value="true"/>
-    </bean>
-  
-    <bean id="test.cfg" class="org.apache.ignite.configuration.IgniteConfiguration">
+    <bean parent="grid.cfg">
         <property name="connectorConfiguration"><null/></property>
 
         <property name="clientConnectorConfiguration">
             <bean class="org.apache.ignite.configuration.ClientConnectorConfiguration">
-                <property name="portRange" value="10"/>
+                <property name="host" value="127.0.0.1"/>
+                <property name="port" value="${IGNITE_CLIENT_PORT}"/>
+                <property name="portRange" value="0"/>
                 <property name="sslEnabled" value="true"/>
                 <property name="useIgniteSslContextFactory" value="false"/>
                 <property name="sslClientAuth" value="true"/>
@@ -44,9 +39,9 @@
                 <!-- Provide Ssl context. -->
                 <property name="sslContextFactory">
                     <bean class="org.apache.ignite.ssl.SslContextFactory">
-                        <property name="keyStoreFilePath" value="${PYTHON_TEST_CONFIG_PATH}/ssl/server.jks"/>
+                        <property name="keyStoreFilePath" value="config/ssl/server.jks"/>
                         <property name="keyStorePassword" value="123456"/>
-                        <property name="trustStoreFilePath" value="${PYTHON_TEST_CONFIG_PATH}/ssl/trust.jks"/>
+                        <property name="trustStoreFilePath" value="config/ssl/trust.jks"/>
                         <property name="trustStorePassword" value="123456"/>
                     </bean>
                 </property>

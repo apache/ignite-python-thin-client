@@ -18,12 +18,14 @@ services:
   - docker
 
 env:
-  COMPOSE_VERSION: 1.27.4
+  IGNITE_VERSION: 2.9.1
+  IGNITE_HOME: /opt/ignite
 
 before_install:
- - curl -L https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
- - chmod +x docker-compose
- - sudo mv docker-compose /usr/local/bin
+  - jdk_switcher use oraclejdk8
+  - curl -L https://apache-mirror.rbc.ru/pub/apache/ignite/${IGNITE_VERSION}/apache-ignite-slim-${IGNITE_VERSION}-bin.zip > ignite.zip
+  - unzip ignite.zip -d /opt
+  - mv /opt/apache-ignite-slim-${IGNITE_VERSION}-bin /opt/ignite
 
 language: python
 python:
