@@ -14,15 +14,18 @@
 # limitations under the License.
 
 sudo: required
-services:
-  - docker
+
+addons:
+  apt:
+    packages:
+      - openjdk-8-jdk
 
 env:
   IGNITE_VERSION: 2.9.1
   IGNITE_HOME: /opt/ignite
 
 before_install:
-  - jdk_switcher use oraclejdk8
+  - source travis_java_install.sh
   - curl -L https://apache-mirror.rbc.ru/pub/apache/ignite/${IGNITE_VERSION}/apache-ignite-slim-${IGNITE_VERSION}-bin.zip > ignite.zip
   - unzip ignite.zip -d /opt
   - mv /opt/apache-ignite-slim-${IGNITE_VERSION}-bin /opt/ignite
