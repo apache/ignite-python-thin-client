@@ -25,7 +25,7 @@ from .exceptions import (
     connection_errors,
 )
 from .utils import (
-    cache_id, get_field_by_id, is_wrapped, select_version,
+    cache_id, get_field_by_id, is_wrapped,
     status_to_exception, unsigned, unwrap_binary,
 )
 from .api.cache_config import (

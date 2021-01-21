@@ -58,7 +58,7 @@ from .exceptions import (
     BinaryTypeError, CacheError, ReconnectError, SQLError, connection_errors,
 )
 from .utils import (
-    capitalize, entity_id, schema_id, process_delimiter, select_version,
+    capitalize, entity_id, schema_id, process_delimiter,
     status_to_exception, is_iterable,
 )
 from .binary import GenericObjectMeta

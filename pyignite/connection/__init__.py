@@ -44,7 +44,7 @@ from pyignite.exceptions import (
 )
 from pyignite.datatypes import Byte, Int, Short, String, UUIDObject
 from pyignite.datatypes.internal import Struct
-from pyignite.utils import DaemonicTimer, select_version
+from pyignite.utils import DaemonicTimer
 
 from .handshake import HandshakeRequest
 from .ssl import wrap
