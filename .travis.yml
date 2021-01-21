@@ -27,6 +27,7 @@ before_install:
   - curl -L https://apache-mirror.rbc.ru/pub/apache/ignite/${IGNITE_VERSION}/apache-ignite-slim-${IGNITE_VERSION}-bin.zip > ignite.zip
   - unzip ignite.zip -d /opt
   - mv /opt/apache-ignite-slim-${IGNITE_VERSION}-bin /opt/ignite
+  - mv /opt/ignite/libs/optional/ignite-log4j2 /opt/ignite/libs/
 
 language: python
 python:
