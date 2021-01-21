@@ -20,20 +20,22 @@
 <Configuration>
     <Appenders>
         <Console name="CONSOLE" target="SYSTEM_OUT" level="debug">
-            <PattertLayout pattern="[%d{ISO8601}][%-5p][%t][%c{1}] %m%n"/>
+            <PatternLayout pattern="[%d{ISO8601}][%-5p][%t][%c{1}] %m%n"/>
         </Console>
-        <File name="FILE" level="debug" append="true" fileName="logs/ignite-log-${env:IGNITE_INSTANCE_INDEX}.txt">
-            <PattertLayout pattern="%m%n"/>
+        <RollingFile name="FILE" level="debug" append="true"
+                     filePattern="logs/ignite-log-${env:IGNITE_INSTANCE_INDEX}-%i.log.gz"
+                     fileName="logs/ignite-log-${env:IGNITE_INSTANCE_INDEX}.txt">
+            <PatternLayout pattern="%m%n"/>
             <Policies>
                 <SizeBasedTriggeringPolicy size="10MB" />
             </Policies>
             <DefaultRolloverStrategy max="10"/>
-        </File>
+        </RollingFile>
     </Appenders>
     <Loggers>
         <Logger name="org.apache.ignite.internal.processors.odbc.ClientListenerNioListener" level="debug"/>
         <Root level="info">
-            <!--AppenderRef ref="CONSOLE"/-->
+            <AppenderRef ref="CONSOLE"/>
             <AppenderRef ref="FILE"/>
         </Root>
     </Loggers>
