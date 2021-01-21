@@ -25,7 +25,6 @@ env:
   IGNITE_HOME: /opt/ignite
 
 before_install:
-  - source travis_java_install.sh
   - curl -L https://apache-mirror.rbc.ru/pub/apache/ignite/${IGNITE_VERSION}/apache-ignite-slim-${IGNITE_VERSION}-bin.zip > ignite.zip
   - unzip ignite.zip -d /opt
   - mv /opt/apache-ignite-slim-${IGNITE_VERSION}-bin /opt/ignite
