@@ -25,7 +25,7 @@ env:
 
 before_install:
   - curl -L https://apache-mirror.rbc.ru/pub/apache/ignite/${IGNITE_VERSION}/apache-ignite-slim-${IGNITE_VERSION}-bin.zip > ignite.zip
-  - unzip ignite.zip -d /opt
+  - unzip ignite.zip -d .
   - rm -rf ignite.zip
   - mv ignite-slim-${IGNITE_VERSION}-bin ignite
 
