@@ -21,8 +21,7 @@ addons:
       - openjdk-8-jdk
 
 env:
-  - IGNITE_VERSION=2.9.1
-  - IGNITE_HOME=/opt/ignite
+  - IGNITE_VERSION=2.9.1 IGNITE_HOME=/opt/ignite
 
 before_install:
   - curl -L https://apache-mirror.rbc.ru/pub/apache/ignite/${IGNITE_VERSION}/apache-ignite-slim-${IGNITE_VERSION}-bin.zip > ignite.zip
