@@ -1,4 +1,7 @@
+.idea
 .eggs
 .pytest_cache
 .tox
 pyignite.egg-info
+ignite-log-*
+__pycache__

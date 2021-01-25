@@ -21,10 +21,11 @@ import pytest
 
 from pyignite import Client
 from pyignite.constants import *
-from pyignite.api import cache_create, cache_get_names, cache_destroy
+from pyignite.api import cache_create, cache_destroy
+from tests.util import _start_ignite, start_ignite_gen, get_request_grid_idx
 
 
-class UseSSLParser(argparse.Action):
+class BoolParser(argparse.Action):
 
     def __call__(self, parser, namespace, values, option_string=None):
         values = True if values is None else bool(strtobool(values))
@@ -64,14 +65,111 @@ class SSLVersionParser(argparse.Action):
             )
 
 
+@pytest.fixture(scope='session', autouse=True)
+def server1(request):
+    yield from start_ignite_server_gen(1, request)
+
+
+@pytest.fixture(scope='session', autouse=True)
+def server2(request):
+    yield from start_ignite_server_gen(2, request)
+
+
+@pytest.fixture(scope='session', autouse=True)
+def server3(request):
+    yield from start_ignite_server_gen(3, request)
+
+
+@pytest.fixture(scope='module')
+def start_ignite_server(use_ssl):
+    def start(idx=1):
+        return _start_ignite(idx, use_ssl=use_ssl)
+
+    return start
+
+
+def start_ignite_server_gen(idx, request):
+    use_ssl = request.config.getoption("--use-ssl")
+    yield from start_ignite_gen(idx, use_ssl)
+
+
 @pytest.fixture(scope='module')
 def client(
-    ignite_host, ignite_port, timeout, use_ssl, ssl_keyfile, ssl_keyfile_password, ssl_certfile,
-    ssl_ca_certfile, ssl_cert_reqs, ssl_ciphers, ssl_version,
+    node, timeout, partition_aware, use_ssl, ssl_keyfile, ssl_keyfile_password,
+    ssl_certfile, ssl_ca_certfile, ssl_cert_reqs, ssl_ciphers, ssl_version,
+    username, password,
+):
+    yield from client0(node, timeout, partition_aware, use_ssl, ssl_keyfile, ssl_keyfile_password, ssl_certfile,
+                       ssl_ca_certfile, ssl_cert_reqs, ssl_ciphers, ssl_version, username, password)
+
+
+@pytest.fixture(scope='module')
+def client_partition_aware(
+        node, timeout, use_ssl, ssl_keyfile, ssl_keyfile_password, ssl_certfile,
+        ssl_ca_certfile, ssl_cert_reqs, ssl_ciphers, ssl_version, username,
+        password
+):
+    yield from client0(node, timeout, True, use_ssl, ssl_keyfile, ssl_keyfile_password, ssl_certfile, ssl_ca_certfile,
+                       ssl_cert_reqs, ssl_ciphers, ssl_version, username, password)
+
+
+@pytest.fixture(scope='module')
+def client_partition_aware_single_server(
+        node, timeout, use_ssl, ssl_keyfile, ssl_keyfile_password, ssl_certfile,
+        ssl_ca_certfile, ssl_cert_reqs, ssl_ciphers, ssl_version, username,
+        password
+):
+    node = node[:1]
+    yield from client(node, timeout, True, use_ssl, ssl_keyfile, ssl_keyfile_password, ssl_certfile, ssl_ca_certfile,
+                      ssl_cert_reqs, ssl_ciphers, ssl_version, username, password)
+
+
+@pytest.fixture
+def cache(client):
+    cache_name = 'my_bucket'
+    conn = client.random_node
+
+    cache_create(conn, cache_name)
+    yield cache_name
+    cache_destroy(conn, cache_name)
+
+
+@pytest.fixture(autouse=True)
+def log_init():
+    # Init log call timestamp
+    get_request_grid_idx()
+
+
+@pytest.fixture(scope='module')
+def start_client(use_ssl, ssl_keyfile, ssl_keyfile_password, ssl_certfile, ssl_ca_certfile, ssl_cert_reqs, ssl_ciphers,
+                 ssl_version,username, password):
+    def start(**kwargs):
+        cli_kw = kwargs.copy()
+        cli_kw.update({
+            'use_ssl': use_ssl,
+            'ssl_keyfile': ssl_keyfile,
+            'ssl_keyfile_password': ssl_keyfile_password,
+            'ssl_certfile': ssl_certfile,
+            'ssl_ca_certfile': ssl_ca_certfile,
+            'ssl_cert_reqs': ssl_cert_reqs,
+            'ssl_ciphers': ssl_ciphers,
+            'ssl_version': ssl_version,
+            'username': username,
+            'password': password
+        })
+        return Client(**cli_kw)
+
+    return start
+
+
+def client0(
+    node, timeout, partition_aware, use_ssl, ssl_keyfile, ssl_keyfile_password,
+    ssl_certfile, ssl_ca_certfile, ssl_cert_reqs, ssl_ciphers, ssl_version,
     username, password,
 ):
     client = Client(
         timeout=timeout,
+        partition_aware=partition_aware,
         use_ssl=use_ssl,
         ssl_keyfile=ssl_keyfile,
         ssl_keyfile_password=ssl_keyfile_password,
@@ -83,19 +181,14 @@ def client(
         username=username,
         password=password,
     )
-    client.connect(ignite_host, ignite_port)
+    nodes = []
+    for n in node:
+        host, port = n.split(':')
+        port = int(port)
+        nodes.append((host, port))
+    client.connect(nodes)
     yield client
-    for cache_name in cache_get_names(client).value:
-        cache_destroy(client, cache_name)
     client.close()
-
-
-@pytest.fixture
-def cache(client):
-    cache_name = 'my_bucket'
-    cache_create(client, cache_name)
-    yield cache_name
-    cache_destroy(client, cache_name)
 
 
 @pytest.fixture
@@ -112,17 +205,13 @@ def run_examples(request, examples):
 
 def pytest_addoption(parser):
     parser.addoption(
-        '--ignite-host',
+        '--node',
         action='append',
-        default=[IGNITE_DEFAULT_HOST],
-        help='Ignite binary protocol test server host (default: localhost)'
-    )
-    parser.addoption(
-        '--ignite-port',
-        action='append',
-        default=[IGNITE_DEFAULT_PORT],
-        type=int,
-        help='Ignite binary protocol test server port (default: 10800)'
+        default=None,
+        help=(
+            'Ignite binary protocol test server connection string '
+            '(default: "localhost:10801")'
+        )
     )
     parser.addoption(
         '--timeout',
@@ -135,8 +224,15 @@ def pytest_addoption(parser):
         )
     )
     parser.addoption(
+        '--partition-aware',
+        action=BoolParser,
+        nargs='?',
+        default=False,
+        help='Turn on the best effort affinity feature'
+    )
+    parser.addoption(
         '--use-ssl',
-        action=UseSSLParser,
+        action=BoolParser,
         nargs='?',
         default=False,
         help='Use SSL encryption'
@@ -214,9 +310,11 @@ def pytest_addoption(parser):
 
 def pytest_generate_tests(metafunc):
     session_parameters = {
-        'ignite_host': IGNITE_DEFAULT_HOST,
-        'ignite_port': IGNITE_DEFAULT_PORT,
+        'node': ['{host}:{port}'.format(host='127.0.0.1', port=10801),
+                 '{host}:{port}'.format(host='127.0.0.1', port=10802),
+                 '{host}:{port}'.format(host='127.0.0.1', port=10803)],
         'timeout': None,
+        'partition_aware': False,
         'use_ssl': False,
         'ssl_keyfile': None,
         'ssl_keyfile_password': None,
@@ -232,9 +330,10 @@ def pytest_generate_tests(metafunc):
     for param_name in session_parameters:
         if param_name in metafunc.fixturenames:
             param = metafunc.config.getoption(param_name)
+            # TODO: This does not work for bool
             if param is None:
                 param = session_parameters[param_name]
-            if type(param) is not list:
+            if param_name == 'node' or type(param) is not list:
                 param = [param]
             metafunc.parametrize(param_name, param, scope='session')
 

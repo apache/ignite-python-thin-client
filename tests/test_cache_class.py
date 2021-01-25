@@ -23,7 +23,7 @@ from pyignite.datatypes import (
     BoolObject, DecimalObject, FloatObject, IntObject, String,
 )
 from pyignite.datatypes.prop_codes import *
-from pyignite.exceptions import CacheError
+from pyignite.exceptions import CacheError, ParameterError
 
 
 def test_cache_create(client):
@@ -178,7 +178,7 @@ def test_get_binary_type(client):
 
 
 @pytest.mark.parametrize('page_size', range(1, 17, 5))
-def test_cache_scan(client, page_size):
+def test_cache_scan(request, client, page_size):
     test_data = {
         1: 'This is a test',
         2: 'One more test',
@@ -197,7 +197,7 @@ def test_cache_scan(client, page_size):
         15: 'sollicitudin iaculis',
     }
 
-    cache = client.get_or_create_cache('my_oop_cache')
+    cache = client.get_or_create_cache(request.node.name)
     cache.put_all(test_data)
 
     gen = cache.scan(page_size=page_size)
@@ -219,3 +219,18 @@ def test_get_and_put_if_absent(client):
     cache.put('my_key', 43)
     value = cache.get_and_put_if_absent('my_key', 42)
     assert value is 43
+
+
+def test_cache_get_when_cache_does_not_exist(client):
+    cache = client.get_cache('missing-cache')
+    with pytest.raises(CacheError) as e_info:
+        cache.put(1, 1)
+    assert str(e_info.value) == "Cache does not exist [cacheId= 1665146971]"
+
+
+def test_cache_create_with_none_name(client):
+    with pytest.raises(ParameterError) as e_info:
+        client.create_cache(None)
+    assert str(e_info.value) == "You should supply at least cache name"
+
+

@@ -17,7 +17,7 @@ from collections import OrderedDict
 import ctypes
 import decimal
 from datetime import date, datetime, timedelta
-from typing import Any, Tuple
+from typing import Any, Tuple, Union, Callable
 import uuid
 
 import attr
@@ -28,10 +28,13 @@ from pyignite.utils import is_binary, is_hinted, is_iterable
 from .type_codes import *
 
 
-__all__ = ['AnyDataArray', 'AnyDataObject', 'Struct', 'StructArray', 'tc_map']
+__all__ = [
+    'AnyDataArray', 'AnyDataObject', 'Struct', 'StructArray', 'tc_map',
+    'infer_from_python',
+]
 
 
-def tc_map(key: bytes, _memo_map: dict={}):
+def tc_map(key: bytes, _memo_map: dict = {}):
     """
     Returns a default parser/generator class for the given type code.
 
@@ -108,6 +111,20 @@ def tc_map(key: bytes, _memo_map: dict={}):
     return _memo_map[key]
 
 
+class Conditional:
+
+    def __init__(self, predicate1: Callable[[any], bool], predicate2: Callable[[any], bool], var1, var2):
+        self.predicate1 = predicate1
+        self.predicate2 = predicate2
+        self.var1 = var1
+        self.var2 = var2
+
+    def parse(self, client: 'Client', context):
+        return self.var1.parse(client) if self.predicate1(context) else self.var2.parse(client)
+
+    def to_python(self, ctype_object, context, *args, **kwargs):
+        return self.var1.to_python(ctype_object, *args, **kwargs) if self.predicate2(context) else self.var2.to_python(ctype_object, *args, **kwargs)
+
 @attr.s
 class StructArray:
     """ `counter_type` counter, followed by count*following structure. """
@@ -167,7 +184,7 @@ class StructArray:
         header_class = self.build_header_class()
         header = header_class()
         header.length = length
-        buffer = bytes(header)
+        buffer = bytearray(header)
 
         for i, v in enumerate(value):
             for default_key, default_value in self.defaults.items():
@@ -175,7 +192,7 @@ class StructArray:
             for name, el_class in self.following:
                 buffer += el_class.from_python(v[name])
 
-        return buffer
+        return bytes(buffer)
 
 
 @attr.s
@@ -185,15 +202,21 @@ class Struct:
     dict_type = attr.ib(default=OrderedDict)
     defaults = attr.ib(type=dict, default={})
 
-    def parse(self, client: 'Client') -> Tuple[type, bytes]:
+    def parse(
+        self, client: 'Client'
+    ) -> Tuple[ctypes.BigEndianStructure, bytes]:
         buffer = b''
         fields = []
+        values = {}
 
         for name, c_type in self.fields:
-            c_type, buffer_fragment = c_type.parse(client)
+            is_cond = isinstance(c_type, Conditional)
+            c_type, buffer_fragment = c_type.parse(client, values) if is_cond else c_type.parse(client)
             buffer += buffer_fragment
 
             fields.append((name, c_type))
+
+            values[name] = buffer_fragment
 
         data_class = type(
             'Struct',
@@ -206,10 +229,17 @@ class Struct:
 
         return data_class, buffer
 
-    def to_python(self, ctype_object, *args, **kwargs) -> Any:
+    def to_python(
+        self, ctype_object, *args, **kwargs
+    ) -> Union[dict, OrderedDict]:
         result = self.dict_type()
         for name, c_type in self.fields:
+            is_cond = isinstance(c_type, Conditional)
             result[name] = c_type.to_python(
+                getattr(ctype_object, name),
+                result,
+                *args, **kwargs
+            ) if is_cond else c_type.to_python(
                 getattr(ctype_object, name),
                 *args, **kwargs
             )
@@ -296,7 +326,7 @@ class AnyDataObject:
         """
         from pyignite.datatypes import (
             LongObject, DoubleObject, String, BoolObject, Null, UUIDObject,
-            DateObject, TimeObject, DecimalObject,
+            DateObject, TimeObject, DecimalObject, ByteArrayObject,
         )
 
         cls._python_map = {
@@ -304,6 +334,7 @@ class AnyDataObject:
             float: DoubleObject,
             str: String,
             bytes: String,
+            bytearray: ByteArrayObject,
             bool: BoolObject,
             type(None): Null,
             uuid.UUID: UUIDObject,
@@ -340,7 +371,7 @@ class AnyDataObject:
     @classmethod
     def map_python_type(cls, value):
         from pyignite.datatypes import (
-            MapObject, ObjectArrayObject, BinaryObject,
+            MapObject, CollectionObject, BinaryObject,
         )
 
         if cls._python_map is None:
@@ -349,12 +380,12 @@ class AnyDataObject:
             cls._init_python_array_map()
 
         value_type = type(value)
-        if is_iterable(value) and value_type is not str:
+        if is_iterable(value) and value_type not in (str, bytearray, bytes):
             value_subtype = cls.get_subtype(value)
             if value_subtype in cls._python_array_map:
                 return cls._python_array_map[value_subtype]
 
-            # a little heuristics (order may be important)
+            # a little heuristics (order is important)
             if all([
                 value_subtype is None,
                 len(value) == 2,
@@ -369,7 +400,9 @@ class AnyDataObject:
                 isinstance(value[0], int),
                 is_iterable(value[1]),
             ]):
-                return ObjectArrayObject
+                return CollectionObject
+
+            # no default for ObjectArrayObject, sorry
 
             raise TypeError(
                 'Type `array of {}` is invalid'.format(value_subtype)
@@ -465,8 +498,8 @@ class AnyDataArray(AnyDataObject):
             value = [value]
             length = 1
         header.length = length
-        buffer = bytes(header)
+        buffer = bytearray(header)
 
         for x in value:
             buffer += infer_from_python(x)
-        return buffer
+        return bytes(buffer)
