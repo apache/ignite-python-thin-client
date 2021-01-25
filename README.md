@@ -81,28 +81,33 @@ installed, and Apache Ignite node is running on localhost:10800.
 *NB!* It is recommended installing `pyignite` in development mode.
 Refer to [this section](#for-developer) for instructions.
 
+Do not forget to install test requirements: 
+```bash
+$ pip install -r requirements/install.txt -r requirements/tests.txt
+```
+
 Also, you'll need to have a binary release of Ignite with lib4j2 enabled and
 `IGNITE_HOME` properly set: 
 ```bash
 $ cd <ignite_binary_release>
 $ export IGNITE_HOME=$(pwd)
-$ cp -r libs/optional/ignite-log4j2/* libs/
+$ cp -r $IGNITE_HOME/libs/optional/ignite-log4j2 $IGNITE_HOME/libs/
 ```
 ### Run basic tests
 ```bash
-$ python ./setup.py pytest
+$ pytest
 ```
 ### Run with examples
 ```bash
-$ python ./setup.py pytest --addopts="--examples" 
+$ pytest --examples 
 ```
 ### Run with ssl and not encrypted key
 ```bash
-$ python ./setup.py pytest --addopts="--use-ssl=True --ssl-certfile=./tests/ssl/client_full.pem" 
+$ pytest --use-ssl=True --ssl-certfile=./tests/ssl/client_full.pem
 ```
 ### Run with ssl and password-protected key
 ```bash
-$ python ./setup.py pytest --addopts="--use-ssl=True --ssl-certfile=./tests/config/ssl/client_with_pass_full.pem --ssl-keyfile-password=654321"
+$ pytest --use-ssl=True --ssl-certfile=./tests/config/ssl/client_with_pass_full.pem --ssl-keyfile-password=654321
 ```
 
 If you need to change the connection parameters, see the documentation on
