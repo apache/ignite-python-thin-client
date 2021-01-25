@@ -58,21 +58,19 @@ pip install pyignite==0.4.0
 is available at *RTD* for your convenience.
 
 If you want to build the documentation from source, do the developer
-installation as described above, then run the following commands:
-```
-$ cd ignite/modules/platforms/python
+installation as described above, then run the following commands from the
+client's root directory:
+```bash
 $ pip install -r requirements/docs.txt
 $ cd docs
 $ make html
 ```
 
-Then open `ignite/modules/platforms/python/docs/generated/html/index.html`
-in your browser.
+Then open `docs/generated/html/index.html` in your browser.
 
 ## Examples
-Some examples of using pyignite are provided in
-`ignite/modules/platforms/python/examples` folder. They are extensively
-commented in the
+Some examples of using pyignite are provided in `examples` folder. They are
+extensively commented in the
 “[Examples of usage](https://apache-ignite-binary-protocol-client.readthedocs.io/en/latest/examples.html)”
 section of the documentation.
 
@@ -80,31 +78,31 @@ This code implies that it is run in the environment with `pyignite` package
 installed, and Apache Ignite node is running on localhost:10800.
 
 ## Testing
-*NB!* All tests require Apache Ignite node running on localhost:10800. For the convenience, `docker-compose.yml` is present.
-So installing `docker` and `docker-compose` is recommended. Also, it is recommended installing `pyignite` in development
-mode. You can do that using following command:
+*NB!* It is recommended installing `pyignite` in development mode.
+Refer to [this section](#for-developer) for instructions.
+
+Also, you'll need to have a binary release of Ignite with lib4j2 enabled and
+`IGNITE_HOME` properly set: 
+```bash
+$ cd <ignite_binary_release>
+$ export IGNITE_HOME=$(pwd)
+$ cp -r libs/optional/ignite-log4j2/* libs/
 ```
-$ pip install -e .
-```
-### Run without ssl
-```
-$ docker-compose down && docker-compose up -d ignite
-$ pytest
+### Run basic tests
+```bash
+$ python ./setup.py pytest
 ```
 ### Run with examples
-```
-$ docker-compose down && docker-compose up -d ignite
-$ pytest --examples
+```bash
+$ python ./setup.py pytest --addopts="--examples" 
 ```
 ### Run with ssl and not encrypted key
-```
-$ docker-compose down && docker-compose up -d ignite
-$ pytest --use-ssl=True --ssl-certfile=./tests/config/ssl/client_full.pem
+```bash
+$ python ./setup.py pytest --addopts="--use-ssl=True --ssl-certfile=./tests/ssl/client_full.pem" 
 ```
 ### Run with ssl and password-protected key
-```
-$ docker-compose down && docker-compose up -d ignite
-$ pytest --use-ssl=True --ssl-certfile=./tests/config/ssl/client_with_pass_full.pem --ssl-keyfile-password=654321
+```bash
+$ python ./setup.py pytest --addopts="--use-ssl=True --ssl-certfile=./tests/config/ssl/client_with_pass_full.pem --ssl-keyfile-password=654321"
 ```
 
 If you need to change the connection parameters, see the documentation on

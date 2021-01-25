@@ -11,7 +11,6 @@ Submodules
 
 .. toctree::
 
-   pyignite.connection.generators
    pyignite.connection.handshake
    pyignite.connection.ssl
 
