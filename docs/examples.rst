@@ -212,7 +212,7 @@ Fill tables with data.
   :language: python
   :lines: 43-50, 63-66, 78-81, 211-218
 
-Data samples are taken from `Ignite GitHub repository`_.
+Data samples are taken from `PyIgnite GitHub repository`_.
 
 That concludes the preparation of data. Now let us answer some questions.
 

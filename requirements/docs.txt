@@ -2,5 +2,6 @@
 # (look up the prebuilt docs in `docs/generated`)
 
 -r install.txt
+wheel==0.36.2
 Sphinx==1.7.5
 sphinxcontrib-fulltoc==1.2.0
