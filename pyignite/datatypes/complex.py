@@ -454,10 +454,10 @@ class MapObject(Map):
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
-        type = getattr(ctype_object, "type", None)
-        if type is None:
+        typ = getattr(ctype_object, "type", None)
+        if typ is None:
             return None
-        return ctype_object.type, super().to_python(
+        return typ, super().to_python(
             ctype_object, *args, **kwargs
         )
 
