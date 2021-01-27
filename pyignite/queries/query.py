@@ -13,26 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import attr
 import ctypes
 from random import randint
 
-import attr
-
 from pyignite.api.result import APIResult
-from pyignite.constants import *
-from pyignite.queries import response
-
-
-def get_response_class(obj: object, sql: bool = False):
-    """
-    Response class factory.
-
-    :param obj: cache, connection or client object,
-    :param sql: (optional) return normal (default) or SQL response class,
-    :return: response class.
-    """
-    template = 'SQLResponse{}{}{}' if sql else 'Response{}{}{}'
-    return getattr(response, template.format(*obj.get_protocol_version()))
+from pyignite.connection import Connection
+from pyignite.constants import MIN_LONG, MAX_LONG, RHF_TOPOLOGY_CHANGED
+from pyignite.queries.response import Response, SQLResponse
 
 
 @attr.s
@@ -59,11 +47,7 @@ class Query:
             )
         return cls._query_c_type
 
-    def from_python(self, values: dict = None):
-        if values is None:
-            values = {}
-        buffer = b''
-
+    def _build_header(self, buffer: bytearray, values: dict):
         header_class = self.build_c_type()
         header = header_class()
         header.op_code = self.op_code
@@ -74,14 +58,23 @@ class Query:
             buffer += c_type.from_python(values[name])
 
         header.length = (
-            len(buffer)
-            + ctypes.sizeof(header_class)
-            - ctypes.sizeof(ctypes.c_int)
+                len(buffer)
+                + ctypes.sizeof(header_class)
+                - ctypes.sizeof(ctypes.c_int)
         )
-        return header.query_id, bytes(header) + buffer
+
+        return header
+
+    def from_python(self, values: dict = None):
+        if values is None:
+            values = {}
+        buffer = bytearray()
+        header = self._build_header(buffer, values)
+        buffer[:0] = bytes(header)
+        return header.query_id, bytes(buffer)
 
     def perform(
-        self, conn: 'Connection', query_params: dict = None,
+        self, conn: Connection, query_params: dict = None,
         response_config: list = None, sql: bool = False, **kwargs,
     ) -> APIResult:
         """
@@ -98,8 +91,14 @@ class Query:
         """
         _, send_buffer = self.from_python(query_params)
         conn.send(send_buffer)
-        response_class = get_response_class(conn, sql)
-        response_struct = response_class(response_config, **kwargs)
+
+        if sql:
+            response_struct = SQLResponse(protocol_version=conn.get_protocol_version(),
+                                          following=response_config, **kwargs)
+        else:
+            response_struct = Response(protocol_version=conn.get_protocol_version(),
+                                       following=response_config)
+
         response_ctype, recv_buffer = response_struct.parse(conn)
         response = response_ctype.from_buffer_copy(recv_buffer)
 
@@ -141,24 +140,7 @@ class ConfigQuery(Query):
             )
         return cls._query_c_type
 
-    def from_python(self, values: dict = None):
-        if values is None:
-            values = {}
-        buffer = b''
-
-        header_class = self.build_c_type()
-        header = header_class()
-        header.op_code = self.op_code
-        if self.query_id is None:
-            header.query_id = randint(MIN_LONG, MAX_LONG)
-
-        for name, c_type in self.following:
-            buffer += c_type.from_python(values[name])
-
-        header.length = (
-            len(buffer)
-            + ctypes.sizeof(header_class)
-            - ctypes.sizeof(ctypes.c_int)
-        )
-        header.config_length = header.length - ctypes.sizeof(header_class)
-        return header.query_id, bytes(header) + buffer
+    def _build_header(self, buffer: bytearray, values: dict):
+        header = super()._build_header(buffer, values)
+        header.config_length = header.length - ctypes.sizeof(type(header))
+        return header
