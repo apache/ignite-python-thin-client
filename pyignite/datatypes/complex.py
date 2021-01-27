@@ -456,7 +456,7 @@ class BinaryObject(IgniteDataType):
                 frame = rec[0]
                 code = frame.f_code
                 for varname in code.co_varnames:
-                    suspect = frame.f_locals[varname]
+                    suspect = frame.f_locals.get(varname)
                     if isinstance(suspect, Client):
                         return suspect
                     if isinstance(suspect, Connection):
