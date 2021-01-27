@@ -195,7 +195,7 @@ class SQLResponse(Response):
         return final_class, bytes(buffer)
 
     def to_python(self, ctype_object, *args, **kwargs):
-        if not hasattr(ctype_object, 'status_code'):
+        if getattr(ctype_object, 'status_code', 0) == 0:
             result = {
                 'more': Bool.to_python(
                     ctype_object.more, *args, **kwargs
