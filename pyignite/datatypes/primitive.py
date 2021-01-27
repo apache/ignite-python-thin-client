@@ -14,6 +14,8 @@
 # limitations under the License.
 
 import ctypes
+import struct
+import sys
 
 from pyignite.constants import *
 from .base import IgniteDataType
@@ -48,13 +50,9 @@ class Primitive(IgniteDataType):
     def parse(cls, client: 'Client'):
         return cls.c_type, client.recv(ctypes.sizeof(cls.c_type))
 
-    @staticmethod
-    def to_python(ctype_object, *args, **kwargs):
-        return ctype_object
-
     @classmethod
-    def from_python(cls, value):
-        return bytes(cls.c_type(value))
+    def to_python(cls, ctype_object, *args, **kwargs):
+        return ctype_object
 
 
 class Byte(Primitive):
@@ -62,11 +60,19 @@ class Byte(Primitive):
     _type_id = TYPE_BYTE
     c_type = ctypes.c_byte
 
+    @classmethod
+    def from_python(cls, value):
+        return struct.pack("<b", value)
+
 
 class Short(Primitive):
     _type_name = NAME_SHORT
     _type_id = TYPE_SHORT
     c_type = ctypes.c_short
+
+    @classmethod
+    def from_python(cls, value):
+        return struct.pack("<h", value)
 
 
 class Int(Primitive):
@@ -74,11 +80,19 @@ class Int(Primitive):
     _type_id = TYPE_INT
     c_type = ctypes.c_int
 
+    @classmethod
+    def from_python(cls, value):
+        return struct.pack("<i", value)
+
 
 class Long(Primitive):
     _type_name = NAME_LONG
     _type_id = TYPE_LONG
     c_type = ctypes.c_longlong
+
+    @classmethod
+    def from_python(cls, value):
+        return struct.pack("<q", value)
 
 
 class Float(Primitive):
@@ -86,11 +100,19 @@ class Float(Primitive):
     _type_id = TYPE_FLOAT
     c_type = ctypes.c_float
 
+    @classmethod
+    def from_python(cls, value):
+        return struct.pack("<f", value)
+
 
 class Double(Primitive):
     _type_name = NAME_DOUBLE
     _type_id = TYPE_DOUBLE
     c_type = ctypes.c_double
+
+    @classmethod
+    def from_python(cls, value):
+        return struct.pack("<d", value)
 
 
 class Char(Primitive):
@@ -122,4 +144,12 @@ class Char(Primitive):
 class Bool(Primitive):
     _type_name = NAME_BOOLEAN
     _type_id = TYPE_BOOLEAN
-    c_type = ctypes.c_bool
+    c_type = ctypes.c_byte  # Use c_byte because c_bool throws endianness conversion error on BE systems.
+
+    @classmethod
+    def to_python(cls, ctype_object, *args, **kwargs):
+        return ctype_object != 0
+
+    @classmethod
+    def from_python(cls, value):
+        return struct.pack("<b", 1 if value else 0)

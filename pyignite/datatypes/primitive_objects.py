@@ -207,7 +207,7 @@ class CharObject(DataObject):
 class BoolObject(DataObject):
     _type_name = NAME_BOOLEAN
     _type_id = TYPE_BOOLEAN
-    c_type = ctypes.c_bool
+    c_type = ctypes.c_byte  # Use c_byte because c_bool throws endianness conversion error on BE systems.
     type_code = TC_BOOL
     pythonic = bool
     default = False
@@ -215,3 +215,8 @@ class BoolObject(DataObject):
     @staticmethod
     def hashcode(value: bool, *args, **kwargs) -> int:
         return 1231 if value else 1237
+
+    @classmethod
+    def to_python(cls, ctype_object, *args, **kwargs):
+        return ctype_object.value != 0
+

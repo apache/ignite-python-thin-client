@@ -86,7 +86,7 @@ def get_binary_type(
     if result.status != 0:
         return result
     result.value = {
-        'type_exists': response.type_exists
+        'type_exists': Bool.to_python(response.type_exists)
     }
     if hasattr(response, 'body'):
         result.value.update(body_struct.to_python(response.body))
