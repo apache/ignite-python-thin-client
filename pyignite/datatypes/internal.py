@@ -219,7 +219,7 @@ class Struct:
             values[name] = buffer_fragment
 
         data_class = type(
-            'StructLE',
+            'Struct',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
