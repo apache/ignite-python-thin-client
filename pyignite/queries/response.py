@@ -55,9 +55,9 @@ class Response:
             )
         return self._response_header
 
-    def parse(self, conn: Connection):
+    def parse(self, stream):
         header_class = self.build_header()
-        buffer = bytearray(conn.recv(ctypes.sizeof(header_class)))
+        buffer = stream.read(ctypes.sizeof(header_class))
         header = header_class.from_buffer_copy(buffer)
         fields = []
 
@@ -76,18 +76,16 @@ class Response:
             has_error = header.status_code != OP_SUCCESS
 
         if fields:
-            buffer += conn.recv(
-                sum([ctypes.sizeof(c_type) for _, c_type in fields])
-            )
+            buffer += stream.read(sum([ctypes.sizeof(c_type) for _, c_type in fields]))
 
         if has_error:
-            msg_type, buffer_fragment = String.parse(conn)
+            msg_type, buffer_fragment = String.parse(stream)
             buffer += buffer_fragment
             fields.append(('error_message', msg_type))
         else:
-            self._parse_success(conn, buffer, fields)
+            self._parse_success(stream, buffer, fields)
 
-        return self._create_parse_result(conn, header_class, fields, buffer)
+        return self._create_parse_result(stream, header_class, fields, buffer)
 
     def _create_parse_result(self, conn: Connection, header_class, fields: list, buffer: bytearray):
         response_class = type(
@@ -98,11 +96,11 @@ class Response:
                 '_fields_': fields,
             }
         )
-        return response_class, bytes(buffer)
+        return response_class, buffer
 
-    def _parse_success(self, conn: Connection, buffer: bytearray, fields: list):
+    def _parse_success(self, stream, buffer: bytearray, fields: list):
         for name, ignite_type in self.following:
-            c_type, buffer_fragment = ignite_type.parse(conn)
+            c_type, buffer_fragment = ignite_type.parse(stream)
             buffer += buffer_fragment
             fields.append((name, c_type))
 
@@ -182,7 +180,7 @@ class SQLResponse(Response):
             ('more', ctypes.c_byte),
         ]
 
-    def _create_parse_result(self, conn: Connection, header_class, fields: list, buffer: bytearray):
+    def _create_parse_result(self, stream, header_class, fields: list, buffer: bytearray):
         final_class = type(
             'SQLResponse',
             (header_class,),
@@ -191,8 +189,8 @@ class SQLResponse(Response):
                 '_fields_': fields,
             }
         )
-        buffer += conn.recv(ctypes.sizeof(final_class) - len(buffer))
-        return final_class, bytes(buffer)
+        buffer += stream.read(ctypes.sizeof(final_class) - len(buffer))
+        return final_class, buffer
 
     def to_python(self, ctype_object, *args, **kwargs):
         if getattr(ctype_object, 'status_code', 0) == 0:

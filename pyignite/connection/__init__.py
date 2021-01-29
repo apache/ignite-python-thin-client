@@ -52,6 +52,8 @@ from .ssl import wrap
 
 __all__ = ['Connection']
 
+from ..stream import BinaryStream
+
 
 class Connection:
     """
@@ -60,8 +62,7 @@ class Connection:
 
      * socket wrapper. Detects fragmentation and network errors. See also
        https://docs.python.org/3/howto/sockets.html,
-     * binary protocol connector. Incapsulates handshake, data read-ahead and
-       failover reconnection.
+     * binary protocol connector. Incapsulates handshake and failover reconnection.
     """
 
     _socket = None
@@ -72,7 +73,6 @@ class Connection:
     host = None
     port = None
     timeout = None
-    prefetch = None
     username = None
     password = None
     ssl_params = {}
@@ -97,7 +97,7 @@ class Connection:
                 ).format(param))
 
     def __init__(
-        self, client: 'Client', prefetch: bytes = b'', timeout: int = None,
+        self, client: 'Client', timeout: int = None,
         username: str = None, password: str = None, **ssl_params
     ):
         """
@@ -107,8 +107,6 @@ class Connection:
         https://docs.python.org/3/library/ssl.html#ssl-certificates.
 
         :param client: Ignite client object,
-        :param prefetch: (optional) initialize the read-ahead data buffer.
-         Empty by default,
         :param timeout: (optional) sets timeout (in seconds) for each socket
          operation including `connect`. 0 means non-blocking mode, which is
          virtually guaranteed to fail. Can accept integer or float value.
@@ -143,7 +141,6 @@ class Connection:
         :param password: (optional) password to authenticate to Ignite cluster.
         """
         self.client = client
-        self.prefetch = prefetch
         self.timeout = timeout
         self.username = username
         self.password = password
@@ -202,26 +199,27 @@ class Connection:
             ('length', Int),
             ('op_code', Byte),
         ])
-        start_class, start_buffer = response_start.parse(self)
-        start = start_class.from_buffer_copy(start_buffer)
-        data = response_start.to_python(start)
-        response_end = None
-        if data['op_code'] == 0:
-            response_end = Struct([
-                ('version_major', Short),
-                ('version_minor', Short),
-                ('version_patch', Short),
-                ('message', String),
-            ])
-        elif self.get_protocol_version() >= (1, 4, 0):
-            response_end = Struct([
-                ('node_uuid', UUIDObject),
-            ])
-        if response_end:
-            end_class, end_buffer = response_end.parse(self)
-            end = end_class.from_buffer_copy(end_buffer)
-            data.update(response_end.to_python(end))
-        return data
+        with BinaryStream(self.recv(), self) as response_stream:
+            start_class, start_buffer = response_start.parse(response_stream)
+            start = start_class.from_buffer_copy(start_buffer)
+            data = response_start.to_python(start)
+            response_end = None
+            if data['op_code'] == 0:
+                response_end = Struct([
+                    ('version_major', Short),
+                    ('version_minor', Short),
+                    ('version_patch', Short),
+                    ('message', String),
+                ])
+            elif self.get_protocol_version() >= (1, 4, 0):
+                response_end = Struct([
+                    ('node_uuid', UUIDObject),
+                ])
+            if response_end:
+                end_class, end_buffer = response_end.parse(response_stream)
+                end = end_class.from_buffer_copy(end_buffer)
+                data.update(response_end.to_python(end))
+            return data
 
     def connect(
         self, host: str = None, port: int = None
@@ -289,7 +287,7 @@ class Connection:
             self.username,
             self.password
         )
-        self.send(hs_request)
+        self.send(bytes(hs_request))
         hs_response = self.read_response()
         if hs_response['op_code'] == 0:
             # disconnect but keep in use
@@ -370,19 +368,6 @@ class Connection:
         to.host = self.host
         to.port = self.port
 
-    def clone(self, prefetch: bytes = b'') -> 'Connection':
-        """
-        Clones this connection in its current state.
-
-        :return: `Connection` object.
-        """
-        clone = self.__class__(self.client, **self.ssl_params)
-        self._transfer_params(to=clone)
-        if self.alive:
-            clone.connect(self.host, self.port)
-        clone.prefetch = prefetch
-        return clone
-
     def send(self, data: bytes, flags=None):
         """
         Send data down the socket.
@@ -396,70 +381,45 @@ class Connection:
         kwargs = {}
         if flags is not None:
             kwargs['flags'] = flags
-        data = bytes(data)
-        total_bytes_sent = 0
 
-        while total_bytes_sent < len(data):
-            try:
-                bytes_sent = self.socket.send(
-                    data[total_bytes_sent:],
-                    **kwargs
-                )
-            except connection_errors:
-                self._fail()
-                self.reconnect()
-                raise
-            if bytes_sent == 0:
-                self._fail()
-                self.reconnect()
-                raise SocketError('Connection broken.')
-            total_bytes_sent += bytes_sent
+        try:
+            self.socket.sendall(data, **kwargs)
+        except Exception:
+            self._fail()
+            self.reconnect()
+            raise
 
-    def recv(self, buffersize, flags=None) -> bytes:
-        """
-        Receive data from socket or read-ahead buffer.
+    def recv(self, flags=None) -> bytearray:
+        def _recv(buffer, num_bytes):
+            bytes_to_receive = num_bytes
+            while bytes_to_receive > 0:
+                try:
+                    bytes_rcvd = self.socket.recv_into(buffer, bytes_to_receive, **kwargs)
+                    if bytes_rcvd == 0:
+                        raise SocketError('Connection broken.')
+                except connection_errors:
+                    self._fail()
+                    self.reconnect()
+                    raise
 
-        :param buffersize: bytes to receive,
-        :param flags: (optional) OS-specific flags,
-        :return: data received.
-        """
+                buffer = buffer[bytes_rcvd:]
+                bytes_to_receive -= bytes_rcvd
+
         if self.closed:
             raise SocketError('Attempt to use closed connection.')
 
-        pref_size = len(self.prefetch)
-        if buffersize > pref_size:
-            result = self.prefetch
-            self.prefetch = b''
-            try:
-                result += self._recv(buffersize-pref_size, flags)
-            except connection_errors:
-                self._fail()
-                self.reconnect()
-                raise
-            return result
-        else:
-            result = self.prefetch[:buffersize]
-            self.prefetch = self.prefetch[buffersize:]
-            return result
-
-    def _recv(self, buffersize, flags=None) -> bytes:
-        """
-        Handle socket data reading.
-        """
         kwargs = {}
         if flags is not None:
             kwargs['flags'] = flags
-        chunks = []
-        bytes_rcvd = 0
 
-        while bytes_rcvd < buffersize:
-            chunk = self.socket.recv(buffersize-bytes_rcvd, **kwargs)
-            if chunk == b'':
-                raise SocketError('Connection broken.')
-            chunks.append(chunk)
-            bytes_rcvd += len(chunk)
+        data = bytearray(4)
+        _recv(memoryview(data), 4)
+        response_len = int.from_bytes(data, PROTOCOL_BYTE_ORDER)
 
-        return b''.join(chunks)
+        data.extend(bytearray(response_len))
+        _recv(memoryview(data)[4:], response_len)
+        return data
+
 
     def close(self, release=True):
         """

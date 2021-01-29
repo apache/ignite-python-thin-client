@@ -20,7 +20,6 @@ from typing import Iterable, Dict
 
 from pyignite.constants import *
 from pyignite.exceptions import ParseError
-
 from .base import IgniteDataType
 from .internal import AnyDataObject, infer_from_python
 from .type_codes import *
@@ -69,19 +68,19 @@ class ObjectArrayObject(IgniteDataType):
         )
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+    def parse(cls, stream):
+        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
 
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
+        if buffer == TC_NULL:
+            return Null.build_c_type(), buffer
 
         header_class = cls.build_header()
-        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
+        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
         header = header_class.from_buffer_copy(buffer)
         fields = []
 
         for i in range(header.length):
-            c_type, buffer_fragment = AnyDataObject.parse(client)
+            c_type, buffer_fragment = AnyDataObject.parse(stream)
             buffer += buffer_fragment
             fields.append(('element_{}'.format(i), c_type))
 
@@ -162,14 +161,14 @@ class WrappedDataObject(IgniteDataType):
         )
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+    def parse(cls, stream):
+        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
 
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
+        if buffer == TC_NULL:
+            return Null.build_c_type(), buffer
 
         header_class = cls.build_header()
-        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
+        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
         header = header_class.from_buffer_copy(buffer)
 
         final_class = type(
@@ -183,7 +182,7 @@ class WrappedDataObject(IgniteDataType):
                 ],
             }
         )
-        buffer += client.recv(
+        buffer += stream.read(
             ctypes.sizeof(final_class) - ctypes.sizeof(header_class)
         )
         return final_class, buffer
@@ -260,19 +259,19 @@ class CollectionObject(IgniteDataType):
         )
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+    def parse(cls, stream):
+        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
 
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
+        if buffer == TC_NULL:
+            return Null.build_c_type(), buffer
 
         header_class = cls.build_header()
-        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
+        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
         header = header_class.from_buffer_copy(buffer)
         fields = []
 
         for i in range(header.length):
-            c_type, buffer_fragment = AnyDataObject.parse(client)
+            c_type, buffer_fragment = AnyDataObject.parse(stream)
             buffer += buffer_fragment
             fields.append(('element_{}'.format(i), c_type))
 
@@ -358,19 +357,19 @@ class Map(IgniteDataType):
         )
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+    def parse(cls, stream):
+        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
 
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
+        if buffer == TC_NULL:
+            return Null.build_c_type(), buffer
 
         header_class = cls.build_header()
-        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
+        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
         header = header_class.from_buffer_copy(buffer)
         fields = []
 
         for i in range(header.length << 1):
-            c_type, buffer_fragment = AnyDataObject.parse(client)
+            c_type, buffer_fragment = AnyDataObject.parse(stream)
             buffer += buffer_fragment
             fields.append(('element_{}'.format(i), c_type))
 
@@ -506,7 +505,7 @@ class BinaryObject(IgniteDataType):
 
     @staticmethod
     def hashcode(
-        value: object, client: 'Client' = None, *args, **kwargs
+        value: object, client, *args, **kwargs
     ) -> int:
         # binary objects's hashcode implementation is special in the sense
         # that you need to fully serialize the object to calculate
@@ -577,29 +576,29 @@ class BinaryObject(IgniteDataType):
         return result
 
     @classmethod
-    def parse(cls, client: 'Client'):
+    def parse(cls, stream):
         from pyignite.datatypes import Struct
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+        buffer = stream.recv(ctypes.sizeof(ctypes.c_byte))
 
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
+        if buffer == TC_NULL:
+            return Null.build_c_type(), buffer
 
         header_class = cls.build_header()
-        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
+        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
         header = header_class.from_buffer_copy(buffer)
 
         # ignore full schema, always retrieve fields' types and order
         # from complex types registry
-        data_class = cls.get_dataclass(client, header)
+        data_class = stream.get_dataclass(header)
         fields = data_class.schema.items()
         object_fields_struct = Struct(fields)
-        object_fields, object_fields_buffer = object_fields_struct.parse(client)
+        object_fields, object_fields_buffer = object_fields_struct.parse(stream)
         buffer += object_fields_buffer
         final_class_fields = [('object_fields', object_fields)]
 
         if header.flags & cls.HAS_SCHEMA:
             schema = cls.schema_type(header.flags) * len(fields)
-            buffer += client.recv(ctypes.sizeof(schema))
+            buffer += stream.read(ctypes.sizeof(schema))
             final_class_fields.append(('schema', schema))
 
         final_class = type(
@@ -611,7 +610,7 @@ class BinaryObject(IgniteDataType):
             }
         )
         # register schema encoding approach
-        client.compact_footer = bool(header.flags & cls.COMPACT_FOOTER)
+        stream.compact_footer = bool(header.flags & cls.COMPACT_FOOTER)
         return final_class, buffer
 
     @classmethod

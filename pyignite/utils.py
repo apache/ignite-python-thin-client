@@ -23,7 +23,7 @@ from typing import Any, Callable, Optional, Type, Tuple, Union
 
 from pyignite.datatypes.base import IgniteDataType
 from .constants import *
-
+from .stream import BinaryStream
 
 LONG_MASK = 0xffffffff
 DIGITS_PER_INT = 9
@@ -96,14 +96,12 @@ def unwrap_binary(client: 'Client', wrapped: tuple) -> object:
     from pyignite.datatypes.complex import BinaryObject
 
     blob, offset = wrapped
-    conn_clone = client.random_node.clone(prefetch=blob)
-    conn_clone.pos = offset
-    data_class, data_bytes = BinaryObject.parse(conn_clone)
+    with BinaryStream(blob, client.random_node) as stream:
+        data_class, data_bytes = BinaryObject.parse(stream)
     result = BinaryObject.to_python(
         data_class.from_buffer_copy(data_bytes),
         client,
     )
-    conn_clone.close()
     return result
 
 

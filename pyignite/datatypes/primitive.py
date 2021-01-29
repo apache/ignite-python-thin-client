@@ -15,7 +15,6 @@
 
 import ctypes
 import struct
-import sys
 
 from pyignite.constants import *
 from .base import IgniteDataType
@@ -47,8 +46,8 @@ class Primitive(IgniteDataType):
     c_type = None
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        return cls.c_type, client.recv(ctypes.sizeof(cls.c_type))
+    def parse(cls, stream):
+        return cls.c_type, stream.read(ctypes.sizeof(cls.c_type))
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):

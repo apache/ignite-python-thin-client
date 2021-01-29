@@ -21,6 +21,7 @@ from pyignite.api.result import APIResult
 from pyignite.connection import Connection
 from pyignite.constants import MIN_LONG, MAX_LONG, RHF_TOPOLOGY_CHANGED
 from pyignite.queries.response import Response, SQLResponse
+from pyignite.stream import BinaryStream
 
 
 @attr.s
@@ -99,7 +100,8 @@ class Query:
             response_struct = Response(protocol_version=conn.get_protocol_version(),
                                        following=response_config)
 
-        response_ctype, recv_buffer = response_struct.parse(conn)
+        with BinaryStream(conn.recv(), conn) as stream:
+            response_ctype, recv_buffer = response_struct.parse(stream)
         response = response_ctype.from_buffer_copy(recv_buffer)
 
         # this test depends on protocol version

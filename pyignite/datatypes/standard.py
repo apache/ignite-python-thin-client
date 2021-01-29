@@ -54,14 +54,14 @@ class StandardObject(IgniteDataType):
         raise NotImplementedError('This object is generic')
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+    def parse(cls, stream):
+        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
 
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
+        if buffer == TC_NULL:
+            return Null.build_c_type(), buffer
 
         c_type = cls.build_c_type()
-        buffer = tc_type + client.recv(ctypes.sizeof(c_type) - len(tc_type))
+        buffer += stream.read(ctypes.sizeof(c_type) - len(buffer))
         return c_type, buffer
 
 
@@ -95,17 +95,17 @@ class String(IgniteDataType):
         )
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+    def parse(cls, stream):
+        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
         # String or Null
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
+        if buffer == TC_NULL:
+            return Null.build_c_type(), buffer
 
-        buffer = tc_type + client.recv(ctypes.sizeof(ctypes.c_int))
+        buffer += stream.read(ctypes.sizeof(ctypes.c_int))
         length = int.from_bytes(buffer[1:], byteorder=PROTOCOL_BYTE_ORDER)
 
         data_type = cls.build_c_type(length)
-        buffer += client.recv(ctypes.sizeof(data_type) - len(buffer))
+        buffer += stream.read(ctypes.sizeof(data_type) - len(buffer))
 
         return data_type, buffer
 
@@ -165,17 +165,14 @@ class DecimalObject(IgniteDataType):
         )
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+    def parse(cls, stream):
+        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
         # Decimal or Null
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
+        if buffer == TC_NULL:
+            return Null.build_c_type(), buffer
 
         header_class = cls.build_c_header()
-        buffer = tc_type + client.recv(
-            ctypes.sizeof(header_class)
-            - len(tc_type)
-        )
+        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
         header = header_class.from_buffer_copy(buffer)
         data_type = type(
             cls.__name__,
@@ -187,10 +184,7 @@ class DecimalObject(IgniteDataType):
                 ],
             }
         )
-        buffer += client.recv(
-            ctypes.sizeof(data_type)
-            - ctypes.sizeof(header_class)
-        )
+        buffer += stream.read(ctypes.sizeof(data_type) - ctypes.sizeof(header_class))
         return data_type, buffer
 
     @classmethod
@@ -599,18 +593,18 @@ class StandardArray(IgniteDataType):
         )
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+    def parse(cls, stream):
+        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
 
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
+        if buffer == TC_NULL:
+            return Null.build_c_type(), buffer
 
         header_class = cls.build_header_class()
-        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
+        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
         header = header_class.from_buffer_copy(buffer)
         fields = []
         for i in range(header.length):
-            c_type, buffer_fragment = cls.standard_type.parse(client)
+            c_type, buffer_fragment = cls.standard_type.parse(stream)
             buffer += buffer_fragment
             fields.append(('element_{}'.format(i), c_type))
 

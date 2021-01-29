@@ -55,8 +55,8 @@ class Null(IgniteDataType):
         return cls._object_c_type
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        buffer = client.recv(ctypes.sizeof(ctypes.c_byte))
+    def parse(cls, stream):
+        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
         data_type = cls.build_c_type()
         return data_type, buffer
 

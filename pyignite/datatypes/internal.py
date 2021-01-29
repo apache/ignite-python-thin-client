@@ -119,8 +119,8 @@ class Conditional:
         self.var1 = var1
         self.var2 = var2
 
-    def parse(self, client: 'Client', context):
-        return self.var1.parse(client) if self.predicate1(context) else self.var2.parse(client)
+    def parse(self, stream, context):
+        return self.var1.parse(stream) if self.predicate1(context) else self.var2.parse(stream)
 
     def to_python(self, ctype_object, context, *args, **kwargs):
         return self.var1.to_python(ctype_object, *args, **kwargs) if self.predicate2(context) else self.var2.to_python(ctype_object, *args, **kwargs)
@@ -144,13 +144,13 @@ class StructArray:
             },
         )
 
-    def parse(self, client: 'Client'):
-        buffer = client.recv(ctypes.sizeof(self.counter_type))
+    def parse(self, stream):
+        buffer = stream.read(ctypes.sizeof(self.counter_type))
         length = int.from_bytes(buffer, byteorder=PROTOCOL_BYTE_ORDER)
         fields = []
 
         for i in range(length):
-            c_type, buffer_fragment = Struct(self.following).parse(client)
+            c_type, buffer_fragment = Struct(self.following).parse(stream)
             buffer += buffer_fragment
             fields.append(('element_{}'.format(i), c_type))
 
@@ -202,16 +202,14 @@ class Struct:
     dict_type = attr.ib(default=OrderedDict)
     defaults = attr.ib(type=dict, default={})
 
-    def parse(
-        self, client: 'Client'
-    ) -> Tuple[ctypes.LittleEndianStructure, bytes]:
+    def parse(self, stream) -> Tuple[ctypes.LittleEndianStructure, bytes]:
         buffer = b''
         fields = []
         values = {}
 
         for name, c_type in self.fields:
             is_cond = isinstance(c_type, Conditional)
-            c_type, buffer_fragment = c_type.parse(client, values) if is_cond else c_type.parse(client)
+            c_type, buffer_fragment = c_type.parse(stream, values) if is_cond else c_type.parse(stream)
             buffer += buffer_fragment
 
             fields.append((name, c_type))
@@ -299,14 +297,14 @@ class AnyDataObject:
             return type_first
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        type_code = client.recv(ctypes.sizeof(ctypes.c_byte))
+    def parse(cls, stream):
+        type_code = bytes(stream.read(ctypes.sizeof(ctypes.c_byte)))
         try:
-            data_class = tc_map(type_code)
+            data_class = tc_map(bytes(type_code))
         except KeyError:
             raise ParseError('Unknown type code: `{}`'.format(type_code))
-        client.prefetch += type_code
-        return data_class.parse(client)
+        stream.seek(stream.tell() - ctypes.sizeof(ctypes.c_byte))
+        return data_class.parse(stream)
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
@@ -455,14 +453,14 @@ class AnyDataArray(AnyDataObject):
             }
         )
 
-    def parse(self, client: 'Client'):
+    def parse(self, stream):
         header_class = self.build_header()
-        buffer = client.recv(ctypes.sizeof(header_class))
+        buffer = stream.read(ctypes.sizeof(header_class))
         header = header_class.from_buffer_copy(buffer)
         fields = []
 
         for i in range(header.length):
-            c_type, buffer_fragment = super().parse(client)
+            c_type, buffer_fragment = super().parse(stream)
             buffer += buffer_fragment
             fields.append(('element_{}'.format(i), c_type))
 

@@ -61,14 +61,14 @@ class PrimitiveArray(IgniteDataType):
         )
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+    def parse(cls, stream):
+        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
 
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
+        if buffer == TC_NULL:
+            return Null.build_c_type(), buffer
 
         header_class = cls.build_header_class()
-        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
+        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
         header = header_class.from_buffer_copy(buffer)
         final_class = type(
             cls.__name__,
@@ -80,20 +80,15 @@ class PrimitiveArray(IgniteDataType):
                 ],
             }
         )
-        buffer += client.recv(
-            ctypes.sizeof(final_class) - ctypes.sizeof(header_class)
-        )
+        buffer += stream.read(ctypes.sizeof(final_class) - ctypes.sizeof(header_class))
         return final_class, buffer
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
-        result = []
         length = getattr(ctype_object, "length", None)
         if length is None:
             return None
-        for i in range(length):
-            result.append(ctype_object.data[i])
-        return result
+        return [ctype_object.data[i] for i in range(ctype_object.length)]
 
     @classmethod
     def from_python(cls, value):

@@ -92,10 +92,11 @@ class PropBase:
         )
 
     @classmethod
-    def parse(cls, connection: 'Connection'):
+    def parse(cls, stream):
         header_class = cls.build_header()
-        header_buffer = connection.recv(ctypes.sizeof(header_class))
-        data_class, data_buffer = cls.prop_data_class.parse(connection)
+        buf = stream.read(ctypes.sizeof(header_class))
+        data_class, data_buf = cls.prop_data_class.parse(stream)
+        buf += data_buf
         prop_class = type(
             cls.__name__,
             (header_class,),
@@ -106,7 +107,7 @@ class PropBase:
                 ],
             }
         )
-        return prop_class, header_buffer + data_buffer
+        return prop_class, buf
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):

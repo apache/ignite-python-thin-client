@@ -17,7 +17,6 @@ import ctypes
 
 from pyignite.constants import *
 from pyignite.utils import unsigned
-
 from .base import IgniteDataType
 from .type_codes import *
 from .type_ids import *
@@ -61,12 +60,13 @@ class DataObject(IgniteDataType):
         return cls._object_c_type
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
+    def parse(cls, stream):
+        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
+        if buffer == TC_NULL:
+            return Null.build_c_type(), buffer
+
         data_type = cls.build_c_type()
-        buffer = tc_type + client.recv(ctypes.sizeof(data_type) - len(tc_type))
+        buffer += stream.read(ctypes.sizeof(data_type) - len(buffer))
         return data_type, buffer
 
     @staticmethod

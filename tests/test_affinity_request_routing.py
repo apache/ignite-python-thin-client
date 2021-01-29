@@ -124,7 +124,6 @@ def test_cache_operation_on_custom_affinity_key_routes_request_to_primary_node(
     assert get_request_grid_idx("Put") == grid_idx
 
 
-@pytest.mark.skip("https://issues.apache.org/jira/browse/IGNITE-13967")
 def test_cache_operation_routed_to_new_cluster_node(request, start_ignite_server, start_client):
     client = start_client(partition_aware=True)
     client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802), ("127.0.0.1", 10803), ("127.0.0.1", 10804)])
@@ -140,7 +139,7 @@ def test_cache_operation_routed_to_new_cluster_node(request, start_ignite_server
         def check_grid_idx():
             cache.get(key)
             return get_request_grid_idx() == 4
-        wait_for_condition(check_grid_idx)
+        wait_for_condition(check_grid_idx, error='failed to wait for rebalance')
 
         # Response is correct and comes from the new node
         res = cache.get_and_remove(key)
