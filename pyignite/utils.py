@@ -118,7 +118,7 @@ def hashcode(data: Union[str, bytes]) -> int:
         For strings we iterate over code point which are of the int type
         and can take up to 4 bytes and can only be positive.
         """
-        result = 1 if isinstance(string, (bytes, bytearray)) else 0
+        result = 0
         for char in data:
             try:
                 char_val = ord(char)
