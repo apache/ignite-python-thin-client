@@ -26,12 +26,35 @@
         http://www.springframework.org/schema/util
         http://www.springframework.org/schema/util/spring-util.xsd">
 
-    <bean id="propertyConfigurer" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
-        <property name="systemPropertiesModeName" value="SYSTEM_PROPERTIES_MODE_FALLBACK"/>
-        <property name="searchSystemEnvironment" value="true"/>
-    </bean>
+    <bean id="grid.cfg" class="org.apache.ignite.configuration.IgniteConfiguration">
+        {% if use_ssl %}
+            <property name="connectorConfiguration"><null/></property>
+        {% endif %}
 
-    <bean id="grid.cfg" abstract="true" class="org.apache.ignite.configuration.IgniteConfiguration">
+        <property name="clientConnectorConfiguration">
+            <bean class="org.apache.ignite.configuration.ClientConnectorConfiguration">
+                <property name="host" value="127.0.0.1"/>
+                <property name="port" value="{{ ignite_client_port }}"/>
+                <property name="portRange" value="0"/>
+                {% if use_ssl %}
+                    <property name="sslEnabled" value="true"/>
+                    <property name="useIgniteSslContextFactory" value="false"/>
+                    <property name="sslClientAuth" value="true"/>
+
+                    <property name="sslContextFactory">
+                        <bean class="org.apache.ignite.ssl.SslContextFactory">
+                            <property name="keyStoreFilePath" value="config/ssl/server.jks"/>
+                            <property name="keyStorePassword" value="123456"/>
+                            <property name="trustStoreFilePath" value="config/ssl/trust.jks"/>
+                            <property name="trustStorePassword" value="123456"/>
+                        </bean>
+                    </property>
+                {% endif %}
+            </bean>
+        </property>
+
+        <property name="consistentId" value="srv_{{  ignite_instance_idx  }}"/>
+
         <property name="localHost" value="127.0.0.1"/>
 
         <property name="discoverySpi">
@@ -42,7 +65,7 @@
                     <bean class="org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder">
                         <property name="addresses">
                             <list>
-                                <value>127.0.0.1:48500..48503</value>
+                                <value>127.0.0.1:48500..48510</value>
                             </list>
                         </property>
                     </bean>
@@ -69,9 +92,9 @@
             </list>
         </property>
 
-         <property name="gridLogger">
-            <bean class="org.apache.ignite.logger.log4j2.Log4J2Logger">
-              <constructor-arg type="java.lang.String" value="config/log4j.xml"/>
+        <property name="gridLogger">
+            <bean class="org.apache.ignite.logger.log4j.Log4JLogger">
+              <constructor-arg type="java.lang.String" value="config/log4j-{{ ignite_instance_idx }}.xml"/>
             </bean>
         </property>
     </bean>

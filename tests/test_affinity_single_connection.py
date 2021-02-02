@@ -13,10 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-
-from tests.util import get_request_grid_idx
-
 
 def test_all_cache_operations_with_partition_aware_client_on_single_server(request, client_partition_aware_single_server):
     cache = client_partition_aware_single_server.get_or_create_cache(request.node.name)

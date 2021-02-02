@@ -15,6 +15,8 @@
 
 import glob
 import os
+
+import jinja2 as jinja2
 import psutil
 import re
 import signal
@@ -72,22 +74,19 @@ def get_ignite_config_path(use_ssl=False):
     if use_ssl:
         file_name = "ignite-config-ssl.xml"
     else:
-        file_name = "ignite-config.xml"
+        file_name = "ignite-config.xml.jinja2"
 
     return os.path.join(get_test_dir(), "config", file_name)
 
 
 def check_server_started(idx=1):
-    log_file = os.path.join(get_test_dir(), "logs", f"ignite-log-{idx}.txt")
-    if not os.path.exists(log_file):
-        return False
-
     pattern = re.compile('^Topology snapshot.*')
 
-    with open(log_file) as f:
-        for line in f.readlines():
-            if pattern.match(line):
-                return True
+    for log_file in get_log_files(idx):
+        with open(log_file) as f:
+            for line in f.readlines():
+                if pattern.match(line):
+                    return True
 
     return False
 
@@ -102,20 +101,33 @@ def kill_process_tree(pid):
         os.kill(pid, signal.SIGKILL)
 
 
+templateLoader = jinja2.FileSystemLoader(searchpath=os.path.join(get_test_dir(), "config"))
+templateEnv = jinja2.Environment(loader=templateLoader)
+
+
+def create_config_file(tpl_name, file_name, **kwargs):
+    template = templateEnv.get_template(tpl_name)
+    with open(os.path.join(get_test_dir(), "config", file_name), mode='w') as f:
+        f.write(template.render(**kwargs))
+
+
 def _start_ignite(idx=1, debug=False, use_ssl=False):
     clear_logs(idx)
 
     runner = get_ignite_runner()
 
     env = os.environ.copy()
-    env['IGNITE_INSTANCE_INDEX'] = str(idx)
-    env['IGNITE_CLIENT_PORT'] = str(10800 + idx)
 
     if debug:
         env["JVM_OPTS"] = "-Djava.net.preferIPv4Stack=true -Xdebug -Xnoagent -Djava.compiler=NONE " \
                           "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005 "
 
-    ignite_cmd = [runner, get_ignite_config_path(use_ssl)]
+    params = {'ignite_instance_idx': str(idx), 'ignite_client_port': 10800 + idx, 'use_ssl': use_ssl}
+
+    create_config_file('log4j.xml.jinja2', f'log4j-{idx}.xml', **params)
+    create_config_file('ignite-config.xml.jinja2', f'ignite-config-{idx}.xml', **params)
+
+    ignite_cmd = [runner, os.path.join(get_test_dir(), "config", f'ignite-config-{idx}.xml')]
     print("Starting Ignite server node:", ignite_cmd)
 
     srv = subprocess.Popen(ignite_cmd, env=env, cwd=get_test_dir())
@@ -142,38 +154,3 @@ def get_log_files(idx=1):
 def clear_logs(idx=1):
     for f in get_log_files(idx):
         os.remove(f)
-
-
-def read_log_file(file, idx):
-    i = -1
-    with open(file) as f:
-        lines = f.readlines()
-        for line in lines:
-            i += 1
-
-            if i < read_log_file.last_line[idx]:
-                continue
-
-            if i > read_log_file.last_line[idx]:
-                read_log_file.last_line[idx] = i
-
-            # Example: Client request received [reqId=1, addr=/127.0.0.1:51694,
-            # req=org.apache.ignite.internal.processors.platform.client.cache.ClientCachePutRequest@1f33101e]
-            res = re.match("Client request received .*?req=org.apache.ignite.internal.processors."
-                           "platform.client.cache.ClientCache([a-zA-Z]+)Request@", line)
-
-            if res is not None:
-                yield res.group(1)
-
-
-def get_request_grid_idx(message="Get"):
-    res = -1
-    for i in range(1, 5):
-        for log_file in get_log_files(i):
-            for log in read_log_file(log_file, i):
-                if log == message:
-                    res = i  # Do not exit early to advance all log positions
-    return res
-
-
-read_log_file.last_line = [0, 0, 0, 0, 0]

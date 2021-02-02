@@ -3,6 +3,7 @@
 .eggs
 .pytest_cache
 .tox
+tests/config/*.xml
 pyignite.egg-info
 ignite-log-*
 __pycache__

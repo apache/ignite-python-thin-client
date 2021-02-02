@@ -187,7 +187,9 @@ class Connection:
     def _fail(self):
         """ set client to failed state. """
         self._failed = True
-        self._in_use.release()
+
+        if self._in_use.locked():
+            self._in_use.release()
 
     def read_response(self) -> Union[dict, OrderedDict]:
         """
@@ -345,10 +347,8 @@ class Connection:
 
         # return connection to initial state regardless of use lock
         self.close(release=False)
-        try:
+        if self._in_use.locked():
             self._in_use.release()
-        except RuntimeError:
-            pass
 
         # connect and silence the connection errors
         try:
@@ -427,11 +427,8 @@ class Connection:
         not required, since sockets are automatically closed when
         garbage-collected.
         """
-        if release:
-            try:
-                self._in_use.release()
-            except RuntimeError:
-                pass
+        if release and self._in_use.locked():
+            self._in_use.release()
 
         if self._socket:
             try:

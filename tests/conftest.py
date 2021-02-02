@@ -22,7 +22,7 @@ import pytest
 from pyignite import Client
 from pyignite.constants import *
 from pyignite.api import cache_create, cache_destroy
-from tests.util import _start_ignite, start_ignite_gen, get_request_grid_idx
+from tests.util import _start_ignite, start_ignite_gen
 
 
 class BoolParser(argparse.Action):
@@ -132,12 +132,6 @@ def cache(client):
     cache_create(conn, cache_name)
     yield cache_name
     cache_destroy(conn, cache_name)
-
-
-@pytest.fixture(autouse=True)
-def log_init():
-    # Init log call timestamp
-    get_request_grid_idx()
 
 
 @pytest.fixture(scope='module')

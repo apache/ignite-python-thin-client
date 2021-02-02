@@ -578,7 +578,7 @@ class BinaryObject(IgniteDataType):
     @classmethod
     def parse(cls, stream):
         from pyignite.datatypes import Struct
-        buffer = stream.recv(ctypes.sizeof(ctypes.c_byte))
+        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
 
         if buffer == TC_NULL:
             return Null.build_c_type(), buffer
