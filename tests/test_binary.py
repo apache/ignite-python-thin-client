@@ -369,13 +369,13 @@ def test_complex_object_null_fields(client):
         name = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
         return re.sub('([a-z0-9])([A-Z])', r'\1_\2', name).lower()
 
-    fields = [(camel_to_snake(type_.__name__), type_) for type_ in [
+    fields = dict((camel_to_snake(type_.__name__), type_) for type_ in [
         ByteObject, ShortObject, IntObject, LongObject, FloatObject, DoubleObject, CharObject, BoolObject, UUIDObject,
         DateObject, TimestampObject, TimeObject, EnumObject, BinaryEnumObject, ByteArrayObject, ShortArrayObject,
         IntArrayObject, LongArrayObject, FloatArrayObject, DoubleArrayObject, CharArrayObject, BoolArrayObject,
         UUIDArrayObject, DateArrayObject, TimestampArrayObject, TimeArrayObject, EnumArrayObject, String,
         StringArrayObject, DecimalObject, DecimalArrayObject, ObjectArrayObject, CollectionObject, MapObject,
-        BinaryObject]]
+        BinaryObject])
 
     class AllTypesObject(metaclass=GenericObjectMeta, type_name='AllTypesObject', schema=fields):
         pass
@@ -383,7 +383,7 @@ def test_complex_object_null_fields(client):
     key = 42
     null_fields_value = AllTypesObject()
 
-    for field, _ in fields:
+    for field, _ in fields.items():
         setattr(null_fields_value, field, None)
 
     cache = client.get_or_create_cache('all_types_test_cache')
