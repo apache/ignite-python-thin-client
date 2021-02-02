@@ -12,14 +12,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import re
 from collections import OrderedDict
 from decimal import Decimal
 
 from pyignite import GenericObjectMeta
 from pyignite.datatypes import (
-    BinaryObject, BoolObject, IntObject, DecimalObject, LongObject, String,
-)
+    BinaryObject, BoolObject, IntObject, DecimalObject, LongObject, String, ByteObject, ShortObject, FloatObject,
+    DoubleObject, CharObject, UUIDObject, DateObject, TimestampObject, TimeObject, EnumObject, BinaryEnumObject,
+    ByteArrayObject, ShortArrayObject, IntArrayObject, LongArrayObject, FloatArrayObject, DoubleArrayObject,
+    CharArrayObject, BoolArrayObject, UUIDArrayObject, DateArrayObject, TimestampArrayObject, TimeArrayObject,
+    EnumArrayObject, StringArrayObject, DecimalArrayObject, ObjectArrayObject, CollectionObject, MapObject)
 from pyignite.datatypes.prop_codes import *
 
 
@@ -308,8 +311,8 @@ def test_complex_object_names(client):
 
 def test_complex_object_hash(client):
     """
-    Test that Python client correctly calculates hash of the binary
-    object that contains negative bytes.
+    Test that Python client correctly calculates hash of the binary object that
+    contains negative bytes.
     """
     class Internal(
         metaclass=GenericObjectMeta,
@@ -355,3 +358,36 @@ def test_complex_object_hash(client):
     hash_utf8 = BinaryObject.hashcode(obj_utf8, client=client)
 
     assert hash_utf8 == -1945378474, 'Invalid hashcode value for object with UTF-8 strings'
+
+
+def test_complex_object_null_fields(client):
+    """
+    Test that Python client can correctly write and read binary object that
+    contains null fields.
+    """
+    def camel_to_snake(name):
+        return re.sub('([a-z0-9])([A-Z])', r'\1_\2', name).lower()
+
+    fields = {camel_to_snake(type_.__name__): type_ for type_ in [
+        ByteObject, ShortObject, IntObject, LongObject, FloatObject, DoubleObject, CharObject, BoolObject, UUIDObject,
+        DateObject, TimestampObject, TimeObject, EnumObject, BinaryEnumObject, ByteArrayObject, ShortArrayObject,
+        IntArrayObject, LongArrayObject, FloatArrayObject, DoubleArrayObject, CharArrayObject, BoolArrayObject,
+        UUIDArrayObject, DateArrayObject, TimestampArrayObject, TimeArrayObject, EnumArrayObject, String,
+        StringArrayObject, DecimalObject, DecimalArrayObject, ObjectArrayObject, CollectionObject, MapObject,
+        BinaryObject]}
+
+    class AllTypesObject(metaclass=GenericObjectMeta, type_name='AllTypesObject', schema=fields):
+        pass
+
+    key = 42
+    null_fields_value = AllTypesObject()
+
+    for field in fields.keys():
+        setattr(null_fields_value, field, None)
+
+    cache = client.get_or_create_cache('all_types_test_cache')
+    cache.put(key, null_fields_value)
+
+    got_obj = cache.get(key)
+
+    assert got_obj == null_fields_value, 'Objects mismatch'

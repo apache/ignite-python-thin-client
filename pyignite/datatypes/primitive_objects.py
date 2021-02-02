@@ -17,10 +17,12 @@ import ctypes
 
 from pyignite.constants import *
 from pyignite.utils import unsigned
+
 from .base import IgniteDataType
 from .type_codes import *
 from .type_ids import *
 from .type_names import *
+from .null_object import Null
 
 
 __all__ = [
@@ -60,16 +62,21 @@ class DataObject(IgniteDataType):
 
     @classmethod
     def parse(cls, client: 'Client'):
+        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+        if tc_type == TC_NULL:
+            return Null.build_c_type(), tc_type
         data_type = cls.build_c_type()
-        buffer = client.recv(ctypes.sizeof(data_type))
+        buffer = tc_type + client.recv(ctypes.sizeof(data_type) - len(tc_type))
         return data_type, buffer
 
     @staticmethod
     def to_python(ctype_object, *args, **kwargs):
-        return ctype_object.value
+        return getattr(ctype_object, "value", None)
 
     @classmethod
     def from_python(cls, value):
+        if value is None:
+            return Null.from_python()
         data_type = cls.build_c_type()
         data_object = data_type()
         data_object.type_code = int.from_bytes(
@@ -185,13 +192,18 @@ class CharObject(DataObject):
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
-        return ctype_object.value.to_bytes(
+        value = getattr(ctype_object, "value", None)
+        if value is None:
+            return None
+        return value.to_bytes(
             ctypes.sizeof(cls.c_type),
             byteorder=PROTOCOL_BYTE_ORDER
         ).decode(PROTOCOL_CHAR_ENCODING)
 
     @classmethod
     def from_python(cls, value):
+        if value is None:
+            return Null.from_python()
         if type(value) is str:
             value = value.encode(PROTOCOL_CHAR_ENCODING)
         # assuming either a bytes or an integer
@@ -218,5 +230,8 @@ class BoolObject(DataObject):
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
-        return ctype_object.value != 0
+        value = getattr(ctype_object, "value", None)
+        if value is None:
+            return None
+        return value != 0
 

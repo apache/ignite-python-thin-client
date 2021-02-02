@@ -276,8 +276,6 @@ class UUIDObject(StandardObject):
 
     UUID_BYTE_ORDER = (7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8)
 
-    UUID_BYTE_ORDER = (7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8)
-
     @staticmethod
     def hashcode(value: 'UUID', *args, **kwargs) -> int:
         msb = value.int >> 64
@@ -303,6 +301,9 @@ class UUIDObject(StandardObject):
 
     @classmethod
     def from_python(cls, value: uuid.UUID):
+        if value is None:
+            return Null.from_python()
+
         data_type = cls.build_c_type()
         data_object = data_type()
         data_object.type_code = int.from_bytes(
@@ -548,8 +549,6 @@ class EnumObject(StandardObject):
             cls.type_code,
             byteorder=PROTOCOL_BYTE_ORDER
         )
-        if value is None:
-            return Null.from_python(value)
         data_object.type_id, data_object.ordinal = value
         return bytes(data_object)
 
@@ -601,8 +600,13 @@ class StandardArray(IgniteDataType):
 
     @classmethod
     def parse(cls, client: 'Client'):
+        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+
+        if tc_type == TC_NULL:
+            return Null.build_c_type(), tc_type
+
         header_class = cls.build_header_class()
-        buffer = client.recv(ctypes.sizeof(header_class))
+        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
         header = header_class.from_buffer_copy(buffer)
         fields = []
         for i in range(header.length):
@@ -623,7 +627,10 @@ class StandardArray(IgniteDataType):
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
         result = []
-        for i in range(ctype_object.length):
+        length = getattr(ctype_object, "length", None)
+        if length is None:
+            return None
+        for i in range(length):
             result.append(
                 cls.standard_type.to_python(
                     getattr(ctype_object, 'element_{}'.format(i)),
@@ -634,6 +641,8 @@ class StandardArray(IgniteDataType):
 
     @classmethod
     def from_python(cls, value):
+        if value is None:
+            return Null.from_python()
         header_class = cls.build_header_class()
         header = header_class()
         if hasattr(header, 'type_code'):
@@ -796,6 +805,9 @@ class EnumArrayObject(StandardArrayObject):
 
     @classmethod
     def from_python(cls, value):
+        if value is None:
+            return Null.from_python()
+
         type_id, value = value
         header_class = cls.build_header_class()
         header = header_class()
@@ -815,7 +827,9 @@ class EnumArrayObject(StandardArrayObject):
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
-        type_id = ctype_object.type_id
+        type_id = getattr(ctype_object, "type_id", None)
+        if type_id is None:
+            return None
         return type_id, super().to_python(ctype_object, *args, **kwargs)
 
 

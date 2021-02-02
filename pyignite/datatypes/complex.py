@@ -20,11 +20,13 @@ from typing import Iterable, Dict
 
 from pyignite.constants import *
 from pyignite.exceptions import ParseError
+
 from .base import IgniteDataType
 from .internal import AnyDataObject, infer_from_python
 from .type_codes import *
 from .type_ids import *
 from .type_names import *
+from .null_object import Null
 
 
 __all__ = [
@@ -68,8 +70,13 @@ class ObjectArrayObject(IgniteDataType):
 
     @classmethod
     def parse(cls, client: 'Client'):
+        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+
+        if tc_type == TC_NULL:
+            return Null.build_c_type(), tc_type
+
         header_class = cls.build_header()
-        buffer = client.recv(ctypes.sizeof(header_class))
+        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
         header = header_class.from_buffer_copy(buffer)
         fields = []
 
@@ -91,7 +98,10 @@ class ObjectArrayObject(IgniteDataType):
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
         result = []
-        for i in range(ctype_object.length):
+        length = getattr(ctype_object, "length", None)
+        if length is None:
+            return None
+        for i in range(length):
             result.append(
                 AnyDataObject.to_python(
                     getattr(ctype_object, 'element_{}'.format(i)),
@@ -102,6 +112,9 @@ class ObjectArrayObject(IgniteDataType):
 
     @classmethod
     def from_python(cls, value):
+        if value is None:
+            return Null.from_python()
+
         type_or_id, value = value
         header_class = cls.build_header()
         header = header_class()
@@ -150,8 +163,13 @@ class WrappedDataObject(IgniteDataType):
 
     @classmethod
     def parse(cls, client: 'Client'):
+        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+
+        if tc_type == TC_NULL:
+            return Null.build_c_type(), tc_type
+
         header_class = cls.build_header()
-        buffer = client.recv(ctypes.sizeof(header_class))
+        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
         header = header_class.from_buffer_copy(buffer)
 
         final_class = type(
@@ -243,8 +261,13 @@ class CollectionObject(IgniteDataType):
 
     @classmethod
     def parse(cls, client: 'Client'):
+        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+
+        if tc_type == TC_NULL:
+            return Null.build_c_type(), tc_type
+
         header_class = cls.build_header()
-        buffer = client.recv(ctypes.sizeof(header_class))
+        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
         header = header_class.from_buffer_copy(buffer)
         fields = []
 
@@ -266,7 +289,10 @@ class CollectionObject(IgniteDataType):
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
         result = []
-        for i in range(ctype_object.length):
+        length = getattr(ctype_object, "length", None)
+        if length is None:
+            return None
+        for i in range(length):
             result.append(
                 AnyDataObject.to_python(
                     getattr(ctype_object, 'element_{}'.format(i)),
@@ -277,6 +303,9 @@ class CollectionObject(IgniteDataType):
 
     @classmethod
     def from_python(cls, value):
+        if value is None:
+            return Null.from_python()
+
         type_or_id, value = value
         header_class = cls.build_header()
         header = header_class()
@@ -330,8 +359,13 @@ class Map(IgniteDataType):
 
     @classmethod
     def parse(cls, client: 'Client'):
+        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+
+        if tc_type == TC_NULL:
+            return Null.build_c_type(), tc_type
+
         header_class = cls.build_header()
-        buffer = client.recv(ctypes.sizeof(header_class))
+        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
         header = header_class.from_buffer_copy(buffer)
         fields = []
 
@@ -420,12 +454,18 @@ class MapObject(Map):
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
-        return ctype_object.type, super().to_python(
+        obj_type = getattr(ctype_object, "type", None)
+        if obj_type is None:
+            return None
+        return obj_type, super().to_python(
             ctype_object, *args, **kwargs
         )
 
     @classmethod
     def from_python(cls, value):
+        if value is None:
+            return Null.from_python()
+
         type_id, value = value
         return super().from_python(value, type_id)
 
@@ -539,9 +579,13 @@ class BinaryObject(IgniteDataType):
     @classmethod
     def parse(cls, client: 'Client'):
         from pyignite.datatypes import Struct
+        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
+
+        if tc_type == TC_NULL:
+            return Null.build_c_type(), tc_type
 
         header_class = cls.build_header()
-        buffer = client.recv(ctypes.sizeof(header_class))
+        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
         header = header_class.from_buffer_copy(buffer)
 
         # ignore full schema, always retrieve fields' types and order
@@ -572,14 +616,17 @@ class BinaryObject(IgniteDataType):
 
     @classmethod
     def to_python(cls, ctype_object, client: 'Client' = None, *args, **kwargs):
+        type_id = getattr(ctype_object, "type_id", None)
+        if type_id is None:
+            return None
 
         if not client:
             raise ParseError(
-                'Can not query binary type {}'.format(ctype_object.type_id)
+                'Can not query binary type {}'.format(type_id)
             )
 
         data_class = client.query_binary_type(
-            ctype_object.type_id,
+            type_id,
             ctype_object.schema_id
         )
         result = data_class()
@@ -596,6 +643,8 @@ class BinaryObject(IgniteDataType):
 
     @classmethod
     def from_python(cls, value: object):
+        if value is None:
+            return Null.from_python()
 
         if getattr(value, '_buffer', None) is None:
             client = cls.find_client()
