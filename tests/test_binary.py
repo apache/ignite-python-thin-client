@@ -377,7 +377,7 @@ def test_complex_object_null_fields(client):
         StringArrayObject, DecimalObject, DecimalArrayObject, ObjectArrayObject, CollectionObject, MapObject,
         BinaryObject]]
 
-    class AllTypesObject(schema=fields):
+    class AllTypesObject(metaclass=GenericObjectMeta, type_name='AllTypesObject', schema=fields):
         pass
 
     key = 42
