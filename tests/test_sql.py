@@ -19,6 +19,7 @@ from pyignite.api import (
     cache_get_configuration,
 )
 from pyignite.datatypes.prop_codes import *
+from pyignite.exceptions import CacheError
 from pyignite.utils import entity_id, unwrap_binary
 
 initial_data = [
@@ -186,3 +187,12 @@ def test_long_multipage_query(client):
             assert value == field_number * page[0]
 
     client.sql(drop_query)
+
+
+def test_sql_not_create_cache(client):
+    error = None
+    try:
+        client.sql(schema='IS_NOT_EXISTING', query_str='select * from IsNotExisting')
+    except CacheError as e:
+        error = e
+    assert type(error) is CacheError
