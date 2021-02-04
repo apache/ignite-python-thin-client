@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from deprecated import deprecated
 from typing import Union
 
 from pyignite.constants import *
@@ -24,7 +23,7 @@ from pyignite.datatypes import (
 from pyignite.datatypes.sql import StatementType
 from pyignite.queries import Query
 from pyignite.queries.op_codes import *
-from pyignite.utils import cache_id
+from pyignite.utils import cache_id, deprecated
 from .result import APIResult
 
 
