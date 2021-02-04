@@ -519,7 +519,7 @@ class Client:
         return cache_get_names(self.random_node)
 
     def sql(
-        self, query_str: str, page_size: int = 1, query_args: Iterable = None,
+        self, query_str: str, page_size: int = 1024, query_args: Iterable = None,
         schema: Union[int, str] = 'PUBLIC',
         statement_type: int = 0, distributed_joins: bool = False,
         local: bool = False, replicated_only: bool = False,
@@ -531,8 +531,8 @@ class Client:
         Runs an SQL query and returns its result.
 
         :param query_str: SQL query string,
-        :param page_size: (optional) cursor page size. Default is 1, which
-         means that client makes one server call per row,
+        :param page_size: (optional) cursor page size. Default is 1024, which
+         means that client makes one server call per 1024 rows,
         :param query_args: (optional) query arguments. List of values or
          (value, type hint) tuples,
         :param schema: (optional) schema for the query. Defaults to `PUBLIC`,
