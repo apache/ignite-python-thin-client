@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
+
 from pyignite.api import (
     sql_fields, sql_fields_cursor_get_page,
     sql, sql_cursor_get_page,
@@ -190,10 +192,6 @@ def test_long_multipage_query(client):
 
 
 def test_sql_not_create_cache(client):
-    error = None
-    try:
+    with pytest.raises(SQLError, match=r".*Cache does not exist.*"):
         client.sql(schema='IS_NOT_EXISTING', query_str='select * from IsNotExisting')
-    except SQLError as e:
-        error = e
-    assert type(error) is SQLError
-    assert str(error).find('Cache does not exist') >= 0
+        pytest.fail("expected SQLError")
