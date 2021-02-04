@@ -15,6 +15,7 @@
 
 import ctypes
 import decimal
+import warnings
 
 from functools import wraps
 from threading import Event, Thread
@@ -313,3 +314,13 @@ def process_delimiter(name: str, delimiter: str) -> str:
     Splits the name by delimiter, capitalize each part, merge.
     """
     return ''.join([capitalize(x) for x in name.split(delimiter)])
+
+
+def deprecated(version, reason):
+    def decorator_deprecated(fn):
+        @wraps(fn)
+        def wrapper_deprecated(*args, **kwds):
+            warnings.warn(f'Deprecated since {version}. The reason: {reason}', category=DeprecationWarning)
+            return fn(*args, **kwds)
+        return wrapper_deprecated
+    return decorator_deprecated

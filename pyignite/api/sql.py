@@ -13,11 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Only key-value queries (scan queries) are implemented. SQL part is still
-in progress.
-"""
-
 from typing import Union
 
 from pyignite.constants import *
@@ -28,7 +23,7 @@ from pyignite.datatypes import (
 from pyignite.datatypes.sql import StatementType
 from pyignite.queries import Query
 from pyignite.queries.op_codes import *
-from pyignite.utils import cache_id
+from pyignite.utils import cache_id, deprecated
 from .result import APIResult
 
 
@@ -142,6 +137,8 @@ def scan_cursor_get_page(
     return result
 
 
+@deprecated(version='1.2.0', reason="This API is deprecated and will be removed in the following major release. "
+                                    "Use sql_fields instead")
 def sql(
     conn: 'Connection', cache: Union[str, int],
     table_name: str, query_str: str, page_size: int, query_args=None,
@@ -227,6 +224,8 @@ def sql(
     return result
 
 
+@deprecated(version='1.2.0', reason="This API is deprecated and will be removed in the following major release. "
+                                    "Use sql_fields instead")
 def sql_cursor_get_page(
     conn: 'Connection', cursor: int, query_id: int = None,
 ) -> APIResult:
