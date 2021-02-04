@@ -194,4 +194,3 @@ def test_long_multipage_query(client):
 def test_sql_not_create_cache(client):
     with pytest.raises(SQLError, match=r".*Cache does not exist.*"):
         client.sql(schema='IS_NOT_EXISTING', query_str='select * from IsNotExisting')
-        pytest.fail("expected SQLError")
