@@ -91,9 +91,10 @@ class PrimitiveArray(IgniteDataType):
         return [ctype_object.data[i] for i in range(ctype_object.length)]
 
     @classmethod
-    def from_python(cls, value):
+    def from_python(cls, stream, value):
         if value is None:
-            return Null.from_python()
+            Null.from_python(stream)
+            return
 
         header_class = cls.build_header_class()
         header = header_class()
@@ -104,11 +105,10 @@ class PrimitiveArray(IgniteDataType):
             )
         length = len(value)
         header.length = length
-        buffer = bytearray(header)
 
+        stream.write(header)
         for x in value:
-            buffer += cls.primitive_type.from_python(x)
-        return bytes(buffer)
+            cls.primitive_type.from_python(stream, x)
 
 
 class ByteArray(PrimitiveArray):
@@ -125,14 +125,13 @@ class ByteArray(PrimitiveArray):
         return bytearray(data)
 
     @classmethod
-    def from_python(cls, value):
+    def from_python(cls, stream, value):
         header_class = cls.build_header_class()
         header = header_class()
-
-        # no need to iterate on bytes or bytearray
-        # to create ByteArray data buffer
         header.length = len(value)
-        return bytes(bytearray(header) + bytearray(value))
+
+        stream.write(header)
+        stream.write(bytearray(value))
 
 
 class ShortArray(PrimitiveArray):
@@ -219,9 +218,10 @@ class ByteArrayObject(PrimitiveArrayObject):
         return ByteArray.to_python(ctype_object, *args, **kwargs)
 
     @classmethod
-    def from_python(cls, value):
+    def from_python(cls, stream, value):
         if value is None:
-            return Null.from_python()
+            Null.from_python(stream)
+            return
 
         header_class = cls.build_header_class()
         header = header_class()
@@ -229,10 +229,13 @@ class ByteArrayObject(PrimitiveArrayObject):
             cls.type_code,
             byteorder=PROTOCOL_BYTE_ORDER
         )
-
-        # no need to iterate on bytes or bytearray
-        # to create ByteArrayObject data buffer
         header.length = len(value)
+        stream.write(header)
+
+        if isinstance(value, (bytes, bytearray)):
+            stream.write(value)
+            return
+
         try:
             # `value` is a `bytearray` or a sequence of integer values
             # in range 0 to 255
@@ -248,7 +251,7 @@ class ByteArrayObject(PrimitiveArrayObject):
                         'byte must be in range(-128, 256)!'
                     ) from None
 
-        return bytes(bytearray(header) + value_buffer)
+        stream.write(value_buffer)
 
 
 class ShortArrayObject(PrimitiveArrayObject):

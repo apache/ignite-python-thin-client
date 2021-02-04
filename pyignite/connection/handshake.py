@@ -50,7 +50,7 @@ class HandshakeRequest:
             ])
         self.handshake_struct = Struct(fields)
 
-    def __bytes__(self) -> bytes:
+    def from_python(self, stream):
         handshake_data = {
             'length': 8,
             'op_code': OP_HANDSHAKE,
@@ -69,4 +69,5 @@ class HandshakeRequest:
                 len(self.username),
                 len(self.password),
             ])
-        return self.handshake_struct.from_python(handshake_data)
+
+        self.handshake_struct.from_python(stream, handshake_data)

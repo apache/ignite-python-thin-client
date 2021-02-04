@@ -48,7 +48,7 @@ def get_binary_type(conn: 'Connection', binary_type: Union[str, int], query_id=N
         query_id=query_id,
     )
 
-    _, send_buffer = query_struct.from_python({
+    send_buffer = query_struct.from_python(conn, {
         'type_id': entity_id(binary_type),
     })
     conn.send(send_buffer)

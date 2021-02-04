@@ -35,7 +35,7 @@ as well as Ignite protocol handshaking.
 
 from collections import OrderedDict
 import socket
-from threading import Lock
+from threading import RLock
 from typing import Union
 
 from pyignite.constants import *
@@ -97,7 +97,7 @@ class Connection:
                 ).format(param))
 
     def __init__(
-        self, client: 'Client', timeout: int = None,
+        self, client: 'Client', timeout: float = 2.0,
         username: str = None, password: str = None, **ssl_params
     ):
         """
@@ -149,7 +149,8 @@ class Connection:
             ssl_params['use_ssl'] = True
         self.ssl_params = ssl_params
         self._failed = False
-        self._in_use = Lock()
+        self._mux = RLock()
+        self._in_use = False
 
     @property
     def socket(self) -> socket.socket:
@@ -159,17 +160,20 @@ class Connection:
     @property
     def closed(self) -> bool:
         """ Tells if socket is closed. """
-        return self._socket is None
+        with self._mux:
+            return self._socket is None
 
     @property
     def failed(self) -> bool:
         """ Tells if connection is failed. """
-        return self._failed
+        with self._mux:
+            return self._failed
 
     @property
     def alive(self) -> bool:
         """ Tells if connection is up and no failure detected. """
-        return not (self._failed or self.closed)
+        with self._mux:
+            return not (self._failed or self.closed)
 
     def __repr__(self) -> str:
         return '{}:{}'.format(self.host or '?', self.port or '?')
@@ -186,10 +190,10 @@ class Connection:
 
     def _fail(self):
         """ set client to failed state. """
-        self._failed = True
+        with self._mux:
+            self._failed = True
 
-        if self._in_use.locked():
-            self._in_use.release()
+            self._in_use = False
 
     def read_response(self) -> Union[dict, OrderedDict]:
         """
@@ -234,9 +238,10 @@ class Connection:
         """
         detecting_protocol = False
 
-        # go non-blocking for faster reconnect
-        if not self._in_use.acquire(blocking=False):
-            raise ConnectionError('Connection is in use.')
+        with self._mux:
+            if self._in_use:
+                raise ConnectionError('Connection is in use.')
+            self._in_use = True
 
         # choose highest version first
         if self.client.protocol_version is None:
@@ -289,7 +294,11 @@ class Connection:
             self.username,
             self.password
         )
-        self.send(bytes(hs_request))
+
+        with BinaryStream(None, self) as stream:
+            hs_request.from_python(stream)
+            self.send(stream.getvalue())
+
         hs_response = self.read_response()
         if hs_response['op_code'] == 0:
             # disconnect but keep in use
@@ -345,10 +354,7 @@ class Connection:
         if not self.failed:
             return
 
-        # return connection to initial state regardless of use lock
-        self.close(release=False)
-        if self._in_use.locked():
-            self._in_use.release()
+        self.close()
 
         # connect and silence the connection errors
         try:
@@ -427,13 +433,14 @@ class Connection:
         not required, since sockets are automatically closed when
         garbage-collected.
         """
-        if release and self._in_use.locked():
-            self._in_use.release()
+        with self._mux:
+            if self._socket:
+                try:
+                    self._socket.shutdown(socket.SHUT_RDWR)
+                    self._socket.close()
+                except connection_errors:
+                    pass
+                self._socket = None
 
-        if self._socket:
-            try:
-                self._socket.shutdown(socket.SHUT_RDWR)
-                self._socket.close()
-            except connection_errors:
-                pass
-            self._socket = None
+            if release:
+                self._in_use = False

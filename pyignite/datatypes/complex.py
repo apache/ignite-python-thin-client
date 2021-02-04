@@ -33,6 +33,8 @@ __all__ = [
     'WrappedDataObject', 'BinaryObject',
 ]
 
+from ..stream import BinaryStream
+
 
 class ObjectArrayObject(IgniteDataType):
     """
@@ -110,9 +112,10 @@ class ObjectArrayObject(IgniteDataType):
         return ctype_object.type_id, result
 
     @classmethod
-    def from_python(cls, value):
+    def from_python(cls, stream, value):
         if value is None:
-            return Null.from_python()
+            Null.from_python(stream)
+            return
 
         type_or_id, value = value
         header_class = cls.build_header()
@@ -128,11 +131,10 @@ class ObjectArrayObject(IgniteDataType):
             length = 1
         header.length = length
         header.type_id = type_or_id
-        buffer = bytearray(header)
 
+        stream.write(header)
         for x in value:
-            buffer += infer_from_python(x)
-        return bytes(buffer)
+            infer_from_python(stream, x)
 
 
 class WrappedDataObject(IgniteDataType):
@@ -192,7 +194,7 @@ class WrappedDataObject(IgniteDataType):
         return bytes(ctype_object.payload), ctype_object.offset
 
     @classmethod
-    def from_python(cls, value):
+    def from_python(cls, stream, value):
         raise ParseError('Send unwrapped data.')
 
 
@@ -301,9 +303,10 @@ class CollectionObject(IgniteDataType):
         return ctype_object.type, result
 
     @classmethod
-    def from_python(cls, value):
+    def from_python(cls, stream, value):
         if value is None:
-            return Null.from_python()
+            Null.from_python(stream)
+            return
 
         type_or_id, value = value
         header_class = cls.build_header()
@@ -319,11 +322,10 @@ class CollectionObject(IgniteDataType):
             length = 1
         header.length = length
         header.type = type_or_id
-        buffer = bytearray(header)
 
+        stream.write(header)
         for x in value:
-            buffer += infer_from_python(x)
-        return bytes(buffer)
+            infer_from_python(stream, x)
 
 
 class Map(IgniteDataType):
@@ -401,7 +403,7 @@ class Map(IgniteDataType):
         return result
 
     @classmethod
-    def from_python(cls, value, type_id=None):
+    def from_python(cls, stream, value, type_id=None):
         header_class = cls.build_header()
         header = header_class()
         length = len(value)
@@ -413,12 +415,11 @@ class Map(IgniteDataType):
             )
         if hasattr(header, 'type'):
             header.type = type_id
-        buffer = bytearray(header)
 
+        stream.write(header)
         for k, v in value.items():
-            buffer += infer_from_python(k)
-            buffer += infer_from_python(v)
-        return bytes(buffer)
+            infer_from_python(stream, k)
+            infer_from_python(stream, v)
 
 
 class MapObject(Map):
@@ -461,12 +462,13 @@ class MapObject(Map):
         )
 
     @classmethod
-    def from_python(cls, value):
+    def from_python(cls, stream, value):
         if value is None:
-            return Null.from_python()
+            Null.from_python(stream)
+            return
 
         type_id, value = value
-        return super().from_python(value, type_id)
+        super().from_python(stream, value, type_id)
 
 
 class BinaryObject(IgniteDataType):
@@ -481,42 +483,14 @@ class BinaryObject(IgniteDataType):
     COMPACT_FOOTER = 0x0020
 
     @staticmethod
-    def find_client():
-        """
-        A nice hack. Extracts the nearest `Client` instance from the
-        call stack.
-        """
-        from pyignite import Client
-        from pyignite.connection import Connection
-
-        frame = None
-        try:
-            for rec in inspect.stack()[2:]:
-                frame = rec[0]
-                code = frame.f_code
-                for varname in code.co_varnames:
-                    suspect = frame.f_locals.get(varname)
-                    if isinstance(suspect, Client):
-                        return suspect
-                    if isinstance(suspect, Connection):
-                        return suspect.client
-        finally:
-            del frame
-
-    @staticmethod
-    def hashcode(
-        value: object, client, *args, **kwargs
-    ) -> int:
+    def hashcode(value: object, client: None) -> int:
         # binary objects's hashcode implementation is special in the sense
         # that you need to fully serialize the object to calculate
         # its hashcode
-        if value._hashcode is None:
+        if not value._hashcode and client :
 
-            # …and for to serialize it you need a Client instance
-            if client is None:
-                client = BinaryObject.find_client()
-
-            value._build(client)
+            with BinaryStream(None, client.random_node) as stream:
+                value._from_python(stream)
 
         return value._hashcode
 
@@ -563,17 +537,6 @@ class BinaryObject(IgniteDataType):
                 ],
             },
         )
-
-    @staticmethod
-    def get_dataclass(conn: 'Connection', header) -> OrderedDict:
-        # get field names from outer space
-        result = conn.client.query_binary_type(
-            header.type_id,
-            header.schema_id
-        )
-        if not result:
-            raise ParseError('Binary type is not registered')
-        return result
 
     @classmethod
     def parse(cls, stream):
@@ -641,23 +604,10 @@ class BinaryObject(IgniteDataType):
         return result
 
     @classmethod
-    def from_python(cls, value: object):
+    def from_python(cls, stream, value):
         if value is None:
-            return Null.from_python()
+            Null.from_python(stream)
+            return
 
-        if getattr(value, '_buffer', None) is None:
-            client = cls.find_client()
-
-            # if no client can be found, the class of the `value` is discarded
-            # and the new dataclass is automatically registered later on
-            if client:
-                client.register_binary_type(value.__class__)
-            else:
-                raise Warning(
-                    'Can not register binary type {}'.format(value.type_name)
-                )
-
-            # build binary representation
-            value._build(client)
-
-        return value._buffer
+        stream.register_binary_type(value.__class__)
+        value._from_python(stream)

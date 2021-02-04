@@ -179,20 +179,19 @@ class StructArray:
             )
         return result
 
-    def from_python(self, value):
+    def from_python(self, stream, value):
         length = len(value)
         header_class = self.build_header_class()
         header = header_class()
         header.length = length
-        buffer = bytearray(header)
 
+
+        stream.write(header)
         for i, v in enumerate(value):
             for default_key, default_value in self.defaults.items():
                 v.setdefault(default_key, default_value)
             for name, el_class in self.following:
-                buffer += el_class.from_python(v[name])
-
-        return bytes(buffer)
+                el_class.from_python(stream, v[name])
 
 
 @attr.s
@@ -243,16 +242,12 @@ class Struct:
             )
         return result
 
-    def from_python(self, value) -> bytes:
-        buffer = b''
-
+    def from_python(self, stream, value):
         for default_key, default_value in self.defaults.items():
             value.setdefault(default_key, default_value)
 
         for name, el_class in self.fields:
-            buffer += el_class.from_python(value[name])
-
-        return buffer
+            el_class.from_python(stream, value[name])
 
 
 class AnyDataObject:
@@ -416,11 +411,12 @@ class AnyDataObject:
         )
 
     @classmethod
-    def from_python(cls, value):
-        return cls.map_python_type(value).from_python(value)
+    def from_python(cls, stream, value):
+        p_type = cls.map_python_type(value)
+        p_type.from_python(stream, value)
 
 
-def infer_from_python(value: Any):
+def infer_from_python(stream, value: Any):
     """
     Convert pythonic value to ctypes buffer, type hint-aware.
 
@@ -431,7 +427,8 @@ def infer_from_python(value: Any):
         value, data_type = value
     else:
         data_type = AnyDataObject
-    return data_type.from_python(value)
+
+    data_type.from_python(stream, value)
 
 
 @attr.s
@@ -489,7 +486,7 @@ class AnyDataArray(AnyDataObject):
             )
         return result
 
-    def from_python(self, value):
+    def from_python(self, stream, value):
         header_class = self.build_header()
         header = header_class()
 
@@ -499,8 +496,7 @@ class AnyDataArray(AnyDataObject):
             value = [value]
             length = 1
         header.length = length
-        buffer = bytearray(header)
 
+        stream.write(header)
         for x in value:
-            buffer += infer_from_python(x)
-        return bytes(buffer)
+            infer_from_python(stream, x)

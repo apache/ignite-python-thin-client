@@ -105,7 +105,7 @@ def unwrap_binary(client: 'Client', wrapped: tuple) -> object:
     return result
 
 
-def hashcode(data: Union[str, bytes]) -> int:
+def hashcode(data: Union[str, bytes, bytearray, memoryview]) -> int:
     """
     Calculate hash code used for identifying objects in Ignite binary API.
 

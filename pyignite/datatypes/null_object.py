@@ -65,6 +65,6 @@ class Null(IgniteDataType):
         return None
 
     @staticmethod
-    def from_python(*args):
-        return TC_NULL
+    def from_python(stream, *args):
+        stream.write(TC_NULL)
 

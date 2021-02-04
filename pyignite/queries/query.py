@@ -48,31 +48,32 @@ class Query:
             )
         return cls._query_c_type
 
-    def _build_header(self, buffer: bytearray, values: dict):
+    def _build_header(self, stream, values: dict):
         header_class = self.build_c_type()
+        header_len = ctypes.sizeof(header_class)
+        init_pos = stream.tell()
+        stream.seek(init_pos + header_len)
+
         header = header_class()
         header.op_code = self.op_code
         if self.query_id is None:
             header.query_id = randint(MIN_LONG, MAX_LONG)
 
         for name, c_type in self.following:
-            buffer += c_type.from_python(values[name])
+            c_type.from_python(stream, values[name])
 
-        header.length = (
-                len(buffer)
-                + ctypes.sizeof(header_class)
-                - ctypes.sizeof(ctypes.c_int)
-        )
+        header.length = stream.tell() - init_pos - ctypes.sizeof(ctypes.c_int)
+        stream.seek(init_pos)
 
         return header
 
-    def from_python(self, values: dict = None):
+    def from_python(self, conn: Connection, values: dict = None):
         if values is None:
             values = {}
-        buffer = bytearray()
-        header = self._build_header(buffer, values)
-        buffer[:0] = bytes(header)
-        return header.query_id, bytes(buffer)
+        stream = BinaryStream(None, conn)
+        header = self._build_header(stream, values)
+        stream.write(header)
+        return stream.getvalue()
 
     def perform(
         self, conn: Connection, query_params: dict = None,
@@ -90,7 +91,7 @@ class Query:
         :return: instance of :class:`~pyignite.api.result.APIResult` with raw
          value (may undergo further processing in API functions).
         """
-        _, send_buffer = self.from_python(query_params)
+        send_buffer = self.from_python(conn, query_params)
         conn.send(send_buffer)
 
         if sql:
@@ -142,7 +143,7 @@ class ConfigQuery(Query):
             )
         return cls._query_c_type
 
-    def _build_header(self, buffer: bytearray, values: dict):
-        header = super()._build_header(buffer, values)
+    def _build_header(self, stream, values: dict):
+        header = super()._build_header(stream, values)
         header.config_length = header.length - ctypes.sizeof(type(header))
         return header

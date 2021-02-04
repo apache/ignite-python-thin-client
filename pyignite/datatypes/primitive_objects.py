@@ -74,9 +74,11 @@ class DataObject(IgniteDataType):
         return getattr(ctype_object, "value", None)
 
     @classmethod
-    def from_python(cls, value):
+    def from_python(cls, stream, value):
         if value is None:
-            return Null.from_python()
+            Null.from_python(stream)
+            return
+
         data_type = cls.build_c_type()
         data_object = data_type()
         data_object.type_code = int.from_bytes(
@@ -84,7 +86,7 @@ class DataObject(IgniteDataType):
             byteorder=PROTOCOL_BYTE_ORDER
         )
         data_object.value = value
-        return bytes(data_object)
+        stream.write(data_object)
 
 
 class ByteObject(DataObject):
@@ -201,18 +203,20 @@ class CharObject(DataObject):
         ).decode(PROTOCOL_CHAR_ENCODING)
 
     @classmethod
-    def from_python(cls, value):
+    def from_python(cls, stream, value):
         if value is None:
-            return Null.from_python()
+            Null.from_python(stream)
+            return
+
         if type(value) is str:
             value = value.encode(PROTOCOL_CHAR_ENCODING)
         # assuming either a bytes or an integer
         if type(value) is bytes:
             value = int.from_bytes(value, byteorder=PROTOCOL_BYTE_ORDER)
         # assuming a valid integer
-        return cls.type_code + value.to_bytes(
-            ctypes.sizeof(cls.c_type),
-            byteorder=PROTOCOL_BYTE_ORDER
+        stream.write(cls.type_code)
+        stream.write(
+            value.to_bytes(ctypes.sizeof(cls.c_type), byteorder=PROTOCOL_BYTE_ORDER)
         )
 
 

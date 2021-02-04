@@ -15,9 +15,12 @@
 
 from io import BytesIO
 
+import pyignite.utils as ignite_utils
+
+
 class BinaryStream:
     def __init__(self, stream, conn):
-        self.stream = BytesIO(stream)
+        self.stream = BytesIO(stream) if stream else BytesIO()
         self.conn = conn
 
     @property
@@ -33,11 +36,20 @@ class BinaryStream:
         self.stream.readinto(buf)
         return buf
 
+    def write(self, buf):
+        return self.stream.write(buf)
+
     def tell(self):
         return self.stream.tell()
 
     def seek(self, *args, **kwargs):
         return self.stream.seek(*args, **kwargs)
+
+    def getvalue(self):
+        return self.stream.getvalue()
+
+    def hashcode(self, start, bytes_len):
+        return ignite_utils.hashcode(self.stream.getbuffer()[start:start+bytes_len])
 
     def __enter__(self):
         return self
@@ -55,3 +67,5 @@ class BinaryStream:
             raise RuntimeError('Binary type is not registered')
         return result
 
+    def register_binary_type(self, *args, **kwargs):
+        return self.conn.client.register_binary_type(*args, **kwargs)

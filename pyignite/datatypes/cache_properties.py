@@ -116,11 +116,12 @@ class PropBase:
         )
 
     @classmethod
-    def from_python(cls, value):
+    def from_python(cls, stream, value):
         header_class = cls.build_header()
         header = header_class()
         header.prop_code = cls.prop_code
-        return bytes(header) + cls.prop_data_class.from_python(value)
+        stream.write(bytes(header))
+        cls.prop_data_class.from_python(stream, value)
 
 
 class PropName(PropBase):
@@ -276,7 +277,7 @@ class PropStatisticsEnabled(PropBase):
 class AnyProperty(PropBase):
 
     @classmethod
-    def from_python(cls, value):
+    def from_python(cls, stream, value):
         raise Exception(
             'You must choose a certain type '
             'for your cache configuration property'

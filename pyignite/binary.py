@@ -102,18 +102,16 @@ class GenericObjectMeta(GenericObjectPropsMeta):
             mcs, name, (GenericObjectProps, )+base_classes, namespace
         )
 
-        def _build(self, client: 'Client' = None) -> int:
+        def _from_python(self, stream):
             """
             Method for building binary representation of the Generic object
             and calculating a hashcode from it.
 
             :param self: Generic object instance,
-            :param client: (optional) connection to Ignite cluster,
+            :param stream: BinaryStream
             """
-            if client is None:
-                compact_footer = True
-            else:
-                compact_footer = client.compact_footer
+
+            compact_footer = stream.compact_footer
 
             # prepare header
             header_class = BinaryObject.build_header()
@@ -129,18 +127,19 @@ class GenericObjectMeta(GenericObjectPropsMeta):
             header.type_id = self.type_id
             header.schema_id = self.schema_id
 
+            header_len = ctypes.sizeof(header_class)
+            initial_pos = stream.tell()
+
             # create fields and calculate offsets
             offsets = [ctypes.sizeof(header_class)]
-            field_buffer = bytearray()
             schema_items = list(self.schema.items())
+
+            stream.seek(initial_pos + header_len)
             for field_name, field_type in schema_items:
-                partial_buffer = field_type.from_python(
-                    getattr(
-                        self, field_name, getattr(field_type, 'default', None)
-                    )
-                )
-                offsets.append(max(offsets) + len(partial_buffer))
-                field_buffer += partial_buffer
+                val = getattr(self, field_name, getattr(field_type, 'default', None))
+                field_start_pos = stream.tell()
+                field_type.from_python(stream, val)
+                offsets.append(max(offsets) + stream.tell() - field_start_pos)
 
             offsets = offsets[:-1]
 
@@ -160,15 +159,16 @@ class GenericObjectMeta(GenericObjectPropsMeta):
                     schema[i].offset = offset
 
             # calculate size and hash code
-            header.schema_offset = (
-                ctypes.sizeof(header_class)
-                + len(field_buffer)
-            )
+            fields_data_len = stream.tell() - initial_pos - header_len
+            header.schema_offset = fields_data_len + header_len
             header.length = header.schema_offset + ctypes.sizeof(schema_class)
-            header.hash_code = hashcode(field_buffer)
+            header.hash_code = stream.hashcode(initial_pos + header_len, fields_data_len)
 
-            # reuse the results
-            self._buffer = bytes(header) + field_buffer + bytes(schema)
+            stream.seek(initial_pos)
+            stream.write(header)
+            stream.seek(initial_pos + header.schema_offset)
+            stream.write(schema)
+
             self._hashcode = header.hash_code
 
         def _setattr(self, attr_name: str, attr_value: Any):
@@ -180,7 +180,7 @@ class GenericObjectMeta(GenericObjectPropsMeta):
             # `super()` is really need these parameters
             super(result, self).__setattr__(attr_name, attr_value)
 
-        setattr(result, _build.__name__, _build)
+        setattr(result, _from_python.__name__, _from_python)
         setattr(result, '__setattr__', _setattr)
         setattr(result, '_buffer', None)
         setattr(result, '_hashcode', None)
