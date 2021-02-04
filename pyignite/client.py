@@ -586,7 +586,7 @@ class Client:
 
         conn = self.random_node
 
-        schema = self.get_or_create_cache(schema)
+        schema = self.get_cache(schema)
         result = sql_fields(
             conn, schema.cache_id, query_str,
             page_size, query_args, schema.name,
