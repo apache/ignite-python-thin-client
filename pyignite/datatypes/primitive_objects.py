@@ -61,13 +61,17 @@ class DataObject(IgniteDataType):
 
     @classmethod
     def parse(cls, stream):
-        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
+        init_pos, type_len = stream.tell(), ctypes.sizeof(ctypes.c_byte)
+
+        buffer = stream.read(type_len)
         if buffer == TC_NULL:
-            return Null.build_c_type(), buffer
+            return Null.build_c_type(), (init_pos, type_len)
 
         data_type = cls.build_c_type()
-        buffer += stream.read(ctypes.sizeof(data_type) - len(buffer))
-        return data_type, buffer
+        data_len = ctypes.sizeof(data_type)
+        stream.seek(init_pos + data_len)
+
+        return data_type, (init_pos, data_len)
 
     @staticmethod
     def to_python(ctype_object, *args, **kwargs):

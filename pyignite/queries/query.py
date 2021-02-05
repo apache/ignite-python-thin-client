@@ -102,8 +102,8 @@ class Query:
                                        following=response_config)
 
         with BinaryStream(conn.recv(), conn) as stream:
-            response_ctype, recv_buffer = response_struct.parse(stream)
-        response = response_ctype.from_buffer_copy(recv_buffer)
+            response_ctype, response_positions = response_struct.parse(stream)
+            response = response_ctype.from_buffer_copy(stream.mem_view(*response_positions))
 
         # this test depends on protocol version
         if getattr(response, 'flags', False) & RHF_TOPOLOGY_CHANGED:

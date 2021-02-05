@@ -48,11 +48,11 @@ def wait_for_affinity_distribution(cache, key, node_idx, timeout=30):
 
     def check_grid_idx():
         nonlocal real_node_idx
-        cache.get(key)
-        # conn = cache.get_best_node(key)
-        # real_node_idx = conn.port % 100
-        # return real_node_idx == node_idx
-        real_node_idx = requests.pop()
+        try:
+            cache.get(key)
+            real_node_idx = requests.pop()
+        except (OSError, IOError):
+            return False
         return real_node_idx == node_idx
 
     res = wait_for_condition(check_grid_idx, timeout=timeout)

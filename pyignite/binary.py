@@ -169,6 +169,7 @@ class GenericObjectMeta(GenericObjectPropsMeta):
             stream.seek(initial_pos + header.schema_offset)
             stream.write(schema)
 
+            self._buffer = bytes(stream.mem_view(initial_pos, stream.tell() - initial_pos))
             self._hashcode = header.hash_code
 
         def _setattr(self, attr_name: str, attr_value: Any):

@@ -15,6 +15,7 @@
 
 import ctypes
 import struct
+from io import SEEK_CUR
 
 from pyignite.constants import *
 from .base import IgniteDataType
@@ -47,7 +48,9 @@ class Primitive(IgniteDataType):
 
     @classmethod
     def parse(cls, stream):
-        return cls.c_type, stream.read(ctypes.sizeof(cls.c_type))
+        init_pos, offset = stream.tell(), ctypes.sizeof(cls.c_type)
+        stream.seek(offset, SEEK_CUR)
+        return cls.c_type, (init_pos, offset)
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):

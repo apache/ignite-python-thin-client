@@ -97,11 +97,11 @@ def unwrap_binary(client: 'Client', wrapped: tuple) -> object:
 
     blob, offset = wrapped
     with BinaryStream(blob, client.random_node) as stream:
-        data_class, data_bytes = BinaryObject.parse(stream)
-    result = BinaryObject.to_python(
-        data_class.from_buffer_copy(data_bytes),
-        client,
-    )
+        data_class, data_positions = BinaryObject.parse(stream)
+        result = BinaryObject.to_python(
+            data_class.from_buffer_copy(stream.mem_view(*data_positions)),
+            client,
+        )
     return result
 
 

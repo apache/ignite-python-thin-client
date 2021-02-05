@@ -205,9 +205,9 @@ class Connection:
             ('length', Int),
             ('op_code', Byte),
         ])
-        with BinaryStream(self.recv(), self) as response_stream:
-            start_class, start_buffer = response_start.parse(response_stream)
-            start = start_class.from_buffer_copy(start_buffer)
+        with BinaryStream(self.recv(), self) as stream:
+            start_class, start_positions = response_start.parse(stream)
+            start = start_class.from_buffer_copy(stream.mem_view(*start_positions))
             data = response_start.to_python(start)
             response_end = None
             if data['op_code'] == 0:
@@ -222,8 +222,8 @@ class Connection:
                     ('node_uuid', UUIDObject),
                 ])
             if response_end:
-                end_class, end_buffer = response_end.parse(response_stream)
-                end = end_class.from_buffer_copy(end_buffer)
+                end_class, end_positions = response_end.parse(stream)
+                end = end_class.from_buffer_copy(stream.mem_view(*end_positions))
                 data.update(response_end.to_python(end))
             return data
 

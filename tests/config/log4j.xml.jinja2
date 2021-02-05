@@ -17,40 +17,26 @@
   limitations under the License.
 -->
 
-<!DOCTYPE log4j:configuration PUBLIC "-//APACHE//DTD LOG4J 1.2//EN"
-    "http://logging.apache.org/log4j/1.2/apidocs/org/apache/log4j/xml/doc-files/log4j.dtd">
-
-<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/" debug="false">
-
-    <appender name="CONSOLE" class="org.apache.log4j.ConsoleAppender">
-        <param name="Target" value="System.out"/>
-        <param name="Threshold" value="Debug"/>
-        <layout class="org.apache.log4j.PatternLayout">
-            <param name="ConversionPattern" value="[%d{ISO8601}][%-5p][%t][%c{1}] %m%n"/>
-        </layout>
-    </appender>
-
-    <appender name="FILE" class="org.apache.ignite.logger.log4j.Log4jRollingFileAppender">
-        <param name="Threshold" value="DEBUG"/>
-        <param name="File" value="logs/ignite-log-{{ ignite_instance_idx }}.txt"/>
-        <param name="Append" value="true"/>
-        <param name="MaxFileSize" value="10MB"/>
-        <param name="MaxBackupIndex" value="10"/>
-        <layout class="org.apache.log4j.PatternLayout">
-            <param name="ConversionPattern" value="%m%n"/>
-        </layout>
-    </appender>
-
-    <category name="org.apache.ignite.internal.processors.odbc.ClientListenerNioListener">
-        <level value="DEBUG"/>
-    </category>
-
-    <!-- Default settings. -->
-    <root>
-        <!-- Print out all info by default. -->
-        <level value="INFO"/>
-
-        <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="FILE"/>
-    </root>
-</log4j:configuration>
+<Configuration>
+    <Appenders>
+        <Console name="CONSOLE" target="SYSTEM_OUT">
+            <PatternLayout pattern="[%d{ISO8601}][%-5p][%t][%c{1}] %m%n"/>
+        </Console>
+        <RollingFile name="FILE" append="true"
+                     filePattern="logs/ignite-log-{{ ignite_instance_idx }}-%i.txt"
+                     fileName="logs/ignite-log-{{ ignite_instance_idx }}.txt">
+            <PatternLayout pattern="%m%n"/>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="10MB" />
+            </Policies>
+            <DefaultRolloverStrategy max="10"/>
+        </RollingFile>
+    </Appenders>
+    <Loggers>
+        <Logger name="org.apache.ignite.internal.processors.odbc.ClientListenerNioListener" level="debug"/>
+        <Root level="info">
+            <AppenderRef ref="CONSOLE"/>
+            <AppenderRef ref="FILE"/>
+        </Root>
+    </Loggers>
+</Configuration>

@@ -16,6 +16,7 @@
 import ctypes
 from datetime import date, datetime, time, timedelta
 import decimal
+from io import SEEK_CUR
 from math import ceil
 from typing import Any, Tuple
 import uuid
@@ -55,14 +56,17 @@ class StandardObject(IgniteDataType):
 
     @classmethod
     def parse(cls, stream):
-        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
+        init_pos, type_len = stream.tell(), ctypes.sizeof(ctypes.c_byte)
 
+        buffer = stream.read(type_len)
         if buffer == TC_NULL:
-            return Null.build_c_type(), buffer
+            return Null.build_c_type(), (init_pos, type_len)
 
-        c_type = cls.build_c_type()
-        buffer += stream.read(ctypes.sizeof(c_type) - len(buffer))
-        return c_type, buffer
+        data_type = cls.build_c_type()
+        data_len = ctypes.sizeof(data_type)
+        stream.seek(init_pos + data_len)
+
+        return data_type, (init_pos, data_len)
 
 
 class String(IgniteDataType):
@@ -96,18 +100,22 @@ class String(IgniteDataType):
 
     @classmethod
     def parse(cls, stream):
-        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
-        # String or Null
-        if buffer == TC_NULL:
-            return Null.build_c_type(), buffer
+        init_pos, type_len = stream.tell(), ctypes.sizeof(ctypes.c_byte)
 
-        buffer += stream.read(ctypes.sizeof(ctypes.c_int))
-        length = int.from_bytes(buffer[1:], byteorder=PROTOCOL_BYTE_ORDER)
+        buffer = stream.read(type_len)
+        if buffer == TC_NULL:
+            return Null.build_c_type(), (init_pos, type_len)
+
+        length = int.from_bytes(
+            stream.read(ctypes.sizeof(ctypes.c_int)),
+            byteorder=PROTOCOL_BYTE_ORDER
+        )
 
         data_type = cls.build_c_type(length)
-        buffer += stream.read(ctypes.sizeof(data_type) - len(buffer))
+        data_len = ctypes.sizeof(data_type)
+        stream.seek(init_pos + data_len)
 
-        return data_type, buffer
+        return data_type, (init_pos, data_len)
 
     @staticmethod
     def to_python(ctype_object, *args, **kwargs):
@@ -168,14 +176,17 @@ class DecimalObject(IgniteDataType):
 
     @classmethod
     def parse(cls, stream):
-        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
-        # Decimal or Null
-        if buffer == TC_NULL:
-            return Null.build_c_type(), buffer
+        init_pos, type_len = stream.tell(), ctypes.sizeof(ctypes.c_byte)
+
+        type_ = stream.mem_view(init_pos, type_len)
+        if type_ == TC_NULL:
+            stream.seek(type_len, SEEK_CUR)
+            return Null.build_c_type(), (init_pos, type_len)
 
         header_class = cls.build_c_header()
-        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
-        header = header_class.from_buffer_copy(buffer)
+        header_len = ctypes.sizeof(header_class)
+        header = header_class.from_buffer_copy(stream.mem_view(init_pos, header_len))
+
         data_type = type(
             cls.__name__,
             (header_class,),
@@ -186,8 +197,11 @@ class DecimalObject(IgniteDataType):
                 ],
             }
         )
-        buffer += stream.read(ctypes.sizeof(data_type) - ctypes.sizeof(header_class))
-        return data_type, buffer
+
+        data_len = ctypes.sizeof(data_type)
+        stream.seek(init_pos + data_len)
+
+        return data_type, (init_pos, data_len)
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
@@ -611,18 +625,21 @@ class StandardArray(IgniteDataType):
 
     @classmethod
     def parse(cls, stream):
-        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
+        init_pos, type_len = stream.tell(), ctypes.sizeof(ctypes.c_byte)
 
-        if buffer == TC_NULL:
-            return Null.build_c_type(), buffer
+        type_ = stream.mem_view(init_pos, type_len)
+        if type_ == TC_NULL:
+            stream.seek(type_len, SEEK_CUR)
+            return Null.build_c_type(), (init_pos, type_len)
 
         header_class = cls.build_header_class()
-        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
-        header = header_class.from_buffer_copy(buffer)
+        header_len = ctypes.sizeof(header_class)
+        header = header_class.from_buffer_copy(stream.mem_view(init_pos, header_len))
+        stream.seek(init_pos + header_len)
+
         fields = []
         for i in range(header.length):
-            c_type, buffer_fragment = cls.standard_type.parse(stream)
-            buffer += buffer_fragment
+            c_type, _ = cls.standard_type.parse(stream)
             fields.append(('element_{}'.format(i), c_type))
 
         final_class = type(
@@ -633,7 +650,7 @@ class StandardArray(IgniteDataType):
                 '_fields_': fields,
             }
         )
-        return final_class, buffer
+        return final_class, (init_pos, stream.tell() - init_pos)
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):

@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from io import SEEK_CUR
 
 import attr
 from collections import OrderedDict
@@ -56,11 +57,14 @@ class Response:
         return self._response_header
 
     def parse(self, stream):
-        header_class = self.build_header()
-        buffer = stream.read(ctypes.sizeof(header_class))
-        header = header_class.from_buffer_copy(buffer)
-        fields = []
+        init_pos = stream.tell()
 
+        header_class = self.build_header()
+        header_len = ctypes.sizeof(header_class)
+        header = header_class.from_buffer_copy(stream.mem_view(init_pos, header_len))
+        stream.seek(header_len, SEEK_CUR)
+
+        fields = []
         has_error = False
         if self.protocol_version and self.protocol_version >= (1, 4, 0):
             if header.flags & RHF_TOPOLOGY_CHANGED:
@@ -76,18 +80,19 @@ class Response:
             has_error = header.status_code != OP_SUCCESS
 
         if fields:
-            buffer += stream.read(sum([ctypes.sizeof(c_type) for _, c_type in fields]))
+            stream.seek(sum([ctypes.sizeof(c_type) for _, c_type in fields]), SEEK_CUR)
 
         if has_error:
-            msg_type, buffer_fragment = String.parse(stream)
-            buffer += buffer_fragment
+            msg_type, _ = String.parse(stream)
             fields.append(('error_message', msg_type))
         else:
-            self._parse_success(stream, buffer, fields)
+            self._parse_success(stream, fields)
 
-        return self._create_parse_result(stream, header_class, fields, buffer)
+        response_class = self._create_response_class(stream, header_class, fields)
+        stream.seek(init_pos + ctypes.sizeof(response_class))
+        return self._create_response_class(stream, header_class, fields), (init_pos, stream.tell() - init_pos)
 
-    def _create_parse_result(self, conn: Connection, header_class, fields: list, buffer: bytearray):
+    def _create_response_class(self, stream, header_class, fields: list):
         response_class = type(
             'Response',
             (header_class,),
@@ -96,12 +101,11 @@ class Response:
                 '_fields_': fields,
             }
         )
-        return response_class, buffer
+        return response_class
 
-    def _parse_success(self, stream, buffer: bytearray, fields: list):
+    def _parse_success(self, stream, fields: list):
         for name, ignite_type in self.following:
-            c_type, buffer_fragment = ignite_type.parse(stream)
-            buffer += buffer_fragment
+            c_type, _ = ignite_type.parse(stream)
             fields.append((name, c_type))
 
     def to_python(self, ctype_object, *args, **kwargs):
@@ -132,7 +136,7 @@ class SQLResponse(Response):
             return 'fields', StringArray
         return 'field_count', Int
 
-    def _parse_success(self, conn: Connection, buffer: bytearray, fields: list):
+    def _parse_success(self, stream, fields: list):
         following = [
             self.fields_or_field_count(),
             ('row_count', Int),
@@ -140,9 +144,8 @@ class SQLResponse(Response):
         if self.has_cursor:
             following.insert(0, ('cursor', Long))
         body_struct = Struct(following)
-        body_class, body_buffer = body_struct.parse(conn)
-        body = body_class.from_buffer_copy(body_buffer)
-        buffer += body_buffer
+        body_class, positions = body_struct.parse(stream)
+        body = body_class.from_buffer_copy(stream.mem_view(*positions))
 
         if self.include_field_names:
             field_count = body.fields.length
@@ -153,9 +156,8 @@ class SQLResponse(Response):
         for i in range(body.row_count):
             row_fields = []
             for j in range(field_count):
-                field_class, field_buffer = AnyDataObject.parse(conn)
+                field_class, field_positions = AnyDataObject.parse(stream)
                 row_fields.append(('column_{}'.format(j), field_class))
-                buffer += field_buffer
 
             row_class = type(
                 'SQLResponseRow',
@@ -180,7 +182,7 @@ class SQLResponse(Response):
             ('more', ctypes.c_byte),
         ]
 
-    def _create_parse_result(self, stream, header_class, fields: list, buffer: bytearray):
+    def _create_response_class(self, stream, header_class, fields: list):
         final_class = type(
             'SQLResponse',
             (header_class,),
@@ -189,8 +191,7 @@ class SQLResponse(Response):
                 '_fields_': fields,
             }
         )
-        buffer += stream.read(ctypes.sizeof(final_class) - len(buffer))
-        return final_class, buffer
+        return final_class
 
     def to_python(self, ctype_object, *args, **kwargs):
         if getattr(ctype_object, 'status_code', 0) == 0:

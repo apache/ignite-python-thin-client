@@ -93,10 +93,12 @@ class PropBase:
 
     @classmethod
     def parse(cls, stream):
+        init_pos = stream.tell()
+
         header_class = cls.build_header()
-        buf = stream.read(ctypes.sizeof(header_class))
-        data_class, data_buf = cls.prop_data_class.parse(stream)
-        buf += data_buf
+        header_len = ctypes.sizeof(header_class)
+        data_class, data_buf = cls.prop_data_class.parse(stream.mem_view(init_pos, header_len))
+
         prop_class = type(
             cls.__name__,
             (header_class,),
@@ -107,7 +109,9 @@ class PropBase:
                 ],
             }
         )
-        return prop_class, buf
+
+        stream.seek(init_pos + ctypes.sizeof(prop_class))
+        return prop_class, (init_pos, stream.tell() - init_pos)
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):

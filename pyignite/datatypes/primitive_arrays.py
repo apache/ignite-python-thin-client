@@ -62,14 +62,16 @@ class PrimitiveArray(IgniteDataType):
 
     @classmethod
     def parse(cls, stream):
-        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
+        init_pos, type_len = stream.tell(), ctypes.sizeof(ctypes.c_byte)
 
+        buffer = stream.read(type_len)
         if buffer == TC_NULL:
-            return Null.build_c_type(), buffer
+            return Null.build_c_type(), (init_pos, type_len)
 
         header_class = cls.build_header_class()
-        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
-        header = header_class.from_buffer_copy(buffer)
+        header_len = ctypes.sizeof(header_class)
+        header = header_class.from_buffer_copy(stream.mem_view(init_pos, header_len))
+
         final_class = type(
             cls.__name__,
             (header_class,),
@@ -80,8 +82,9 @@ class PrimitiveArray(IgniteDataType):
                 ],
             }
         )
-        buffer += stream.read(ctypes.sizeof(final_class) - ctypes.sizeof(header_class))
-        return final_class, buffer
+        data_len = ctypes.sizeof(final_class)
+        stream.seek(init_pos + data_len)
+        return final_class, (init_pos, data_len)
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):

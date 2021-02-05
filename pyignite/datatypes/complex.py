@@ -15,7 +15,7 @@
 
 from collections import OrderedDict
 import ctypes
-import inspect
+from io import SEEK_CUR
 from typing import Iterable, Dict
 
 from pyignite.constants import *
@@ -71,19 +71,20 @@ class ObjectArrayObject(IgniteDataType):
 
     @classmethod
     def parse(cls, stream):
-        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
+        init_pos, type_len = stream.tell(), ctypes.sizeof(ctypes.c_byte)
 
+        buffer = stream.read(type_len)
         if buffer == TC_NULL:
-            return Null.build_c_type(), buffer
+            return Null.build_c_type(), (init_pos, type_len)
 
         header_class = cls.build_header()
-        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
-        header = header_class.from_buffer_copy(buffer)
-        fields = []
+        header_len = ctypes.sizeof(header_class)
+        header = header_class.from_buffer_copy(stream.mem_view(init_pos, header_len))
+        stream.seek(init_pos + header_len)
 
+        fields = []
         for i in range(header.length):
-            c_type, buffer_fragment = AnyDataObject.parse(stream)
-            buffer += buffer_fragment
+            c_type, _ = AnyDataObject.parse(stream)
             fields.append(('element_{}'.format(i), c_type))
 
         final_class = type(
@@ -94,7 +95,9 @@ class ObjectArrayObject(IgniteDataType):
                 '_fields_': fields,
             }
         )
-        return final_class, buffer
+
+        stream.seek(init_pos + ctypes.sizeof(final_class))
+        return final_class, (init_pos, stream.tell() - init_pos)
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
@@ -164,14 +167,16 @@ class WrappedDataObject(IgniteDataType):
 
     @classmethod
     def parse(cls, stream):
-        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
+        init_pos, type_len = stream.tell(), ctypes.sizeof(ctypes.c_byte)
 
+        buffer = stream.read(type_len)
         if buffer == TC_NULL:
-            return Null.build_c_type(), buffer
+            return Null.build_c_type(), (init_pos, type_len)
 
         header_class = cls.build_header()
-        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
-        header = header_class.from_buffer_copy(buffer)
+        header_len = ctypes.sizeof(header_class)
+        header = header_class.from_buffer_copy(stream.mem_view(init_pos, header_len))
+        stream.seek(init_pos + header_len)
 
         final_class = type(
             cls.__name__,
@@ -184,10 +189,9 @@ class WrappedDataObject(IgniteDataType):
                 ],
             }
         )
-        buffer += stream.read(
-            ctypes.sizeof(final_class) - ctypes.sizeof(header_class)
-        )
-        return final_class, buffer
+
+        stream.seek(init_pos + ctypes.sizeof(final_class))
+        return final_class, (init_pos, stream.tell() - init_pos)
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
@@ -262,19 +266,21 @@ class CollectionObject(IgniteDataType):
 
     @classmethod
     def parse(cls, stream):
-        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
+        init_pos, type_len = stream.tell(), ctypes.sizeof(ctypes.c_byte)
 
-        if buffer == TC_NULL:
-            return Null.build_c_type(), buffer
+        type_ = stream.mem_view(init_pos, type_len)
+        if type_ == TC_NULL:
+            stream.seek(type_len, SEEK_CUR)
+            return Null.build_c_type(), (init_pos, type_len)
 
         header_class = cls.build_header()
-        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
-        header = header_class.from_buffer_copy(buffer)
-        fields = []
+        header_len = ctypes.sizeof(header_class)
+        header = header_class.from_buffer_copy(stream.mem_view(init_pos, header_len))
+        stream.seek(init_pos + header_len)
 
+        fields = []
         for i in range(header.length):
-            c_type, buffer_fragment = AnyDataObject.parse(stream)
-            buffer += buffer_fragment
+            c_type, _ = AnyDataObject.parse(stream)
             fields.append(('element_{}'.format(i), c_type))
 
         final_class = type(
@@ -285,7 +291,7 @@ class CollectionObject(IgniteDataType):
                 '_fields_': fields,
             }
         )
-        return final_class, buffer
+        return final_class, (init_pos, stream.tell() - init_pos)
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
@@ -360,19 +366,20 @@ class Map(IgniteDataType):
 
     @classmethod
     def parse(cls, stream):
-        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
+        init_pos, type_len = stream.tell(), ctypes.sizeof(ctypes.c_byte)
 
+        buffer = stream.read(type_len)
         if buffer == TC_NULL:
-            return Null.build_c_type(), buffer
+            return Null.build_c_type(), (init_pos, type_len)
 
         header_class = cls.build_header()
-        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
-        header = header_class.from_buffer_copy(buffer)
-        fields = []
+        header_len = ctypes.sizeof(header_class)
+        header = header_class.from_buffer_copy(stream.mem_view(init_pos, header_len))
+        stream.seek(init_pos + header_len)
 
+        fields = []
         for i in range(header.length << 1):
-            c_type, buffer_fragment = AnyDataObject.parse(stream)
-            buffer += buffer_fragment
+            c_type, _ = AnyDataObject.parse(stream)
             fields.append(('element_{}'.format(i), c_type))
 
         final_class = type(
@@ -383,7 +390,7 @@ class Map(IgniteDataType):
                 '_fields_': fields,
             }
         )
-        return final_class, buffer
+        return final_class, (init_pos, stream.tell() - init_pos)
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
@@ -541,27 +548,30 @@ class BinaryObject(IgniteDataType):
     @classmethod
     def parse(cls, stream):
         from pyignite.datatypes import Struct
-        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
 
-        if buffer == TC_NULL:
-            return Null.build_c_type(), buffer
+        init_pos, type_len = stream.tell(), ctypes.sizeof(ctypes.c_byte)
+
+        type_ = stream.mem_view(init_pos, type_len)
+        if type_ == TC_NULL:
+            stream.seek(type_len, SEEK_CUR)
+            return Null.build_c_type(), (init_pos, type_len)
 
         header_class = cls.build_header()
-        buffer += stream.read(ctypes.sizeof(header_class) - len(buffer))
-        header = header_class.from_buffer_copy(buffer)
+        header_len = ctypes.sizeof(header_class)
+        header = header_class.from_buffer_copy(stream.mem_view(init_pos, header_len))
+        stream.seek(init_pos + header_len)
 
         # ignore full schema, always retrieve fields' types and order
         # from complex types registry
         data_class = stream.get_dataclass(header)
         fields = data_class.schema.items()
         object_fields_struct = Struct(fields)
-        object_fields, object_fields_buffer = object_fields_struct.parse(stream)
-        buffer += object_fields_buffer
+        object_fields, _ = object_fields_struct.parse(stream)
         final_class_fields = [('object_fields', object_fields)]
 
         if header.flags & cls.HAS_SCHEMA:
             schema = cls.schema_type(header.flags) * len(fields)
-            buffer += stream.read(ctypes.sizeof(schema))
+            stream.seek(ctypes.sizeof(schema), SEEK_CUR)
             final_class_fields.append(('schema', schema))
 
         final_class = type(
@@ -574,7 +584,7 @@ class BinaryObject(IgniteDataType):
         )
         # register schema encoding approach
         stream.compact_footer = bool(header.flags & cls.COMPACT_FOOTER)
-        return final_class, buffer
+        return final_class, (init_pos, stream.tell() - init_pos)
 
     @classmethod
     def to_python(cls, ctype_object, client: 'Client' = None, *args, **kwargs):
@@ -610,4 +620,7 @@ class BinaryObject(IgniteDataType):
             return
 
         stream.register_binary_type(value.__class__)
-        value._from_python(stream)
+        if getattr(value, '_buffer', None):
+            stream.write(value._buffer)
+        else:
+            value._from_python(stream)

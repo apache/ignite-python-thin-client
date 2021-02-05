@@ -20,6 +20,7 @@ There can't be null type, because null payload takes exactly 0 bytes.
 """
 
 import ctypes
+from io import SEEK_CUR
 from typing import Any
 
 from .base import IgniteDataType
@@ -56,9 +57,9 @@ class Null(IgniteDataType):
 
     @classmethod
     def parse(cls, stream):
-        buffer = stream.read(ctypes.sizeof(ctypes.c_byte))
-        data_type = cls.build_c_type()
-        return data_type, buffer
+        init_pos, offset = stream.tell(), ctypes.sizeof(ctypes.c_byte)
+        stream.seek(offset, SEEK_CUR)
+        return cls.build_c_type(), (init_pos, offset)
 
     @staticmethod
     def to_python(*args, **kwargs):

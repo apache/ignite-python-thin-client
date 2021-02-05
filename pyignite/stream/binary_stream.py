@@ -48,6 +48,9 @@ class BinaryStream:
     def getvalue(self):
         return self.stream.getvalue()
 
+    def mem_view(self, start, offset):
+        return self.stream.getbuffer()[start:start+offset]
+
     def hashcode(self, start, bytes_len):
         return ignite_utils.hashcode(self.stream.getbuffer()[start:start+bytes_len])
 

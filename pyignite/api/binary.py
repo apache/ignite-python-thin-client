@@ -57,31 +57,35 @@ def get_binary_type(conn: 'Connection', binary_type: Union[str, int], query_id=N
                                     following=[('type_exists', Bool)])
 
     with BinaryStream(conn.recv(), conn) as stream:
-        response_head_type, recv_buffer = response_head_struct.parse(stream)
-        response_head = response_head_type.from_buffer_copy(recv_buffer)
+        response_head_type, response_positions = response_head_struct.parse(stream)
+        response_head = response_head_type.from_buffer_copy(stream.mem_view(*response_positions))
+        init_pos, total_len = response_positions
+
         response_parts = []
         if response_head.type_exists:
-            resp_body_type, resp_body_buffer = body_struct.parse(stream)
+            resp_body_type, resp_body_positions = body_struct.parse(stream)
             response_parts.append(('body', resp_body_type))
-            resp_body = resp_body_type.from_buffer_copy(resp_body_buffer)
-            recv_buffer += resp_body_buffer
+            resp_body = resp_body_type.from_buffer_copy(stream.mem_view(*resp_body_positions))
+            total_len += resp_body_positions[1]
             if resp_body.is_enum:
-                resp_enum, resp_enum_buffer = enum_struct.parse(stream)
+                resp_enum, resp_enum_positions = enum_struct.parse(stream)
                 response_parts.append(('enums', resp_enum))
-                recv_buffer += resp_enum_buffer
-            resp_schema_type, resp_schema_buffer = schema_struct.parse(stream)
-            response_parts.append(('schema', resp_schema_type))
-            recv_buffer += resp_schema_buffer
+                total_len += resp_enum_positions[1]
 
-    response_class = type(
-        'GetBinaryTypeResponse',
-        (response_head_type,),
-        {
-            '_pack_': 1,
-            '_fields_': response_parts,
-        }
-    )
-    response = response_class.from_buffer_copy(recv_buffer)
+            resp_schema_type, resp_schema_positions = schema_struct.parse(stream)
+            response_parts.append(('schema', resp_schema_type))
+            total_len += resp_schema_positions[1]
+
+        response_class = type(
+            'GetBinaryTypeResponse',
+            (response_head_type,),
+            {
+                '_pack_': 1,
+                '_fields_': response_parts,
+            }
+        )
+        response = response_class.from_buffer_copy(stream.mem_view(init_pos, total_len))
+
     result = APIResult(response)
     if result.status != 0:
         return result
