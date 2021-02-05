@@ -19,11 +19,11 @@ import warnings
 
 from functools import wraps
 from threading import Event, Thread
-from typing import Any, Callable, Optional, Type, Tuple, Union
+from typing import Any, Optional, Type, Tuple, Union
 
 from pyignite.datatypes.base import IgniteDataType
 from .constants import *
-from .stream import BinaryStream
+
 
 LONG_MASK = 0xffffffff
 DIGITS_PER_INT = 9
@@ -83,26 +83,6 @@ def int_overflow(value: int) -> int:
     Simulates 32bit integer overflow.
     """
     return ((value ^ 0x80000000) & 0xffffffff) - 0x80000000
-
-
-def unwrap_binary(client: 'Client', wrapped: tuple) -> object:
-    """
-    Unwrap wrapped BinaryObject and convert it to Python data.
-
-    :param client: connection to Ignite cluster,
-    :param wrapped: `WrappedDataObject` value,
-    :return: dict representing wrapped BinaryObject.
-    """
-    from pyignite.datatypes.complex import BinaryObject
-
-    blob, offset = wrapped
-    with BinaryStream(blob, client.random_node) as stream:
-        data_class, data_positions = BinaryObject.parse(stream)
-        result = BinaryObject.to_python(
-            data_class.from_buffer_copy(stream.mem_view(*data_positions)),
-            client,
-        )
-    return result
 
 
 def hashcode(data: Union[str, bytes, bytearray, memoryview]) -> int:
