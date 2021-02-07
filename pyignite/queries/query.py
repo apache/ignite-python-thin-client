@@ -21,7 +21,7 @@ from pyignite.api.result import APIResult
 from pyignite.connection import Connection
 from pyignite.constants import MIN_LONG, MAX_LONG, RHF_TOPOLOGY_CHANGED
 from pyignite.queries.response import Response, SQLResponse
-from pyignite.stream import BinaryStream
+from pyignite.stream import BinaryStream, READ_BACKWARD
 
 
 @attr.s
@@ -70,7 +70,7 @@ class Query:
     def from_python(self, conn: Connection, values: dict = None):
         if values is None:
             values = {}
-        stream = BinaryStream(None, conn)
+        stream = BinaryStream(conn)
         header = self._build_header(stream, values)
         stream.write(header)
         return stream.getvalue()
@@ -102,8 +102,8 @@ class Query:
                                        following=response_config)
 
         with BinaryStream(conn.recv(), conn) as stream:
-            response_ctype, response_positions = response_struct.parse(stream)
-            response = response_ctype.from_buffer_copy(stream.mem_view(*response_positions))
+            response_ctype = response_struct.parse(stream)
+            response = stream.read_ctype(response_ctype, direction=READ_BACKWARD)
 
         # this test depends on protocol version
         if getattr(response, 'flags', False) & RHF_TOPOLOGY_CHANGED:

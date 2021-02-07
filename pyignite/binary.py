@@ -102,13 +102,14 @@ class GenericObjectMeta(GenericObjectPropsMeta):
             mcs, name, (GenericObjectProps, )+base_classes, namespace
         )
 
-        def _from_python(self, stream):
+        def _from_python(self, stream, save_to_buf=False):
             """
             Method for building binary representation of the Generic object
             and calculating a hashcode from it.
 
             :param self: Generic object instance,
             :param stream: BinaryStream
+            :param save_to_buf: Optional. If True, save serialized data to buffer.
             """
 
             compact_footer = stream.compact_footer
@@ -169,7 +170,8 @@ class GenericObjectMeta(GenericObjectPropsMeta):
             stream.seek(initial_pos + header.schema_offset)
             stream.write(schema)
 
-            self._buffer = bytes(stream.mem_view(initial_pos, stream.tell() - initial_pos))
+            if save_to_buf:
+                self._buffer = bytes(stream.mem_view(initial_pos, stream.tell() - initial_pos))
             self._hashcode = header.hash_code
 
         def _setattr(self, attr_name: str, attr_value: Any):

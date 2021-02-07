@@ -52,7 +52,7 @@ from .ssl import wrap
 
 __all__ = ['Connection']
 
-from ..stream import BinaryStream
+from ..stream import BinaryStream, READ_BACKWARD
 
 
 class Connection:
@@ -206,8 +206,8 @@ class Connection:
             ('op_code', Byte),
         ])
         with BinaryStream(self.recv(), self) as stream:
-            start_class, start_positions = response_start.parse(stream)
-            start = start_class.from_buffer_copy(stream.mem_view(*start_positions))
+            start_class = response_start.parse(stream)
+            start = stream.read_ctype(start_class, direction=READ_BACKWARD)
             data = response_start.to_python(start)
             response_end = None
             if data['op_code'] == 0:
@@ -222,8 +222,8 @@ class Connection:
                     ('node_uuid', UUIDObject),
                 ])
             if response_end:
-                end_class, end_positions = response_end.parse(stream)
-                end = end_class.from_buffer_copy(stream.mem_view(*end_positions))
+                end_class = response_end.parse(stream)
+                end = stream.read_ctype(end_class, direction=READ_BACKWARD)
                 data.update(response_end.to_python(end))
             return data
 
@@ -295,7 +295,7 @@ class Connection:
             self.password
         )
 
-        with BinaryStream(None, self) as stream:
+        with BinaryStream(self) as stream:
             hs_request.from_python(stream)
             self.send(stream.getvalue())
 

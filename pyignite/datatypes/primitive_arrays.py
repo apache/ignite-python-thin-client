@@ -14,11 +14,13 @@
 # limitations under the License.
 
 import ctypes
+from io import SEEK_CUR
 from typing import Any
 
 from pyignite.constants import *
 from . import Null
 from .base import IgniteDataType
+from .null_object import Nullable
 from .primitive import *
 from .type_codes import *
 from .type_ids import *
@@ -33,7 +35,7 @@ __all__ = [
 ]
 
 
-class PrimitiveArray(IgniteDataType):
+class PrimitiveArray(IgniteDataType, Nullable):
     """
     Base class for array of primitives. Payload-only.
     """
@@ -61,16 +63,9 @@ class PrimitiveArray(IgniteDataType):
         )
 
     @classmethod
-    def parse(cls, stream):
-        init_pos, type_len = stream.tell(), ctypes.sizeof(ctypes.c_byte)
-
-        buffer = stream.read(type_len)
-        if buffer == TC_NULL:
-            return Null.build_c_type(), (init_pos, type_len)
-
+    def parse_not_null(cls, stream):
         header_class = cls.build_header_class()
-        header_len = ctypes.sizeof(header_class)
-        header = header_class.from_buffer_copy(stream.mem_view(init_pos, header_len))
+        header = stream.read_ctype(header_class)
 
         final_class = type(
             cls.__name__,
@@ -82,9 +77,8 @@ class PrimitiveArray(IgniteDataType):
                 ],
             }
         )
-        data_len = ctypes.sizeof(final_class)
-        stream.seek(init_pos + data_len)
-        return final_class, (init_pos, data_len)
+        stream.seek(ctypes.sizeof(final_class), SEEK_CUR)
+        return final_class
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
@@ -94,11 +88,7 @@ class PrimitiveArray(IgniteDataType):
         return [ctype_object.data[i] for i in range(ctype_object.length)]
 
     @classmethod
-    def from_python(cls, stream, value):
-        if value is None:
-            Null.from_python(stream)
-            return
-
+    def from_python_not_null(cls, stream, value):
         header_class = cls.build_header_class()
         header = header_class()
         if hasattr(header, 'type_code'):
@@ -221,11 +211,7 @@ class ByteArrayObject(PrimitiveArrayObject):
         return ByteArray.to_python(ctype_object, *args, **kwargs)
 
     @classmethod
-    def from_python(cls, stream, value):
-        if value is None:
-            Null.from_python(stream)
-            return
-
+    def from_python_not_null(cls, stream, value):
         header_class = cls.build_header_class()
         header = header_class()
         header.type_code = int.from_bytes(

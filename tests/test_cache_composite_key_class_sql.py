@@ -111,13 +111,12 @@ def test_python_sql_finds_inserted_value_with_composite_key(client):
 
 
 def validate_query_result(student_key, student_val, query_result):
-    '''
+    """
     Compare query result with expected key and value.
-    '''
+    """
     assert len(query_result) == 2
     sql_row = dict(zip(query_result[0], query_result[1]))
 
-    assert sql_row["_KEY"][0] == student_key._buffer
     assert sql_row['ID'] == student_key.ID
     assert sql_row['DEPT'] == student_key.DEPT
     assert sql_row['NAME'] == student_val.NAME

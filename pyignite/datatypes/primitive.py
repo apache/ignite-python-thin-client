@@ -50,7 +50,7 @@ class Primitive(IgniteDataType):
     def parse(cls, stream):
         init_pos, offset = stream.tell(), ctypes.sizeof(cls.c_type)
         stream.seek(offset, SEEK_CUR)
-        return cls.c_type, (init_pos, offset)
+        return cls.c_type
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):

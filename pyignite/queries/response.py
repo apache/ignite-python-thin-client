@@ -22,6 +22,7 @@ from pyignite.constants import RHF_TOPOLOGY_CHANGED, RHF_ERROR
 from pyignite.connection import Connection
 from pyignite.datatypes import AnyDataObject, Bool, Int, Long, String, StringArray, Struct
 from pyignite.queries.op_codes import OP_SUCCESS
+from pyignite.stream import READ_BACKWARD
 
 
 @attr.s
@@ -58,10 +59,9 @@ class Response:
 
     def parse(self, stream):
         init_pos = stream.tell()
-
         header_class = self.build_header()
         header_len = ctypes.sizeof(header_class)
-        header = header_class.from_buffer_copy(stream.mem_view(init_pos, header_len))
+        header = stream.read_ctype(header_class)
         stream.seek(header_len, SEEK_CUR)
 
         fields = []
@@ -80,17 +80,17 @@ class Response:
             has_error = header.status_code != OP_SUCCESS
 
         if fields:
-            stream.seek(sum([ctypes.sizeof(c_type) for _, c_type in fields]), SEEK_CUR)
+            stream.seek(sum(ctypes.sizeof(c_type) for _, c_type in fields), SEEK_CUR)
 
         if has_error:
-            msg_type, _ = String.parse(stream)
+            msg_type = String.parse(stream)
             fields.append(('error_message', msg_type))
         else:
             self._parse_success(stream, fields)
 
         response_class = self._create_response_class(stream, header_class, fields)
         stream.seek(init_pos + ctypes.sizeof(response_class))
-        return self._create_response_class(stream, header_class, fields), (init_pos, stream.tell() - init_pos)
+        return self._create_response_class(stream, header_class, fields)
 
     def _create_response_class(self, stream, header_class, fields: list):
         response_class = type(
@@ -105,7 +105,7 @@ class Response:
 
     def _parse_success(self, stream, fields: list):
         for name, ignite_type in self.following:
-            c_type, _ = ignite_type.parse(stream)
+            c_type = ignite_type.parse(stream)
             fields.append((name, c_type))
 
     def to_python(self, ctype_object, *args, **kwargs):
@@ -144,8 +144,8 @@ class SQLResponse(Response):
         if self.has_cursor:
             following.insert(0, ('cursor', Long))
         body_struct = Struct(following)
-        body_class, positions = body_struct.parse(stream)
-        body = body_class.from_buffer_copy(stream.mem_view(*positions))
+        body_class = body_struct.parse(stream)
+        body = stream.read_ctype(body_class, direction=READ_BACKWARD)
 
         if self.include_field_names:
             field_count = body.fields.length
@@ -156,7 +156,7 @@ class SQLResponse(Response):
         for i in range(body.row_count):
             row_fields = []
             for j in range(field_count):
-                field_class, field_positions = AnyDataObject.parse(stream)
+                field_class = AnyDataObject.parse(stream)
                 row_fields.append(('column_{}'.format(j), field_class))
 
             row_class = type(

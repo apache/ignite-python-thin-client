@@ -34,6 +34,8 @@ __all__ = [
     'infer_from_python',
 ]
 
+from ..stream import READ_BACKWARD
+
 
 def tc_map(key: bytes, _memo_map: dict = {}):
     """
@@ -114,14 +116,14 @@ def tc_map(key: bytes, _memo_map: dict = {}):
 
 class Conditional:
 
-    def __init__(self, predicate1: Callable[['BinaryStream', any], bool], predicate2: Callable[[any], bool], var1, var2):
+    def __init__(self, predicate1: Callable[[any], bool], predicate2: Callable[[any], bool], var1, var2):
         self.predicate1 = predicate1
         self.predicate2 = predicate2
         self.var1 = var1
         self.var2 = var2
 
     def parse(self, stream, context):
-        return self.var1.parse(stream) if self.predicate1(stream, context) else self.var2.parse(stream)
+        return self.var1.parse(stream) if self.predicate1(context) else self.var2.parse(stream)
 
     def to_python(self, ctype_object, context, *args, **kwargs):
         return self.var1.to_python(ctype_object, *args, **kwargs) if self.predicate2(context)\
@@ -147,13 +149,16 @@ class StructArray:
         )
 
     def parse(self, stream):
-        init_pos = stream.tell()
-        buffer = stream.read(ctypes.sizeof(self.counter_type))
-        length = int.from_bytes(buffer, byteorder=PROTOCOL_BYTE_ORDER)
-        fields = []
+        counter_type_len = ctypes.sizeof(self.counter_type)
+        length = int.from_bytes(
+            stream.mem_view(offset=counter_type_len),
+            byteorder=PROTOCOL_BYTE_ORDER
+        )
+        stream.seek(counter_type_len, SEEK_CUR)
 
+        fields = []
         for i in range(length):
-            c_type, _ = Struct(self.following).parse(stream)
+            c_type = Struct(self.following).parse(stream)
             fields.append(('element_{}'.format(i), c_type))
 
         data_class = type(
@@ -165,7 +170,7 @@ class StructArray:
             },
         )
 
-        return data_class, (init_pos, stream.tell() - init_pos)
+        return data_class
 
     def to_python(self, ctype_object, *args, **kwargs):
         result = []
@@ -204,14 +209,12 @@ class Struct:
     defaults = attr.ib(type=dict, default={})
 
     def parse(self, stream):
-        init_pos = stream.tell()
-
         fields, values = [], {}
         for name, c_type in self.fields:
             is_cond = isinstance(c_type, Conditional)
-            c_type, value_position = c_type.parse(stream, values) if is_cond else c_type.parse(stream)
+            c_type = c_type.parse(stream, values) if is_cond else c_type.parse(stream)
             fields.append((name, c_type))
-            values[name] = value_position
+            values[name] = stream.read_ctype(c_type, direction=READ_BACKWARD)
 
         data_class = type(
             'Struct',
@@ -222,7 +225,7 @@ class Struct:
             },
         )
 
-        return data_class, (init_pos, stream.tell() - init_pos)
+        return data_class
 
     def to_python(
         self, ctype_object, *args, **kwargs
@@ -291,12 +294,11 @@ class AnyDataObject:
 
     @classmethod
     def parse(cls, stream):
-        type_code = bytes(stream.read(ctypes.sizeof(ctypes.c_byte)))
+        type_code = bytes(stream.mem_view(offset=ctypes.sizeof(ctypes.c_byte)))
         try:
-            data_class = tc_map(bytes(type_code))
+            data_class = tc_map(type_code)
         except KeyError:
             raise ParseError('Unknown type code: `{}`'.format(type_code))
-        stream.seek(-ctypes.sizeof(ctypes.c_byte), SEEK_CUR)
         return data_class.parse(stream)
 
     @classmethod
@@ -450,13 +452,12 @@ class AnyDataArray(AnyDataObject):
 
     def parse(self, stream):
         header_class = self.build_header()
-        header_len, initial_pos = ctypes.sizeof(header_class), stream.tell()
-        header = header_class.from_buffer_copy(stream.mem_view(initial_pos, header_len))
-        stream.seek(header_len, SEEK_CUR)
+        header = stream.read_ctype(header_class)
+        stream.seek(ctypes.sizeof(header_class), SEEK_CUR)
 
         fields = []
         for i in range(header.length):
-            c_type, _ = super().parse(stream)
+            c_type = super().parse(stream)
             fields.append(('element_{}'.format(i), c_type))
 
         final_class = type(
@@ -467,7 +468,7 @@ class AnyDataArray(AnyDataObject):
                 '_fields_': fields,
             }
         )
-        return final_class, (initial_pos, stream.tell() - initial_pos)
+        return final_class
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):

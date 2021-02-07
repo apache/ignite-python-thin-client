@@ -24,7 +24,7 @@ from pyignite.queries import Query
 from pyignite.queries.op_codes import *
 from pyignite.utils import int_overflow, entity_id
 from .result import APIResult
-from ..stream import BinaryStream
+from ..stream import BinaryStream, READ_BACKWARD
 from ..queries.response import Response
 
 
@@ -57,24 +57,21 @@ def get_binary_type(conn: 'Connection', binary_type: Union[str, int], query_id=N
                                     following=[('type_exists', Bool)])
 
     with BinaryStream(conn.recv(), conn) as stream:
-        response_head_type, response_positions = response_head_struct.parse(stream)
-        response_head = response_head_type.from_buffer_copy(stream.mem_view(*response_positions))
-        init_pos, total_len = response_positions
+        init_pos = stream.tell()
+        response_head_type = response_head_struct.parse(stream)
+        response_head = stream.read_ctype(response_head_type, direction=READ_BACKWARD)
 
         response_parts = []
         if response_head.type_exists:
-            resp_body_type, resp_body_positions = body_struct.parse(stream)
+            resp_body_type = body_struct.parse(stream)
             response_parts.append(('body', resp_body_type))
-            resp_body = resp_body_type.from_buffer_copy(stream.mem_view(*resp_body_positions))
-            total_len += resp_body_positions[1]
+            resp_body = stream.read_ctype(resp_body_type, direction=READ_BACKWARD)
             if resp_body.is_enum:
-                resp_enum, resp_enum_positions = enum_struct.parse(stream)
+                resp_enum = enum_struct.parse(stream)
                 response_parts.append(('enums', resp_enum))
-                total_len += resp_enum_positions[1]
 
-            resp_schema_type, resp_schema_positions = schema_struct.parse(stream)
+            resp_schema_type = schema_struct.parse(stream)
             response_parts.append(('schema', resp_schema_type))
-            total_len += resp_schema_positions[1]
 
         response_class = type(
             'GetBinaryTypeResponse',
@@ -84,7 +81,7 @@ def get_binary_type(conn: 'Connection', binary_type: Union[str, int], query_id=N
                 '_fields_': response_parts,
             }
         )
-        response = response_class.from_buffer_copy(stream.mem_view(init_pos, total_len))
+        response = stream.read_ctype(response_class, position=init_pos)
 
     result = APIResult(response)
     if result.status != 0:

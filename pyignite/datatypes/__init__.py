@@ -25,7 +25,7 @@ from .primitive import *
 from .primitive_arrays import *
 from .primitive_objects import *
 from .standard import *
-from ..stream import BinaryStream
+from ..stream import BinaryStream, READ_BACKWARD
 
 
 def unwrap_binary(client: 'Client', wrapped: tuple) -> object:
@@ -40,9 +40,7 @@ def unwrap_binary(client: 'Client', wrapped: tuple) -> object:
 
     blob, offset = wrapped
     with BinaryStream(blob, client.random_node) as stream:
-        data_class, data_positions = BinaryObject.parse(stream)
-        result = BinaryObject.to_python(
-            data_class.from_buffer_copy(stream.mem_view(*data_positions)),
-            client,
-        )
+        data_class = BinaryObject.parse(stream)
+        result = BinaryObject.to_python(stream.read_ctype(data_class, direction=READ_BACKWARD), client)
+
     return result
