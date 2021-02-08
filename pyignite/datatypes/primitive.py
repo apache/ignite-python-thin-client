@@ -15,7 +15,7 @@
 
 import ctypes
 import struct
-import sys
+from io import SEEK_CUR
 
 from pyignite.constants import *
 from .base import IgniteDataType
@@ -47,8 +47,10 @@ class Primitive(IgniteDataType):
     c_type = None
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        return cls.c_type, client.recv(ctypes.sizeof(cls.c_type))
+    def parse(cls, stream):
+        init_pos, offset = stream.tell(), ctypes.sizeof(cls.c_type)
+        stream.seek(offset, SEEK_CUR)
+        return cls.c_type
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
@@ -61,8 +63,8 @@ class Byte(Primitive):
     c_type = ctypes.c_byte
 
     @classmethod
-    def from_python(cls, value):
-        return struct.pack("<b", value)
+    def from_python(cls, stream, value):
+        stream.write(struct.pack("<b", value))
 
 
 class Short(Primitive):
@@ -71,8 +73,8 @@ class Short(Primitive):
     c_type = ctypes.c_short
 
     @classmethod
-    def from_python(cls, value):
-        return struct.pack("<h", value)
+    def from_python(cls, stream, value):
+        stream.write(struct.pack("<h", value))
 
 
 class Int(Primitive):
@@ -81,8 +83,8 @@ class Int(Primitive):
     c_type = ctypes.c_int
 
     @classmethod
-    def from_python(cls, value):
-        return struct.pack("<i", value)
+    def from_python(cls, stream, value):
+        stream.write(struct.pack("<i", value))
 
 
 class Long(Primitive):
@@ -91,8 +93,8 @@ class Long(Primitive):
     c_type = ctypes.c_longlong
 
     @classmethod
-    def from_python(cls, value):
-        return struct.pack("<q", value)
+    def from_python(cls, stream, value):
+        stream.write(struct.pack("<q", value))
 
 
 class Float(Primitive):
@@ -101,8 +103,8 @@ class Float(Primitive):
     c_type = ctypes.c_float
 
     @classmethod
-    def from_python(cls, value):
-        return struct.pack("<f", value)
+    def from_python(cls, stream, value):
+        stream.write(struct.pack("<f", value))
 
 
 class Double(Primitive):
@@ -111,8 +113,8 @@ class Double(Primitive):
     c_type = ctypes.c_double
 
     @classmethod
-    def from_python(cls, value):
-        return struct.pack("<d", value)
+    def from_python(cls, stream, value):
+        stream.write(struct.pack("<d", value))
 
 
 class Char(Primitive):
@@ -128,16 +130,15 @@ class Char(Primitive):
         ).decode(PROTOCOL_CHAR_ENCODING)
 
     @classmethod
-    def from_python(cls, value):
+    def from_python(cls, stream, value):
         if type(value) is str:
             value = value.encode(PROTOCOL_CHAR_ENCODING)
         # assuming either a bytes or an integer
         if type(value) is bytes:
             value = int.from_bytes(value, byteorder=PROTOCOL_BYTE_ORDER)
         # assuming a valid integer
-        return value.to_bytes(
-            ctypes.sizeof(cls.c_type),
-            byteorder=PROTOCOL_BYTE_ORDER
+        stream.write(
+            value.to_bytes(ctypes.sizeof(cls.c_type), byteorder=PROTOCOL_BYTE_ORDER)
         )
 
 
@@ -151,5 +152,5 @@ class Bool(Primitive):
         return ctype_object != 0
 
     @classmethod
-    def from_python(cls, value):
-        return struct.pack("<b", 1 if value else 0)
+    def from_python(cls, stream, value):
+        stream.write(struct.pack("<b", 1 if value else 0))

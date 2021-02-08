@@ -14,11 +14,13 @@
 # limitations under the License.
 
 import ctypes
+from io import SEEK_CUR
 from typing import Any
 
 from pyignite.constants import *
 from . import Null
 from .base import IgniteDataType
+from .null_object import Nullable
 from .primitive import *
 from .type_codes import *
 from .type_ids import *
@@ -33,7 +35,7 @@ __all__ = [
 ]
 
 
-class PrimitiveArray(IgniteDataType):
+class PrimitiveArray(IgniteDataType, Nullable):
     """
     Base class for array of primitives. Payload-only.
     """
@@ -61,15 +63,10 @@ class PrimitiveArray(IgniteDataType):
         )
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
-
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
-
+    def parse_not_null(cls, stream):
         header_class = cls.build_header_class()
-        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
-        header = header_class.from_buffer_copy(buffer)
+        header = stream.read_ctype(header_class)
+
         final_class = type(
             cls.__name__,
             (header_class,),
@@ -80,26 +77,18 @@ class PrimitiveArray(IgniteDataType):
                 ],
             }
         )
-        buffer += client.recv(
-            ctypes.sizeof(final_class) - ctypes.sizeof(header_class)
-        )
-        return final_class, buffer
+        stream.seek(ctypes.sizeof(final_class), SEEK_CUR)
+        return final_class
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
-        result = []
         length = getattr(ctype_object, "length", None)
         if length is None:
             return None
-        for i in range(length):
-            result.append(ctype_object.data[i])
-        return result
+        return [ctype_object.data[i] for i in range(ctype_object.length)]
 
     @classmethod
-    def from_python(cls, value):
-        if value is None:
-            return Null.from_python()
-
+    def from_python_not_null(cls, stream, value):
         header_class = cls.build_header_class()
         header = header_class()
         if hasattr(header, 'type_code'):
@@ -109,11 +98,10 @@ class PrimitiveArray(IgniteDataType):
             )
         length = len(value)
         header.length = length
-        buffer = bytearray(header)
 
+        stream.write(header)
         for x in value:
-            buffer += cls.primitive_type.from_python(x)
-        return bytes(buffer)
+            cls.primitive_type.from_python(stream, x)
 
 
 class ByteArray(PrimitiveArray):
@@ -130,14 +118,13 @@ class ByteArray(PrimitiveArray):
         return bytearray(data)
 
     @classmethod
-    def from_python(cls, value):
+    def from_python(cls, stream, value):
         header_class = cls.build_header_class()
         header = header_class()
-
-        # no need to iterate on bytes or bytearray
-        # to create ByteArray data buffer
         header.length = len(value)
-        return bytes(bytearray(header) + bytearray(value))
+
+        stream.write(header)
+        stream.write(bytearray(value))
 
 
 class ShortArray(PrimitiveArray):
@@ -224,20 +211,20 @@ class ByteArrayObject(PrimitiveArrayObject):
         return ByteArray.to_python(ctype_object, *args, **kwargs)
 
     @classmethod
-    def from_python(cls, value):
-        if value is None:
-            return Null.from_python()
-
+    def from_python_not_null(cls, stream, value):
         header_class = cls.build_header_class()
         header = header_class()
         header.type_code = int.from_bytes(
             cls.type_code,
             byteorder=PROTOCOL_BYTE_ORDER
         )
-
-        # no need to iterate on bytes or bytearray
-        # to create ByteArrayObject data buffer
         header.length = len(value)
+        stream.write(header)
+
+        if isinstance(value, (bytes, bytearray)):
+            stream.write(value)
+            return
+
         try:
             # `value` is a `bytearray` or a sequence of integer values
             # in range 0 to 255
@@ -253,7 +240,7 @@ class ByteArrayObject(PrimitiveArrayObject):
                         'byte must be in range(-128, 256)!'
                     ) from None
 
-        return bytes(bytearray(header) + value_buffer)
+        stream.write(value_buffer)
 
 
 class ShortArrayObject(PrimitiveArrayObject):

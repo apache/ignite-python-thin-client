@@ -19,7 +19,7 @@ import warnings
 
 from functools import wraps
 from threading import Event, Thread
-from typing import Any, Callable, Optional, Type, Tuple, Union
+from typing import Any, Optional, Type, Tuple, Union
 
 from pyignite.datatypes.base import IgniteDataType
 from .constants import *
@@ -85,29 +85,7 @@ def int_overflow(value: int) -> int:
     return ((value ^ 0x80000000) & 0xffffffff) - 0x80000000
 
 
-def unwrap_binary(client: 'Client', wrapped: tuple) -> object:
-    """
-    Unwrap wrapped BinaryObject and convert it to Python data.
-
-    :param client: connection to Ignite cluster,
-    :param wrapped: `WrappedDataObject` value,
-    :return: dict representing wrapped BinaryObject.
-    """
-    from pyignite.datatypes.complex import BinaryObject
-
-    blob, offset = wrapped
-    conn_clone = client.random_node.clone(prefetch=blob)
-    conn_clone.pos = offset
-    data_class, data_bytes = BinaryObject.parse(conn_clone)
-    result = BinaryObject.to_python(
-        data_class.from_buffer_copy(data_bytes),
-        client,
-    )
-    conn_clone.close()
-    return result
-
-
-def hashcode(data: Union[str, bytes]) -> int:
+def hashcode(data: Union[str, bytes, bytearray, memoryview]) -> int:
     """
     Calculate hash code used for identifying objects in Ignite binary API.
 

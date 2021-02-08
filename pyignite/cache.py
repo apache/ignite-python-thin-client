@@ -17,7 +17,7 @@ import time
 from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
 from .constants import *
-from .binary import GenericObjectMeta
+from .binary import GenericObjectMeta, unwrap_binary
 from .datatypes import prop_codes
 from .datatypes.internal import AnyDataObject
 from .exceptions import (
@@ -26,7 +26,7 @@ from .exceptions import (
 )
 from .utils import (
     cache_id, get_field_by_id, is_wrapped,
-    status_to_exception, unsigned, unwrap_binary,
+    status_to_exception, unsigned
 )
 from .api.cache_config import (
     cache_create, cache_create_with_config,

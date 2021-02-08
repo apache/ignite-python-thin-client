@@ -17,6 +17,7 @@ from collections import OrderedDict
 import ctypes
 import decimal
 from datetime import date, datetime, timedelta
+from io import SEEK_CUR
 from typing import Any, Tuple, Union, Callable
 import uuid
 
@@ -32,6 +33,8 @@ __all__ = [
     'AnyDataArray', 'AnyDataObject', 'Struct', 'StructArray', 'tc_map',
     'infer_from_python',
 ]
+
+from ..stream import READ_BACKWARD
 
 
 def tc_map(key: bytes, _memo_map: dict = {}):
@@ -119,11 +122,12 @@ class Conditional:
         self.var1 = var1
         self.var2 = var2
 
-    def parse(self, client: 'Client', context):
-        return self.var1.parse(client) if self.predicate1(context) else self.var2.parse(client)
+    def parse(self, stream, context):
+        return self.var1.parse(stream) if self.predicate1(context) else self.var2.parse(stream)
 
     def to_python(self, ctype_object, context, *args, **kwargs):
-        return self.var1.to_python(ctype_object, *args, **kwargs) if self.predicate2(context) else self.var2.to_python(ctype_object, *args, **kwargs)
+        return self.var1.to_python(ctype_object, *args, **kwargs) if self.predicate2(context)\
+            else self.var2.to_python(ctype_object, *args, **kwargs)
 
 @attr.s
 class StructArray:
@@ -144,14 +148,17 @@ class StructArray:
             },
         )
 
-    def parse(self, client: 'Client'):
-        buffer = client.recv(ctypes.sizeof(self.counter_type))
-        length = int.from_bytes(buffer, byteorder=PROTOCOL_BYTE_ORDER)
-        fields = []
+    def parse(self, stream):
+        counter_type_len = ctypes.sizeof(self.counter_type)
+        length = int.from_bytes(
+            stream.mem_view(offset=counter_type_len),
+            byteorder=PROTOCOL_BYTE_ORDER
+        )
+        stream.seek(counter_type_len, SEEK_CUR)
 
+        fields = []
         for i in range(length):
-            c_type, buffer_fragment = Struct(self.following).parse(client)
-            buffer += buffer_fragment
+            c_type = Struct(self.following).parse(stream)
             fields.append(('element_{}'.format(i), c_type))
 
         data_class = type(
@@ -163,7 +170,7 @@ class StructArray:
             },
         )
 
-        return data_class, buffer
+        return data_class
 
     def to_python(self, ctype_object, *args, **kwargs):
         result = []
@@ -179,20 +186,19 @@ class StructArray:
             )
         return result
 
-    def from_python(self, value):
+    def from_python(self, stream, value):
         length = len(value)
         header_class = self.build_header_class()
         header = header_class()
         header.length = length
-        buffer = bytearray(header)
 
+
+        stream.write(header)
         for i, v in enumerate(value):
             for default_key, default_value in self.defaults.items():
                 v.setdefault(default_key, default_value)
             for name, el_class in self.following:
-                buffer += el_class.from_python(v[name])
-
-        return bytes(buffer)
+                el_class.from_python(stream, v[name])
 
 
 @attr.s
@@ -202,21 +208,13 @@ class Struct:
     dict_type = attr.ib(default=OrderedDict)
     defaults = attr.ib(type=dict, default={})
 
-    def parse(
-        self, client: 'Client'
-    ) -> Tuple[ctypes.LittleEndianStructure, bytes]:
-        buffer = b''
-        fields = []
-        values = {}
-
+    def parse(self, stream):
+        fields, values = [], {}
         for name, c_type in self.fields:
             is_cond = isinstance(c_type, Conditional)
-            c_type, buffer_fragment = c_type.parse(client, values) if is_cond else c_type.parse(client)
-            buffer += buffer_fragment
-
+            c_type = c_type.parse(stream, values) if is_cond else c_type.parse(stream)
             fields.append((name, c_type))
-
-            values[name] = buffer_fragment
+            values[name] = stream.read_ctype(c_type, direction=READ_BACKWARD)
 
         data_class = type(
             'Struct',
@@ -227,7 +225,7 @@ class Struct:
             },
         )
 
-        return data_class, buffer
+        return data_class
 
     def to_python(
         self, ctype_object, *args, **kwargs
@@ -245,16 +243,12 @@ class Struct:
             )
         return result
 
-    def from_python(self, value) -> bytes:
-        buffer = b''
-
+    def from_python(self, stream, value):
         for default_key, default_value in self.defaults.items():
             value.setdefault(default_key, default_value)
 
         for name, el_class in self.fields:
-            buffer += el_class.from_python(value[name])
-
-        return buffer
+            el_class.from_python(stream, value[name])
 
 
 class AnyDataObject:
@@ -299,14 +293,13 @@ class AnyDataObject:
             return type_first
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        type_code = client.recv(ctypes.sizeof(ctypes.c_byte))
+    def parse(cls, stream):
+        type_code = bytes(stream.mem_view(offset=ctypes.sizeof(ctypes.c_byte)))
         try:
             data_class = tc_map(type_code)
         except KeyError:
             raise ParseError('Unknown type code: `{}`'.format(type_code))
-        client.prefetch += type_code
-        return data_class.parse(client)
+        return data_class.parse(stream)
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
@@ -418,11 +411,12 @@ class AnyDataObject:
         )
 
     @classmethod
-    def from_python(cls, value):
-        return cls.map_python_type(value).from_python(value)
+    def from_python(cls, stream, value):
+        p_type = cls.map_python_type(value)
+        p_type.from_python(stream, value)
 
 
-def infer_from_python(value: Any):
+def infer_from_python(stream, value: Any):
     """
     Convert pythonic value to ctypes buffer, type hint-aware.
 
@@ -433,7 +427,8 @@ def infer_from_python(value: Any):
         value, data_type = value
     else:
         data_type = AnyDataObject
-    return data_type.from_python(value)
+
+    data_type.from_python(stream, value)
 
 
 @attr.s
@@ -455,15 +450,14 @@ class AnyDataArray(AnyDataObject):
             }
         )
 
-    def parse(self, client: 'Client'):
+    def parse(self, stream):
         header_class = self.build_header()
-        buffer = client.recv(ctypes.sizeof(header_class))
-        header = header_class.from_buffer_copy(buffer)
-        fields = []
+        header = stream.read_ctype(header_class)
+        stream.seek(ctypes.sizeof(header_class), SEEK_CUR)
 
+        fields = []
         for i in range(header.length):
-            c_type, buffer_fragment = super().parse(client)
-            buffer += buffer_fragment
+            c_type = super().parse(stream)
             fields.append(('element_{}'.format(i), c_type))
 
         final_class = type(
@@ -474,7 +468,7 @@ class AnyDataArray(AnyDataObject):
                 '_fields_': fields,
             }
         )
-        return final_class, buffer
+        return final_class
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
@@ -491,7 +485,7 @@ class AnyDataArray(AnyDataObject):
             )
         return result
 
-    def from_python(self, value):
+    def from_python(self, stream, value):
         header_class = self.build_header()
         header = header_class()
 
@@ -501,8 +495,7 @@ class AnyDataArray(AnyDataObject):
             value = [value]
             length = 1
         header.length = length
-        buffer = bytearray(header)
 
+        stream.write(header)
         for x in value:
-            buffer += infer_from_python(x)
-        return bytes(buffer)
+            infer_from_python(stream, x)

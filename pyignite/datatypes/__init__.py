@@ -25,3 +25,22 @@ from .primitive import *
 from .primitive_arrays import *
 from .primitive_objects import *
 from .standard import *
+from ..stream import BinaryStream, READ_BACKWARD
+
+
+def unwrap_binary(client: 'Client', wrapped: tuple) -> object:
+    """
+    Unwrap wrapped BinaryObject and convert it to Python data.
+
+    :param client: connection to Ignite cluster,
+    :param wrapped: `WrappedDataObject` value,
+    :return: dict representing wrapped BinaryObject.
+    """
+    from pyignite.datatypes.complex import BinaryObject
+
+    blob, offset = wrapped
+    with BinaryStream(client.random_node, blob) as stream:
+        data_class = BinaryObject.parse(stream)
+        result = BinaryObject.to_python(stream.read_ctype(data_class, direction=READ_BACKWARD), client)
+
+    return result

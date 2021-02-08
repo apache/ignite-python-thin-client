@@ -21,6 +21,7 @@ from pyignite.api.result import APIResult
 from pyignite.connection import Connection
 from pyignite.constants import MIN_LONG, MAX_LONG, RHF_TOPOLOGY_CHANGED
 from pyignite.queries.response import Response, SQLResponse
+from pyignite.stream import BinaryStream, READ_BACKWARD
 
 
 @attr.s
@@ -47,31 +48,28 @@ class Query:
             )
         return cls._query_c_type
 
-    def _build_header(self, buffer: bytearray, values: dict):
+    def _build_header(self, stream, values: dict):
         header_class = self.build_c_type()
+        header_len = ctypes.sizeof(header_class)
+        init_pos = stream.tell()
+        stream.seek(init_pos + header_len)
+
         header = header_class()
         header.op_code = self.op_code
         if self.query_id is None:
             header.query_id = randint(MIN_LONG, MAX_LONG)
 
         for name, c_type in self.following:
-            buffer += c_type.from_python(values[name])
+            c_type.from_python(stream, values[name])
 
-        header.length = (
-                len(buffer)
-                + ctypes.sizeof(header_class)
-                - ctypes.sizeof(ctypes.c_int)
-        )
+        header.length = stream.tell() - init_pos - ctypes.sizeof(ctypes.c_int)
+        stream.seek(init_pos)
 
         return header
 
-    def from_python(self, values: dict = None):
-        if values is None:
-            values = {}
-        buffer = bytearray()
-        header = self._build_header(buffer, values)
-        buffer[:0] = bytes(header)
-        return header.query_id, bytes(buffer)
+    def from_python(self, stream, values: dict = None):
+        header = self._build_header(stream, values if values else {})
+        stream.write(header)
 
     def perform(
         self, conn: Connection, query_params: dict = None,
@@ -89,8 +87,9 @@ class Query:
         :return: instance of :class:`~pyignite.api.result.APIResult` with raw
          value (may undergo further processing in API functions).
         """
-        _, send_buffer = self.from_python(query_params)
-        conn.send(send_buffer)
+        with BinaryStream(conn) as stream:
+            self.from_python(stream, query_params)
+            conn.send(stream.getbuffer())
 
         if sql:
             response_struct = SQLResponse(protocol_version=conn.get_protocol_version(),
@@ -99,8 +98,9 @@ class Query:
             response_struct = Response(protocol_version=conn.get_protocol_version(),
                                        following=response_config)
 
-        response_ctype, recv_buffer = response_struct.parse(conn)
-        response = response_ctype.from_buffer_copy(recv_buffer)
+        with BinaryStream(conn, conn.recv()) as stream:
+            response_ctype = response_struct.parse(stream)
+            response = stream.read_ctype(response_ctype, direction=READ_BACKWARD)
 
         # this test depends on protocol version
         if getattr(response, 'flags', False) & RHF_TOPOLOGY_CHANGED:
@@ -140,7 +140,7 @@ class ConfigQuery(Query):
             )
         return cls._query_c_type
 
-    def _build_header(self, buffer: bytearray, values: dict):
-        header = super()._build_header(buffer, values)
+    def _build_header(self, stream, values: dict):
+        header = super()._build_header(stream, values)
         header.config_length = header.length - ctypes.sizeof(type(header))
         return header

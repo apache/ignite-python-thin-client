@@ -22,7 +22,9 @@ from pyignite.api import (
 )
 from pyignite.datatypes.prop_codes import *
 from pyignite.exceptions import SQLError
-from pyignite.utils import entity_id, unwrap_binary
+from pyignite.utils import entity_id
+from pyignite.binary import unwrap_binary
+
 
 initial_data = [
         ('John', 'Doe', 5),

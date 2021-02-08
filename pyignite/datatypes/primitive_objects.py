@@ -14,16 +14,15 @@
 # limitations under the License.
 
 import ctypes
+from io import SEEK_CUR
 
 from pyignite.constants import *
 from pyignite.utils import unsigned
-
 from .base import IgniteDataType
 from .type_codes import *
 from .type_ids import *
 from .type_names import *
-from .null_object import Null
-
+from .null_object import Null, Nullable
 
 __all__ = [
     'DataObject', 'ByteObject', 'ShortObject', 'IntObject', 'LongObject',
@@ -31,7 +30,7 @@ __all__ = [
 ]
 
 
-class DataObject(IgniteDataType):
+class DataObject(IgniteDataType, Nullable):
     """
     Base class for primitive data objects.
 
@@ -61,22 +60,17 @@ class DataObject(IgniteDataType):
         return cls._object_c_type
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
+    def parse_not_null(cls, stream):
         data_type = cls.build_c_type()
-        buffer = tc_type + client.recv(ctypes.sizeof(data_type) - len(tc_type))
-        return data_type, buffer
+        stream.seek(ctypes.sizeof(data_type), SEEK_CUR)
+        return data_type
 
     @staticmethod
     def to_python(ctype_object, *args, **kwargs):
         return getattr(ctype_object, "value", None)
 
     @classmethod
-    def from_python(cls, value):
-        if value is None:
-            return Null.from_python()
+    def from_python_not_null(cls, stream, value):
         data_type = cls.build_c_type()
         data_object = data_type()
         data_object.type_code = int.from_bytes(
@@ -84,7 +78,7 @@ class DataObject(IgniteDataType):
             byteorder=PROTOCOL_BYTE_ORDER
         )
         data_object.value = value
-        return bytes(data_object)
+        stream.write(data_object)
 
 
 class ByteObject(DataObject):
@@ -201,18 +195,16 @@ class CharObject(DataObject):
         ).decode(PROTOCOL_CHAR_ENCODING)
 
     @classmethod
-    def from_python(cls, value):
-        if value is None:
-            return Null.from_python()
+    def from_python_not_null(cls, stream, value):
         if type(value) is str:
             value = value.encode(PROTOCOL_CHAR_ENCODING)
         # assuming either a bytes or an integer
         if type(value) is bytes:
             value = int.from_bytes(value, byteorder=PROTOCOL_BYTE_ORDER)
         # assuming a valid integer
-        return cls.type_code + value.to_bytes(
-            ctypes.sizeof(cls.c_type),
-            byteorder=PROTOCOL_BYTE_ORDER
+        stream.write(cls.type_code)
+        stream.write(
+            value.to_bytes(ctypes.sizeof(cls.c_type), byteorder=PROTOCOL_BYTE_ORDER)
         )
 
 

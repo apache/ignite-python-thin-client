@@ -20,6 +20,7 @@ There can't be null type, because null payload takes exactly 0 bytes.
 """
 
 import ctypes
+from io import SEEK_CUR
 from typing import Any
 
 from .base import IgniteDataType
@@ -27,6 +28,8 @@ from .type_codes import TC_NULL
 
 
 __all__ = ['Null']
+
+from ..constants import PROTOCOL_BYTE_ORDER
 
 
 class Null(IgniteDataType):
@@ -55,16 +58,56 @@ class Null(IgniteDataType):
         return cls._object_c_type
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        buffer = client.recv(ctypes.sizeof(ctypes.c_byte))
-        data_type = cls.build_c_type()
-        return data_type, buffer
+    def parse(cls, stream):
+        init_pos, offset = stream.tell(), ctypes.sizeof(ctypes.c_byte)
+        stream.seek(offset, SEEK_CUR)
+        return cls.build_c_type()
 
     @staticmethod
     def to_python(*args, **kwargs):
         return None
 
     @staticmethod
-    def from_python(*args):
-        return TC_NULL
+    def from_python(stream, *args):
+        stream.write(TC_NULL)
 
+
+class Nullable:
+    @classmethod
+    def parse_not_null(cls, stream):
+        raise NotImplementedError
+
+    @classmethod
+    def parse(cls, stream):
+        type_len = ctypes.sizeof(ctypes.c_byte)
+
+        if stream.mem_view(offset=type_len) == TC_NULL:
+            stream.seek(type_len, SEEK_CUR)
+            return Null.build_c_type()
+
+        return cls.parse_not_null(stream)
+
+    @classmethod
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+        raise NotImplementedError
+
+    @classmethod
+    def to_python(cls, ctypes_object, *args, **kwargs):
+        if ctypes_object.type_code == int.from_bytes(
+                TC_NULL,
+                byteorder=PROTOCOL_BYTE_ORDER
+        ):
+            return None
+
+        return cls.to_python_not_null(ctypes_object, *args, **kwargs)
+
+    @classmethod
+    def from_python_not_null(cls, stream, value):
+        raise NotImplementedError
+
+    @classmethod
+    def from_python(cls, stream, value):
+        if value is None:
+            Null.from_python(stream)
+        else:
+            cls.from_python_not_null(stream, value)

@@ -16,6 +16,7 @@
 import ctypes
 from datetime import date, datetime, time, timedelta
 import decimal
+from io import SEEK_CUR
 from math import ceil
 from typing import Any, Tuple
 import uuid
@@ -26,8 +27,7 @@ from .base import IgniteDataType
 from .type_codes import *
 from .type_ids import *
 from .type_names import *
-from .null_object import Null
-
+from .null_object import Null, Nullable
 
 __all__ = [
     'String', 'DecimalObject', 'UUIDObject', 'TimestampObject', 'DateObject',
@@ -44,7 +44,7 @@ __all__ = [
 ]
 
 
-class StandardObject(IgniteDataType):
+class StandardObject(IgniteDataType, Nullable):
     _type_name = None
     _type_id = None
     type_code = None
@@ -54,18 +54,13 @@ class StandardObject(IgniteDataType):
         raise NotImplementedError('This object is generic')
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
-
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
-
-        c_type = cls.build_c_type()
-        buffer = tc_type + client.recv(ctypes.sizeof(c_type) - len(tc_type))
-        return c_type, buffer
+    def parse_not_null(cls, stream):
+        data_type = cls.build_c_type()
+        stream.seek(ctypes.sizeof(data_type), SEEK_CUR)
+        return data_type
 
 
-class String(IgniteDataType):
+class String(IgniteDataType, Nullable):
     """
     Pascal-style string: `c_int` counter, followed by count*bytes.
     UTF-8-encoded, so that one character may take 1 to 4 bytes.
@@ -95,35 +90,25 @@ class String(IgniteDataType):
         )
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
-        # String or Null
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
-
-        buffer = tc_type + client.recv(ctypes.sizeof(ctypes.c_int))
-        length = int.from_bytes(buffer[1:], byteorder=PROTOCOL_BYTE_ORDER)
+    def parse_not_null(cls, stream):
+        length = int.from_bytes(
+            stream.mem_view(stream.tell() + ctypes.sizeof(ctypes.c_byte), ctypes.sizeof(ctypes.c_int)),
+            byteorder=PROTOCOL_BYTE_ORDER
+        )
 
         data_type = cls.build_c_type(length)
-        buffer += client.recv(ctypes.sizeof(data_type) - len(buffer))
-
-        return data_type, buffer
-
-    @staticmethod
-    def to_python(ctype_object, *args, **kwargs):
-        length = getattr(ctype_object, 'length', None)
-        if length is None:
-            return None
-        elif length > 0:
-            return ctype_object.data.decode(PROTOCOL_STRING_ENCODING)
-        else:
-            return ''
+        stream.seek(ctypes.sizeof(data_type), SEEK_CUR)
+        return data_type
 
     @classmethod
-    def from_python(cls, value):
-        if value is None:
-            return Null.from_python()
+    def to_python_not_null(cls, ctype_object, *args, **kwargs):
+        if ctype_object.length > 0:
+            return ctype_object.data.decode(PROTOCOL_STRING_ENCODING)
 
+        return ''
+
+    @classmethod
+    def from_python_not_null(cls, stream, value):
         if isinstance(value, str):
             value = value.encode(PROTOCOL_STRING_ENCODING)
         length = len(value)
@@ -135,10 +120,11 @@ class String(IgniteDataType):
         )
         data_object.length = length
         data_object.data = value
-        return bytes(data_object)
+
+        stream.write(data_object)
 
 
-class DecimalObject(IgniteDataType):
+class DecimalObject(IgniteDataType, Nullable):
     _type_name = NAME_DECIMAL
     _type_id = TYPE_DECIMAL
     type_code = TC_DECIMAL
@@ -165,18 +151,10 @@ class DecimalObject(IgniteDataType):
         )
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
-        # Decimal or Null
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
-
+    def parse_not_null(cls, stream):
         header_class = cls.build_c_header()
-        buffer = tc_type + client.recv(
-            ctypes.sizeof(header_class)
-            - len(tc_type)
-        )
-        header = header_class.from_buffer_copy(buffer)
+        header = stream.read_ctype(header_class)
+
         data_type = type(
             cls.__name__,
             (header_class,),
@@ -187,17 +165,12 @@ class DecimalObject(IgniteDataType):
                 ],
             }
         )
-        buffer += client.recv(
-            ctypes.sizeof(data_type)
-            - ctypes.sizeof(header_class)
-        )
-        return data_type, buffer
+
+        stream.seek(ctypes.sizeof(data_type), SEEK_CUR)
+        return data_type
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
-        if getattr(ctype_object, 'length', None) is None:
-            return None
-
+    def to_python_not_null(cls, ctype_object, *args, **kwargs):
         sign = 1 if ctype_object.data[0] & 0x80 else 0
         data = ctype_object.data[1:]
         data.insert(0, ctype_object.data[0] & 0x7f)
@@ -218,10 +191,7 @@ class DecimalObject(IgniteDataType):
         return result
 
     @classmethod
-    def from_python(cls, value: decimal.Decimal):
-        if value is None:
-            return Null.from_python()
-
+    def from_python_not_null(cls, stream, value: decimal.Decimal):
         sign, digits, scale = value.normalize().as_tuple()
         integer = int(''.join([str(d) for d in digits]))
         # calculate number of bytes (at least one, and not forget the sign bit)
@@ -257,7 +227,8 @@ class DecimalObject(IgniteDataType):
         data_object.scale = -scale
         for i in range(length):
             data_object.data[i] = data[i]
-        return bytes(data_object)
+
+        stream.write(data_object)
 
 
 class UUIDObject(StandardObject):
@@ -300,10 +271,7 @@ class UUIDObject(StandardObject):
         return cls._object_c_type
 
     @classmethod
-    def from_python(cls, value: uuid.UUID):
-        if value is None:
-            return Null.from_python()
-
+    def from_python_not_null(cls, stream, value: uuid.UUID):
         data_type = cls.build_c_type()
         data_object = data_type()
         data_object.type_code = int.from_bytes(
@@ -312,15 +280,11 @@ class UUIDObject(StandardObject):
         )
         for i, byte in zip(cls.UUID_BYTE_ORDER, bytearray(value.bytes)):
             data_object.value[i] = byte
-        return bytes(data_object)
+
+        stream.write(data_object)
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
-        if ctypes_object.type_code == int.from_bytes(
-            TC_NULL,
-            byteorder=PROTOCOL_BYTE_ORDER
-        ):
-            return None
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
         uuid_array = bytearray(ctypes_object.value)
         return uuid.UUID(
             bytes=bytes([uuid_array[i] for i in cls.UUID_BYTE_ORDER])
@@ -367,9 +331,7 @@ class TimestampObject(StandardObject):
         return cls._object_c_type
 
     @classmethod
-    def from_python(cls, value: tuple):
-        if value is None:
-            return Null.from_python()
+    def from_python_not_null(cls, stream, value: tuple):
         data_type = cls.build_c_type()
         data_object = data_type()
         data_object.type_code = int.from_bytes(
@@ -378,15 +340,11 @@ class TimestampObject(StandardObject):
         )
         data_object.epoch = int(value[0].timestamp() * 1000)
         data_object.fraction = value[1]
-        return bytes(data_object)
+
+        stream.write(data_object)
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
-        if ctypes_object.type_code == int.from_bytes(
-            TC_NULL,
-            byteorder=PROTOCOL_BYTE_ORDER
-        ):
-            return None
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
         return (
             datetime.fromtimestamp(ctypes_object.epoch/1000),
             ctypes_object.fraction
@@ -428,9 +386,7 @@ class DateObject(StandardObject):
         return cls._object_c_type
 
     @classmethod
-    def from_python(cls, value: [date, datetime]):
-        if value is None:
-            return Null.from_python()
+    def from_python_not_null(cls, stream, value: [date, datetime]):
         if type(value) is date:
             value = datetime.combine(value, time())
         data_type = cls.build_c_type()
@@ -440,15 +396,11 @@ class DateObject(StandardObject):
             byteorder=PROTOCOL_BYTE_ORDER
         )
         data_object.epoch = int(value.timestamp() * 1000)
-        return bytes(data_object)
+
+        stream.write(data_object)
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
-        if ctypes_object.type_code == int.from_bytes(
-            TC_NULL,
-            byteorder=PROTOCOL_BYTE_ORDER
-        ):
-            return None
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
         return datetime.fromtimestamp(ctypes_object.epoch/1000)
 
 
@@ -486,9 +438,7 @@ class TimeObject(StandardObject):
         return cls._object_c_type
 
     @classmethod
-    def from_python(cls, value: timedelta):
-        if value is None:
-            return Null.from_python()
+    def from_python_not_null(cls, stream, value: timedelta):
         data_type = cls.build_c_type()
         data_object = data_type()
         data_object.type_code = int.from_bytes(
@@ -496,15 +446,11 @@ class TimeObject(StandardObject):
             byteorder=PROTOCOL_BYTE_ORDER
         )
         data_object.value = int(value.total_seconds() * 1000)
-        return bytes(data_object)
+
+        stream.write(data_object)
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
-        if ctypes_object.type_code == int.from_bytes(
-            TC_NULL,
-            byteorder=PROTOCOL_BYTE_ORDER
-        ):
-            return None
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
         return timedelta(milliseconds=ctypes_object.value)
 
 
@@ -539,10 +485,7 @@ class EnumObject(StandardObject):
         return cls._object_c_type
 
     @classmethod
-    def from_python(cls, value: tuple):
-        if value is None:
-            return Null.from_python()
-
+    def from_python_not_null(cls, stream, value: tuple):
         data_type = cls.build_c_type()
         data_object = data_type()
         data_object.type_code = int.from_bytes(
@@ -550,15 +493,11 @@ class EnumObject(StandardObject):
             byteorder=PROTOCOL_BYTE_ORDER
         )
         data_object.type_id, data_object.ordinal = value
-        return bytes(data_object)
+
+        stream.write(data_object)
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
-        if ctypes_object.type_code == int.from_bytes(
-            TC_NULL,
-            byteorder=PROTOCOL_BYTE_ORDER
-        ):
-            return None
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
         return ctypes_object.type_id, ctypes_object.ordinal
 
 
@@ -571,7 +510,7 @@ class BinaryEnumObject(EnumObject):
     type_code = TC_BINARY_ENUM
 
 
-class StandardArray(IgniteDataType):
+class StandardArray(IgniteDataType, Nullable):
     """
     Base class for array of primitives. Payload-only.
     """
@@ -599,19 +538,14 @@ class StandardArray(IgniteDataType):
         )
 
     @classmethod
-    def parse(cls, client: 'Client'):
-        tc_type = client.recv(ctypes.sizeof(ctypes.c_byte))
-
-        if tc_type == TC_NULL:
-            return Null.build_c_type(), tc_type
-
+    def parse_not_null(cls, stream):
         header_class = cls.build_header_class()
-        buffer = tc_type + client.recv(ctypes.sizeof(header_class) - len(tc_type))
-        header = header_class.from_buffer_copy(buffer)
+        header = stream.read_ctype(header_class)
+        stream.seek(ctypes.sizeof(header_class), SEEK_CUR)
+
         fields = []
         for i in range(header.length):
-            c_type, buffer_fragment = cls.standard_type.parse(client)
-            buffer += buffer_fragment
+            c_type = cls.standard_type.parse(stream)
             fields.append(('element_{}'.format(i), c_type))
 
         final_class = type(
@@ -622,14 +556,15 @@ class StandardArray(IgniteDataType):
                 '_fields_': fields,
             }
         )
-        return final_class, buffer
+        return final_class
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
-        result = []
         length = getattr(ctype_object, "length", None)
         if length is None:
             return None
+
+        result = []
         for i in range(length):
             result.append(
                 cls.standard_type.to_python(
@@ -640,9 +575,7 @@ class StandardArray(IgniteDataType):
         return result
 
     @classmethod
-    def from_python(cls, value):
-        if value is None:
-            return Null.from_python()
+    def from_python_not_null(cls, stream, value):
         header_class = cls.build_header_class()
         header = header_class()
         if hasattr(header, 'type_code'):
@@ -652,11 +585,10 @@ class StandardArray(IgniteDataType):
             )
         length = len(value)
         header.length = length
-        buffer = bytearray(header)
 
+        stream.write(header)
         for x in value:
-            buffer += cls.standard_type.from_python(x)
-        return bytes(buffer)
+            cls.standard_type.from_python(stream, x)
 
 
 class StringArray(StandardArray):
@@ -804,10 +736,7 @@ class EnumArrayObject(StandardArrayObject):
         )
 
     @classmethod
-    def from_python(cls, value):
-        if value is None:
-            return Null.from_python()
-
+    def from_python_not_null(cls, stream, value):
         type_id, value = value
         header_class = cls.build_header_class()
         header = header_class()
@@ -819,11 +748,10 @@ class EnumArrayObject(StandardArrayObject):
         length = len(value)
         header.length = length
         header.type_id = type_id
-        buffer = bytearray(header)
 
+        stream.write(header)
         for x in value:
-            buffer += cls.standard_type.from_python(x)
-        return bytes(buffer)
+            cls.standard_type.from_python(stream, x)
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):

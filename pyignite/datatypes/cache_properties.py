@@ -92,10 +92,11 @@ class PropBase:
         )
 
     @classmethod
-    def parse(cls, connection: 'Connection'):
+    def parse(cls, stream):
+        init_pos = stream.tell()
         header_class = cls.build_header()
-        header_buffer = connection.recv(ctypes.sizeof(header_class))
-        data_class, data_buffer = cls.prop_data_class.parse(connection)
+        data_class = cls.prop_data_class.parse(stream)
+
         prop_class = type(
             cls.__name__,
             (header_class,),
@@ -106,7 +107,9 @@ class PropBase:
                 ],
             }
         )
-        return prop_class, header_buffer + data_buffer
+
+        stream.seek(init_pos + ctypes.sizeof(prop_class))
+        return prop_class
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
@@ -115,11 +118,12 @@ class PropBase:
         )
 
     @classmethod
-    def from_python(cls, value):
+    def from_python(cls, stream, value):
         header_class = cls.build_header()
         header = header_class()
         header.prop_code = cls.prop_code
-        return bytes(header) + cls.prop_data_class.from_python(value)
+        stream.write(bytes(header))
+        cls.prop_data_class.from_python(stream, value)
 
 
 class PropName(PropBase):
@@ -275,7 +279,7 @@ class PropStatisticsEnabled(PropBase):
 class AnyProperty(PropBase):
 
     @classmethod
-    def from_python(cls, value):
+    def from_python(cls, stream, value):
         raise Exception(
             'You must choose a certain type '
             'for your cache configuration property'
