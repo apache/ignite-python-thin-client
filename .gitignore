@@ -4,6 +4,7 @@
 .pytest_cache
 .tox
 tests/config/*.xml
+junit*.xml
 pyignite.egg-info
 ignite-log-*
 __pycache__
