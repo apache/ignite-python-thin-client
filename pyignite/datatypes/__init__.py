@@ -39,7 +39,7 @@ def unwrap_binary(client: 'Client', wrapped: tuple) -> object:
     from pyignite.datatypes.complex import BinaryObject
 
     blob, offset = wrapped
-    with BinaryStream(blob, client.random_node) as stream:
+    with BinaryStream(client.random_node, blob) as stream:
         data_class = BinaryObject.parse(stream)
         result = BinaryObject.to_python(stream.read_ctype(data_class, direction=READ_BACKWARD), client)
 

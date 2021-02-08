@@ -205,7 +205,7 @@ class Connection:
             ('length', Int),
             ('op_code', Byte),
         ])
-        with BinaryStream(self.recv(), self) as stream:
+        with BinaryStream(self, self.recv()) as stream:
             start_class = response_start.parse(stream)
             start = stream.read_ctype(start_class, direction=READ_BACKWARD)
             data = response_start.to_python(start)
@@ -297,7 +297,7 @@ class Connection:
 
         with BinaryStream(self) as stream:
             hs_request.from_python(stream)
-            self.send(stream.getvalue())
+            self.send(stream.getbuffer())
 
         hs_response = self.read_response()
         if hs_response['op_code'] == 0:
@@ -374,7 +374,7 @@ class Connection:
         to.host = self.host
         to.port = self.port
 
-    def send(self, data: bytes, flags=None):
+    def send(self, data: Union[bytes, bytearray, memoryview], flags=None):
         """
         Send data down the socket.
 

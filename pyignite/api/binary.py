@@ -48,15 +48,16 @@ def get_binary_type(conn: 'Connection', binary_type: Union[str, int], query_id=N
         query_id=query_id,
     )
 
-    send_buffer = query_struct.from_python(conn, {
-        'type_id': entity_id(binary_type),
-    })
-    conn.send(send_buffer)
+    with BinaryStream(conn) as stream:
+        query_struct.from_python(stream, {
+            'type_id': entity_id(binary_type),
+        })
+        conn.send(stream.getbuffer())
 
     response_head_struct = Response(protocol_version=conn.get_protocol_version(),
                                     following=[('type_exists', Bool)])
 
-    with BinaryStream(conn.recv(), conn) as stream:
+    with BinaryStream(conn, conn.recv()) as stream:
         init_pos = stream.tell()
         response_head_type = response_head_struct.parse(stream)
         response_head = stream.read_ctype(response_head_type, direction=READ_BACKWARD)

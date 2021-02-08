@@ -22,7 +22,7 @@ READ_BACKWARD = 1
 
 
 class BinaryStream:
-    def __init__(self, *args):
+    def __init__(self, conn, buf=None):
         """
         Initialize binary stream around buffers.
 
@@ -31,19 +31,13 @@ class BinaryStream:
         """
         from pyignite.connection import Connection
 
-        buf = None
-        if len(args) == 1:
-            self.conn = args[0]
-        elif len(args) == 2:
-            buf = args[0]
-            self.conn = args[1]
-
-        if not isinstance(self.conn, Connection):
+        if not isinstance(conn, Connection):
             raise TypeError(f"invalid parameter: expected instance of {Connection}")
 
         if buf and not isinstance(buf, (bytearray, bytes, memoryview)):
             raise TypeError(f"invalid parameter: expected bytes-like object")
 
+        self.conn = conn
         self.stream = BytesIO(buf) if buf else BytesIO()
 
     @property
@@ -86,6 +80,9 @@ class BinaryStream:
 
     def getvalue(self):
         return self.stream.getvalue()
+
+    def getbuffer(self):
+        return self.stream.getbuffer()
 
     def mem_view(self, start=-1, offset=0):
         start = start if start >= 0 else self.tell()

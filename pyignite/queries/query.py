@@ -67,13 +67,9 @@ class Query:
 
         return header
 
-    def from_python(self, conn: Connection, values: dict = None):
-        if values is None:
-            values = {}
-        stream = BinaryStream(conn)
-        header = self._build_header(stream, values)
+    def from_python(self, stream, values: dict = None):
+        header = self._build_header(stream, values if values else {})
         stream.write(header)
-        return stream.getvalue()
 
     def perform(
         self, conn: Connection, query_params: dict = None,
@@ -91,8 +87,9 @@ class Query:
         :return: instance of :class:`~pyignite.api.result.APIResult` with raw
          value (may undergo further processing in API functions).
         """
-        send_buffer = self.from_python(conn, query_params)
-        conn.send(send_buffer)
+        with BinaryStream(conn) as stream:
+            self.from_python(stream, query_params)
+            conn.send(stream.getbuffer())
 
         if sql:
             response_struct = SQLResponse(protocol_version=conn.get_protocol_version(),
@@ -101,7 +98,7 @@ class Query:
             response_struct = Response(protocol_version=conn.get_protocol_version(),
                                        following=response_config)
 
-        with BinaryStream(conn.recv(), conn) as stream:
+        with BinaryStream(conn, conn.recv()) as stream:
             response_ctype = response_struct.parse(stream)
             response = stream.read_ctype(response_ctype, direction=READ_BACKWARD)
 
