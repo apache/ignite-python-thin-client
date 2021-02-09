@@ -19,7 +19,6 @@ from collections import OrderedDict
 import ctypes
 
 from pyignite.constants import RHF_TOPOLOGY_CHANGED, RHF_ERROR
-from pyignite.connection import Connection
 from pyignite.datatypes import AnyDataObject, Bool, Int, Long, String, StringArray, Struct
 from pyignite.queries.op_codes import OP_SUCCESS
 from pyignite.stream import READ_BACKWARD
@@ -30,6 +29,7 @@ class Response:
     following = attr.ib(type=list, factory=list)
     protocol_version = attr.ib(type=tuple, factory=tuple)
     _response_header = None
+    _response_class_name = 'Response'
 
     def __attrs_post_init__(self):
         # replace None with empty list
@@ -88,19 +88,16 @@ class Response:
         else:
             self._parse_success(stream, fields)
 
-        response_class = self._create_response_class(stream, header_class, fields)
-        stream.seek(init_pos + ctypes.sizeof(response_class))
-        return self._create_response_class(stream, header_class, fields)
-
-    def _create_response_class(self, stream, header_class, fields: list):
         response_class = type(
-            'Response',
+            self._response_class_name,
             (header_class,),
             {
                 '_pack_': 1,
                 '_fields_': fields,
             }
         )
+
+        stream.seek(init_pos + ctypes.sizeof(response_class))
         return response_class
 
     def _parse_success(self, stream, fields: list):
@@ -130,6 +127,7 @@ class SQLResponse(Response):
     """
     include_field_names = attr.ib(type=bool, default=False)
     has_cursor = attr.ib(type=bool, default=False)
+    _response_class_name = 'SQLResponse'
 
     def fields_or_field_count(self):
         if self.include_field_names:
@@ -181,17 +179,6 @@ class SQLResponse(Response):
             ('data', data_class),
             ('more', ctypes.c_byte),
         ]
-
-    def _create_response_class(self, stream, header_class, fields: list):
-        final_class = type(
-            'SQLResponse',
-            (header_class,),
-            {
-                '_pack_': 1,
-                '_fields_': fields,
-            }
-        )
-        return final_class
 
     def to_python(self, ctype_object, *args, **kwargs):
         if getattr(ctype_object, 'status_code', 0) == 0:
