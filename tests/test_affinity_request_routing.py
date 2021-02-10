@@ -184,10 +184,6 @@ def test_cache_operation_routed_to_new_cluster_node(request, start_ignite_server
         kill_process_tree(srv.pid)
 
 
-def test_unsupported_affinity_cache_operation_routed_to_random_node(client_partition_aware):
-    verify_random_node(client_partition_aware.get_cache("custom-affinity"))
-
-
 def test_replicated_cache_operation_routed_to_random_node(request, client_partition_aware):
     cache = client_partition_aware.get_or_create_cache({
         PROP_NAME: request.node.name,
