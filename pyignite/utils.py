@@ -18,7 +18,6 @@ import decimal
 import warnings
 
 from functools import wraps
-from threading import Event, Thread
 from typing import Any, Optional, Type, Tuple, Union
 
 from pyignite.datatypes.base import IgniteDataType
@@ -253,30 +252,6 @@ def get_field_by_id(
 def unsigned(value: int, c_type: ctypes._SimpleCData = ctypes.c_uint) -> int:
     """ Convert signed integer value to unsigned. """
     return c_type(value).value
-
-
-class DaemonicTimer(Thread):
-    """
-    Same as normal `threading.Timer`, but do not delay the program exit.
-    """
-
-    def __init__(self, interval, function, args=None, kwargs=None):
-        Thread.__init__(self, daemon=True)
-        self.interval = interval
-        self.function = function
-        self.args = args if args is not None else []
-        self.kwargs = kwargs if kwargs is not None else {}
-        self.finished = Event()
-
-    def cancel(self):
-        """Stop the timer if it hasn't finished yet."""
-        self.finished.set()
-
-    def run(self):
-        self.finished.wait(self.interval)
-        if not self.finished.is_set():
-            self.function(*self.args, **self.kwargs)
-        self.finished.set()
 
 
 def capitalize(string: str) -> str:

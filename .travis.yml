@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+language: python
 sudo: required
 
 addons:
@@ -21,7 +22,9 @@ addons:
       - openjdk-8-jdk
 
 env:
-  - IGNITE_VERSION=2.9.1 IGNITE_HOME=/opt/ignite
+  global:
+    - IGNITE_VERSION=2.9.1
+    - IGNITE_HOME=/opt/ignite
 
 before_install:
   - curl -L https://apache-mirror.rbc.ru/pub/apache/ignite/${IGNITE_VERSION}/apache-ignite-slim-${IGNITE_VERSION}-bin.zip > ignite.zip
@@ -29,10 +32,17 @@ before_install:
   - mv /opt/apache-ignite-slim-${IGNITE_VERSION}-bin /opt/ignite
   - mv /opt/ignite/libs/optional/ignite-log4j2 /opt/ignite/libs/
 
-language: python
-python:
-  - "3.6"
-  - "3.7"
-  - "3.8"
-install: pip install tox-travis
+jobs:
+  include:
+    - python: '3.6'
+      arch: amd64
+      env: TOXENV=py36-no-ssl,py36-ssl,py36-ssl-password
+    - python: '3.7'
+      arch: amd64
+      env: TOXENV=py37-no-ssl,py37-ssl,py37-ssl-password
+    - python: '3.8'
+      arch: amd64
+      env: TOXENV=py38-no-ssl,py38-ssl,py38-ssl-password
+
+install: pip install tox
 script: tox

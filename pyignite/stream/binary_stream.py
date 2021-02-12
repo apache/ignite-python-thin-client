@@ -95,7 +95,10 @@ class BinaryStream:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.stream.close()
+        try:
+            self.stream.close()
+        except BufferError:
+            pass
 
     def get_dataclass(self, header):
         # get field names from outer space

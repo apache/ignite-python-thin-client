@@ -182,15 +182,9 @@ class Client:
                     if not self.partition_aware:
                         # do not try to open more nodes
                         self._current_node = i
-                    else:
-                        # take a chance to schedule the reconnection
-                        # for all the failed connections, that was probed
-                        # before this
-                        for failed_node in self._nodes[:i]:
-                            failed_node.reconnect()
 
             except connection_errors:
-                conn._fail()
+                conn.failed = True
                 if self.partition_aware:
                     # schedule the reconnection
                     conn.reconnect()

@@ -105,9 +105,11 @@ class Query:
         # this test depends on protocol version
         if getattr(response, 'flags', False) & RHF_TOPOLOGY_CHANGED:
             # update latest affinity version
-            conn.client.affinity_version = (
-                response.affinity_version, response.affinity_minor
-            )
+            new_affinity = (response.affinity_version, response.affinity_minor)
+            old_affinity = conn.client.affinity_version
+
+            if new_affinity > old_affinity:
+                conn.client.affinity_version = new_affinity
 
         # build result
         result = APIResult(response)
