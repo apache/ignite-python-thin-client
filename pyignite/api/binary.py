@@ -22,7 +22,7 @@ from pyignite.datatypes.binary import (
 from pyignite.datatypes import String, Int, Bool
 from pyignite.queries import Query
 from pyignite.queries.op_codes import *
-from pyignite.utils import int_overflow, entity_id
+from pyignite.utils import entity_id, schema_id
 from .result import APIResult
 from ..stream import BinaryStream, READ_BACKWARD
 from ..queries.response import Response
@@ -137,7 +137,7 @@ def put_binary_type(
         'is_enum': is_enum,
         'schema': [],
     }
-    schema_id = None
+    s_id = None
     if is_enum:
         data['enums'] = []
         for literal, ordinal in schema.items():
@@ -147,7 +147,7 @@ def put_binary_type(
             })
     else:
         # assemble schema and calculate schema ID in one go
-        schema_id = FNV1_OFFSET_BASIS if schema else 0
+        s_id = schema_id(schema)
         for field_name, data_type in schema.items():
             # TODO: check for allowed data types
             field_id = entity_id(field_name)
@@ -159,17 +159,9 @@ def put_binary_type(
                 ),
                 'field_id': field_id,
             })
-            schema_id ^= (field_id & 0xff)
-            schema_id = int_overflow(schema_id * FNV1_PRIME)
-            schema_id ^= ((field_id >> 8) & 0xff)
-            schema_id = int_overflow(schema_id * FNV1_PRIME)
-            schema_id ^= ((field_id >> 16) & 0xff)
-            schema_id = int_overflow(schema_id * FNV1_PRIME)
-            schema_id ^= ((field_id >> 24) & 0xff)
-            schema_id = int_overflow(schema_id * FNV1_PRIME)
 
     data['schema'].append({
-        'schema_id': schema_id,
+        'schema_id': s_id,
         'schema_fields': [
             {'schema_field_id': entity_id(x)} for x in schema
         ],
