@@ -91,7 +91,8 @@ int32_t str_hashcode_(PyObject *data, int lower) {
     int32_t res = 0;
     Py_ssize_t sz = PyUnicode_GET_LENGTH(data);
 
-    for (Py_ssize_t i = 0; i < sz; i++) {
+    Py_ssize_t i;
+    for (i = 0; i < sz; i++) {
         Py_UCS4 ch = PyUnicode_READ_CHAR(data, i);
 
         if (lower) {
@@ -126,7 +127,8 @@ PyObject* b_hashcode(PyObject* data) {
         return NULL;
     }
 
-    for (Py_ssize_t i = 0; i < sz; i++) {
+    Py_ssize_t i;
+    for (i = 0; i < sz; i++) {
         res = 31 * res + buf[i];
     }
 
