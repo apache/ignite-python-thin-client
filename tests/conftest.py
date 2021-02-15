@@ -120,7 +120,7 @@ def client_partition_aware_single_server(
         password
 ):
     node = node[:1]
-    yield from client(node, timeout, True, use_ssl, ssl_keyfile, ssl_keyfile_password, ssl_certfile, ssl_ca_certfile,
+    yield from client0(node, timeout, True, use_ssl, ssl_keyfile, ssl_keyfile_password, ssl_certfile, ssl_ca_certfile,
                       ssl_cert_reqs, ssl_ciphers, ssl_version, username, password)
 
 
@@ -211,7 +211,7 @@ def pytest_addoption(parser):
         '--timeout',
         action='store',
         type=float,
-        default=None,
+        default=2.0,
         help=(
             'Timeout (in seconds) for each socket operation. Can accept '
             'integer or float value. Default is None'

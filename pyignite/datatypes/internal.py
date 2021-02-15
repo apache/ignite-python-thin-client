@@ -18,7 +18,7 @@ import ctypes
 import decimal
 from datetime import date, datetime, timedelta
 from io import SEEK_CUR
-from typing import Any, Tuple, Union, Callable
+from typing import Any, Tuple, Union, Callable, List
 import uuid
 
 import attr
@@ -115,8 +115,9 @@ def tc_map(key: bytes, _memo_map: dict = {}):
 
 
 class Conditional:
-
-    def __init__(self, predicate1: Callable[[any], bool], predicate2: Callable[[any], bool], var1, var2):
+    def __init__(self, fields: List, predicate1: Callable[[any], bool],
+                 predicate2: Callable[[any], bool], var1, var2):
+        self.fields = fields
         self.predicate1 = predicate1
         self.predicate2 = predicate2
         self.var1 = var1
@@ -209,12 +210,19 @@ class Struct:
     defaults = attr.ib(type=dict, default={})
 
     def parse(self, stream):
-        fields, values = [], {}
+        fields, ctx = [], {}
+
+        for _, c_type in self.fields:
+            if isinstance(c_type, Conditional):
+                for name in c_type.fields:
+                    ctx[name] = None
+
         for name, c_type in self.fields:
             is_cond = isinstance(c_type, Conditional)
-            c_type = c_type.parse(stream, values) if is_cond else c_type.parse(stream)
+            c_type = c_type.parse(stream, ctx) if is_cond else c_type.parse(stream)
             fields.append((name, c_type))
-            values[name] = stream.read_ctype(c_type, direction=READ_BACKWARD)
+            if name in ctx:
+                ctx[name] = stream.read_ctype(c_type, direction=READ_BACKWARD)
 
         data_class = type(
             'Struct',

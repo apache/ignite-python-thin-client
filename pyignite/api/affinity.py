@@ -55,11 +55,13 @@ empty_node_mapping = Struct([])
 partition_mapping = StructArray([
     ('is_applicable', Bool),
 
-    ('cache_mapping', Conditional(lambda ctx: ctx['is_applicable'] and ctx['is_applicable'].value == 1,
+    ('cache_mapping', Conditional(['is_applicable'],
+                                  lambda ctx: ctx['is_applicable'] and ctx['is_applicable'].value == 1,
                                   lambda ctx: ctx['is_applicable'],
                                   cache_mapping, empty_cache_mapping)),
 
-    ('node_mapping', Conditional(lambda ctx: ctx['is_applicable'] and ctx['is_applicable'].value == 1,
+    ('node_mapping', Conditional(['is_applicable'],
+                                 lambda ctx: ctx['is_applicable'] and ctx['is_applicable'].value == 1,
                                  lambda ctx: ctx['is_applicable'],
                                  node_mapping, empty_node_mapping)),
 ])

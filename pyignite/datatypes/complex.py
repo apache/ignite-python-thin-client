@@ -564,8 +564,8 @@ class BinaryObject(IgniteDataType, Nullable):
 
     @classmethod
     def from_python_not_null(cls, stream, value):
-        stream.register_binary_type(value.__class__)
         if getattr(value, '_buffer', None):
             stream.write(value._buffer)
         else:
+            stream.register_binary_type(value.__class__)
             value._from_python(stream)

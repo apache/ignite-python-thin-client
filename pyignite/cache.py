@@ -283,6 +283,10 @@ class Cache:
                         parts += len(p)
 
                 self.affinity['number_of_partitions'] = parts
+
+                for conn in self.client._nodes:
+                    if not conn.alive:
+                        conn.reconnect()
             else:
                 # get number of partitions
                 parts = self.affinity.get('number_of_partitions')
