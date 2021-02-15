@@ -205,7 +205,7 @@ def skip_if_no_cext(request):
     except ImportError:
         skip = True
 
-    if skip:
+    if skip and request.node.get_closest_marker('skip_if_no_cext'):
         pytest.skip('skipped c extensions test, c extension is not available.')
 
 

@@ -55,11 +55,14 @@ def test_schema_id():
 def get_random_field_name(length):
     first = get_random_unicode(length // 2, latin=True)
     second = get_random_unicode(length - length // 2, latin=True)
-    return first + '_' + second.lower()
+
+    first = first.upper() if random.randint(0, 1) else first.lower()
+    second = second.upper() if random.randint(0, 1) else second.lower()
+
+    return first + '_' + second
 
 
 def get_random_unicode(length, latin=False):
-    # Update this to include code point ranges to be sampled
     include_ranges = [
         (0x0041, 0x005A),
         (0x0061, 0x007A),
