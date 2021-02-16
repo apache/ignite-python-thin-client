@@ -13,63 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import defaultdict
 from distutils.command.build_ext import build_ext
 from distutils.errors import CCompilerError, DistutilsExecError, DistutilsPlatformError
 
 import setuptools
 import sys
 
-
-PYTHON_REQUIRED = (3, 4)
-PYTHON_INSTALLED = sys.version_info[:2]
-
-if PYTHON_INSTALLED < PYTHON_REQUIRED:
-    sys.stderr.write('''
-
-`pyignite` is not compatible with Python {}.{}!
-Use Python {}.{} or above.
-
-
-'''.format(
-            PYTHON_INSTALLED[0],
-            PYTHON_INSTALLED[1],
-            PYTHON_REQUIRED[0],
-            PYTHON_REQUIRED[1],
-        )
-    )
-    sys.exit(1)
-
-
-def is_a_requirement(line):
-    return not any([
-        line.startswith('#'),
-        line.startswith('-r'),
-        len(line) == 0,
-    ])
-
-
-requirement_sections = [
-    'install',
-    'setup',
-    'tests',
-    'docs',
-]
-requirements = defaultdict(list)
-
-for section in requirement_sections:
-    with open(
-        'requirements/{}.txt'.format(section),
-        'r',
-        encoding='utf-8',
-    ) as requirements_file:
-        for line in requirements_file.readlines():
-            line = line.strip('\n')
-            if is_a_requirement(line):
-                requirements[section].append(line)
-
-with open('README.md', 'r', encoding='utf-8') as readme_file:
-    long_description = readme_file.read()
 
 cext = setuptools.Extension(
     "pyignite._cutils",
@@ -116,30 +65,40 @@ def run_setup(with_binary=True):
 
     setuptools.setup(
         name='pyignite',
-        version='0.3.4',
-        python_requires='>={}.{}'.format(*PYTHON_REQUIRED),
-        author='Dmitry Melnichuk',
-        author_email='dmitry.melnichuk@nobitlost.com',
+        version='0.4.0',
+        python_requires='>=3.6',
+        author='The Apache Software Foundation',
+        author_email='dev@ignite.apache.org',
         description='Apache Ignite binary client Python API',
-        long_description=long_description,
-        long_description_content_type='text/markdown',
-        url=(
-            'https://github.com/apache/ignite/tree/master'
-            '/modules/platforms/python'
-        ),
+        url='https://github.com/apache/ignite-python-thin-client',
         packages=setuptools.find_packages(),
-        install_requires=requirements['install'],
-        tests_require=requirements['tests'],
-        setup_requires=requirements['setup'],
+        install_requires=[
+            "attrs==18.1.0"
+        ],
+        tests_require=[
+            'pytest==3.6.1',
+            'pytest-cov==2.5.1',
+            'teamcity-messages==1.21',
+            'psutil==5.6.5',
+            'jinja2==2.11.3'
+        ],
+        setup_requires=[
+            'pytest-runner==4.2'
+        ],
         extras_require={
-            'docs': requirements['docs'],
+            'docs': [
+                'wheel==0.36.2',
+                'Sphinx==1.7.5',
+                'sphinxcontrib-fulltoc==1.2.0'
+            ],
         },
         classifiers=[
             'Programming Language :: Python',
             'Programming Language :: Python :: 3',
-            'Programming Language :: Python :: 3.4',
-            'Programming Language :: Python :: 3.5',
             'Programming Language :: Python :: 3.6',
+            'Programming Language :: Python :: 3.7',
+            'Programming Language :: Python :: 3.8',
+            'Programming Language :: Python :: 3.9',
             'Programming Language :: Python :: 3 :: Only',
             'Intended Audience :: Developers',
             'Topic :: Database :: Front-Ends',
@@ -149,6 +108,7 @@ def run_setup(with_binary=True):
         ],
         **kw
     )
+
 
 try:
     run_setup()

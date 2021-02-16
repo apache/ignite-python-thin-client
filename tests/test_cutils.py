@@ -23,57 +23,67 @@ from pyignite.datatypes import IntObject
 
 try:
     from pyignite import _cutils
+
+    _cutils_hashcode = _cutils.hashcode
+    _cutils_schema_id = _cutils.schema_id
 except ImportError:
+    _cutils_hashcode = lambda x: None
+    _cutils_schema_id = lambda x: None
     pass
 
 
 @pytest.mark.skip_if_no_cext
 def test_bytes_hashcode():
+    assert _cutils_hashcode(None) == 0
+    assert _cutils_hashcode(b'') == 1
+    assert _cutils_hashcode(bytearray()) == 1
+    assert _cutils_hashcode(memoryview(b'')) == 1
+
     for i in range(1000):
-        rnd_bytes = bytearray([random.randint(0, 255) for _ in range(1024)])
+        rnd_bytes = bytearray([random.randint(0, 255) for _ in range(random.randint(1, 1024))])
 
         fallback_val = _putils.__hashcode_fallback(rnd_bytes)
-        assert _cutils.hashcode(rnd_bytes) == fallback_val
-        assert _cutils.hashcode(bytes(rnd_bytes)) == fallback_val
-        assert _cutils.hashcode(memoryview(rnd_bytes)) == fallback_val
+        assert _cutils_hashcode(rnd_bytes) == fallback_val
+        assert _cutils_hashcode(bytes(rnd_bytes)) == fallback_val
+        assert _cutils_hashcode(memoryview(rnd_bytes)) == fallback_val
 
 
 @pytest.mark.skip_if_no_cext
 def test_string_hashcode():
-    assert _cutils.hashcode(None) == 0
-    assert _cutils.hashcode('') == 0
+    assert _cutils_hashcode(None) == 0
+    assert _cutils_hashcode('') == 0
 
     for i in range(1000):
         rnd_str = get_random_unicode(random.randint(1, 128))
-        assert _cutils.hashcode(rnd_str) == _putils.__hashcode_fallback(rnd_str)
+        assert _cutils_hashcode(rnd_str) == _putils.__hashcode_fallback(rnd_str)
 
 
 @pytest.mark.skip_if_no_cext
 def test_schema_id():
     rnd_id = random.randint(-100, 100)
-    assert _cutils.schema_id(rnd_id) == rnd_id
-    assert _cutils.schema_id(None) == 0
-    assert _cutils.schema_id({}) == 0
+    assert _cutils_schema_id(rnd_id) == rnd_id
+    assert _cutils_schema_id(None) == 0
+    assert _cutils_schema_id({}) == 0
 
     for i in range(1000):
         schema = OrderedDict({get_random_field_name(20): IntObject for _ in range(20)})
-        assert _cutils.schema_id(schema) == _putils.__schema_id_fallback(schema)
+        assert _cutils_schema_id(schema) == _putils.__schema_id_fallback(schema)
 
 
 @pytest.mark.skip_if_no_cext
 @pytest.mark.parametrize(
     'func,args,kwargs,err_cls',
     [
-        [_cutils.hashcode, [123], {}, ValueError],
-        [_cutils.hashcode, [{'test': 'test'}], {}, ValueError],
-        [_cutils.hashcode, [], {}, TypeError],
-        [_cutils.hashcode, [123, 123], {}, TypeError],
-        [_cutils.hashcode, [], {'input': 'test'}, TypeError],
-        [_cutils.schema_id, ['test'], {}, ValueError],
-        [_cutils.schema_id, [], {}, TypeError],
-        [_cutils.schema_id, [], {}, TypeError],
-        [_cutils.schema_id, [123, 123], {}, TypeError],
-        [_cutils.schema_id, [], {'input': 'test'}, TypeError],
+        [_cutils_hashcode, [123], {}, ValueError],
+        [_cutils_hashcode, [{'test': 'test'}], {}, ValueError],
+        [_cutils_hashcode, [], {}, TypeError],
+        [_cutils_hashcode, [123, 123], {}, TypeError],
+        [_cutils_hashcode, [], {'input': 'test'}, TypeError],
+        [_cutils_schema_id, ['test'], {}, ValueError],
+        [_cutils_schema_id, [], {}, TypeError],
+        [_cutils_schema_id, [], {}, TypeError],
+        [_cutils_schema_id, [123, 123], {}, TypeError],
+        [_cutils_schema_id, [], {'input': 'test'}, TypeError],
     ]
 )
 def test_handling_errors(func, args, kwargs, err_cls):
