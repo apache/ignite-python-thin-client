@@ -108,7 +108,7 @@ class ve_build_ext(build_ext):
 def run_setup(with_binary=True):
     if with_binary:
         kw = dict(
-            ext_modules = [cext],
+            ext_modules=[cext],
             cmdclass=dict(build_ext=ve_build_ext),
         )
     else:

@@ -40,16 +40,45 @@ def test_bytes_hashcode():
 
 @pytest.mark.skip_if_no_cext
 def test_string_hashcode():
+    assert _cutils.hashcode(None) == 0
+    assert _cutils.hashcode('') == 0
+
     for i in range(1000):
-        rnd_str = get_random_unicode(128)
+        rnd_str = get_random_unicode(random.randint(1, 128))
         assert _cutils.hashcode(rnd_str) == _putils.__hashcode_fallback(rnd_str)
 
 
 @pytest.mark.skip_if_no_cext
 def test_schema_id():
+    rnd_id = random.randint(-100, 100)
+    assert _cutils.schema_id(rnd_id) == rnd_id
+    assert _cutils.schema_id(None) == 0
+    assert _cutils.schema_id({}) == 0
+
     for i in range(1000):
         schema = OrderedDict({get_random_field_name(20): IntObject for _ in range(20)})
         assert _cutils.schema_id(schema) == _putils.__schema_id_fallback(schema)
+
+
+@pytest.mark.skip_if_no_cext
+@pytest.mark.parametrize(
+    'func,args,kwargs,err_cls',
+    [
+        [_cutils.hashcode, [123], {}, ValueError],
+        [_cutils.hashcode, [{'test': 'test'}], {}, ValueError],
+        [_cutils.hashcode, [], {}, TypeError],
+        [_cutils.hashcode, [123, 123], {}, TypeError],
+        [_cutils.hashcode, [], {'input': 'test'}, TypeError],
+        [_cutils.schema_id, ['test'], {}, ValueError],
+        [_cutils.schema_id, [], {}, TypeError],
+        [_cutils.schema_id, [], {}, TypeError],
+        [_cutils.schema_id, [123, 123], {}, TypeError],
+        [_cutils.schema_id, [], {'input': 'test'}, TypeError],
+    ]
+)
+def test_handling_errors(func, args, kwargs, err_cls):
+    with pytest.raises(err_cls):
+        func(*args, **kwargs)
 
 
 def get_random_field_name(length):
