@@ -203,6 +203,9 @@ def skip_if_no_cext(request):
     try:
         from pyignite import _cutils
     except ImportError:
+        if request.config.getoption('--force-cext'):
+            pytest.fail("C extension failed to build, fail test because of --force-cext is set.")
+            return
         skip = True
 
     if skip and request.node.get_closest_marker('skip_if_no_cext'):
@@ -309,6 +312,11 @@ def pytest_addoption(parser):
     )
     parser.addoption(
         '--examples',
+        action='store_true',
+        help='check if examples can be run',
+    )
+    parser.addoption(
+        '--force-cext',
         action='store_true',
         help='check if examples can be run',
     )
