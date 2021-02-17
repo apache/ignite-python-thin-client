@@ -87,13 +87,20 @@ PyObject* str_hashcode(PyObject* data) {
     return PyLong_FromLong(str_hashcode_(data, 0));
 }
 
-int32_t str_hashcode_(PyObject *data, int lower) {
+int32_t str_hashcode_(PyObject *str, int lower) {
     int32_t res = 0;
-    Py_ssize_t sz = PyUnicode_GET_LENGTH(data);
+
+    Py_ssize_t sz = PyUnicode_GET_LENGTH(str);
+    if (!sz) {
+        return res;
+    }
+
+    int kind = PyUnicode_KIND(str);
+    void* buf = PyUnicode_DATA(str);
 
     Py_ssize_t i;
     for (i = 0; i < sz; i++) {
-        Py_UCS4 ch = PyUnicode_READ_CHAR(data, i);
+        Py_UCS4 ch = PyUnicode_READ(kind, buf, i);
 
         if (lower) {
             ch = Py_UNICODE_TOLOWER(ch);
@@ -129,7 +136,7 @@ PyObject* b_hashcode(PyObject* data) {
 
     Py_ssize_t i;
     for (i = 0; i < sz; i++) {
-        res = 31 * res + buf[i];
+        res = 31 * res + (signed char)buf[i];
     }
 
     return PyLong_FromLong(res);

@@ -103,11 +103,11 @@ def get_random_field_name(length):
 
 def get_random_unicode(length, latin=False):
     include_ranges = [
-        (0x0041, 0x005A),
-        (0x0061, 0x007A),
-        (0x0410, 0x042F),
-        (0x0430, 0x044F),
-        (0x05D0, 0x05EA)
+        (0x0041, 0x005A),  # Latin high
+        (0x0061, 0x007A),  # Latin lower
+        (0x0410, 0x042F),  # Russian high
+        (0x0430, 0x044F),  # Russian lower
+        (0x05D0, 0x05EA)   # Hebrew
     ]
 
     alphabet = []
