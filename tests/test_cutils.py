@@ -49,13 +49,27 @@ def test_bytes_hashcode():
 
 
 @pytest.mark.skip_if_no_cext
-def test_string_hashcode():
+@pytest.mark.parametrize(
+    'value',
+    [
+        '皮膚の色、',
+        'Произвольный символ',
+        'Random string',
+        '',
+    ]
+)
+def test_string_hashcode(value):
+    assert _cutils_hashcode(value) == _putils.__hashcode_fallback(value), f'failed on {value}'
+
+
+@pytest.mark.skip_if_no_cext
+def test_random_string_hashcode():
     assert _cutils_hashcode(None) == 0
     assert _cutils_hashcode('') == 0
 
     for i in range(1000):
         rnd_str = get_random_unicode(random.randint(1, 128))
-        assert _cutils_hashcode(rnd_str) == _putils.__hashcode_fallback(rnd_str)
+        assert _cutils_hashcode(rnd_str) == _putils.__hashcode_fallback(rnd_str), f'failed on {rnd_str}'
 
 
 @pytest.mark.skip_if_no_cext
@@ -67,7 +81,7 @@ def test_schema_id():
 
     for i in range(1000):
         schema = OrderedDict({get_random_field_name(20): IntObject for _ in range(20)})
-        assert _cutils_schema_id(schema) == _putils.__schema_id_fallback(schema)
+        assert _cutils_schema_id(schema) == _putils.__schema_id_fallback(schema), f'failed on {schema}'
 
 
 @pytest.mark.skip_if_no_cext
