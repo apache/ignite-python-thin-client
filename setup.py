@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections import defaultdict
 from distutils.command.build_ext import build_ext
 from distutils.errors import CCompilerError, DistutilsExecError, DistutilsPlatformError
 
@@ -54,6 +55,38 @@ class ve_build_ext(build_ext):
             raise BuildFailed()
 
 
+def is_a_requirement(line):
+    return not any([
+        line.startswith('#'),
+        line.startswith('-r'),
+        len(line) == 0,
+    ])
+
+
+requirement_sections = [
+    'install',
+    'setup',
+    'tests',
+    'docs',
+]
+
+requirements = defaultdict(list)
+
+for section in requirement_sections:
+    with open(
+        'requirements/{}.txt'.format(section),
+        'r',
+        encoding='utf-8',
+    ) as requirements_file:
+        for line in requirements_file.readlines():
+            line = line.strip('\n')
+            if is_a_requirement(line):
+                requirements[section].append(line)
+
+with open('README.md', 'r', encoding='utf-8') as readme_file:
+    long_description = readme_file.read()
+
+
 def run_setup(with_binary=True):
     if with_binary:
         kw = dict(
@@ -72,25 +105,11 @@ def run_setup(with_binary=True):
         description='Apache Ignite binary client Python API',
         url='https://github.com/apache/ignite-python-thin-client',
         packages=setuptools.find_packages(),
-        install_requires=[
-            "attrs==18.1.0"
-        ],
-        tests_require=[
-            'pytest==3.6.1',
-            'pytest-cov==2.5.1',
-            'teamcity-messages==1.21',
-            'psutil==5.6.5',
-            'jinja2==2.11.3'
-        ],
-        setup_requires=[
-            'pytest-runner==4.2'
-        ],
+        install_requires=requirements['install'],
+        tests_require=requirements['tests'],
+        setup_requires=requirements['setup'],
         extras_require={
-            'docs': [
-                'wheel==0.36.2',
-                'Sphinx==1.7.5',
-                'sphinxcontrib-fulltoc==1.2.0'
-            ],
+            'docs': requirements['docs'],
         },
         classifiers=[
             'Programming Language :: Python',
