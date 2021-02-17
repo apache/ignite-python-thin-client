@@ -14,9 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-DISTR_DIR="$(pwd)/../distr/"
-SRC_DIR="$(pwd)/.."
-SCRIPT_DIR="$(pwd)"
+DISTR_DIR="$(pwd)/distr/"
+SRC_DIR="$(pwd)"
 DEFAULT_DOCKER_IMAGE="quay.io/pypa/manylinux1_x86_64"
 
 usage() {
@@ -45,7 +44,6 @@ normalize_path() {
     DISTR_DIR="$(pwd)"
     cd "$SRC_DIR" || exit 1
     SRC_DIR="$(pwd)"
-    cd "$SCRIPT_DIR" || exit 1
 }
 
 run_wheel_arch() {

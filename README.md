@@ -36,6 +36,19 @@ $ pip install -r requirements/<your task>.txt
 
 You may also want to consult the `setuptools` manual about using `setup.py`.
 
+### *optional C extension*
+There is an optional C extension to speedup some computational intensive tasks. If it's compilation fails
+(missing compiler or CPython headers), `pyignite` will be installed without this module.
+
+- On Linux or MacOS X only C compiler is required (`gcc` or `clang`). It compiles during standard setup process.
+- For building universal `wheels` (binary packages) for Linux, just invoke script `./scripts/create_distr.sh`. 
+  
+  ***NB!* Docker is required.**
+  
+  Ready wheels for `x86` and `x86-64` for different python versions (3.6, 3.7, 3.8 and 3.9) will be
+  located in `./distr` directory.
+  
+
 ### Updating from older version
 
 To upgrade an existing package, use the following command:
