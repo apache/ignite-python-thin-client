@@ -1,8 +1,12 @@
 .idea
+.benchmarks
 .vscode
 .eggs
 .pytest_cache
 .tox
+*.so
+build
+distr
 tests/config/*.xml
 junit*.xml
 pyignite.egg-info

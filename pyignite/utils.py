@@ -23,6 +23,13 @@ from typing import Any, Optional, Type, Tuple, Union
 from pyignite.datatypes.base import IgniteDataType
 from .constants import *
 
+FALLBACK = False
+
+try:
+    from pyignite import _cutils
+except ImportError:
+    FALLBACK = True
+
 
 LONG_MASK = 0xffffffff
 DIGITS_PER_INT = 9
@@ -91,6 +98,13 @@ def hashcode(data: Union[str, bytes, bytearray, memoryview]) -> int:
     :param data: UTF-8-encoded string identifier of binary buffer or byte array
     :return: hash code.
     """
+    if FALLBACK:
+        return __hashcode_fallback(data)
+
+    return _cutils.hashcode(data)
+
+
+def __hashcode_fallback(data: Union[str, bytes, bytearray, memoryview]) -> int:
     if isinstance(data, str):
         """
         For strings we iterate over code point which are of the int type
@@ -147,13 +161,21 @@ def schema_id(schema: Union[int, dict]) -> int:
     :param schema: a dict of field names: field types,
     :return: schema ID.
     """
-    if type(schema) is int:
+    if FALLBACK:
+        return __schema_id_fallback(schema)
+    return _cutils.schema_id(schema)
+
+
+def __schema_id_fallback(schema: Union[int, dict]) -> int:
+    if isinstance(schema, int):
         return schema
+
     if schema is None:
         return 0
+
     s_id = FNV1_OFFSET_BASIS if schema else 0
     for field_name in schema.keys():
-        field_id = entity_id(field_name)
+        field_id = __hashcode_fallback(field_name.lower())
         s_id ^= (field_id & 0xff)
         s_id = int_overflow(s_id * FNV1_PRIME)
         s_id ^= ((field_id >> 8) & 0xff)

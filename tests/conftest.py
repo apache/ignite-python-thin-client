@@ -197,6 +197,21 @@ def run_examples(request, examples):
             pytest.skip('skipped examples: --examples is not passed')
 
 
+@pytest.fixture(autouse=True)
+def skip_if_no_cext(request):
+    skip = False
+    try:
+        from pyignite import _cutils
+    except ImportError:
+        if request.config.getoption('--force-cext'):
+            pytest.fail("C extension failed to build, fail test because of --force-cext is set.")
+            return
+        skip = True
+
+    if skip and request.node.get_closest_marker('skip_if_no_cext'):
+        pytest.skip('skipped c extensions test, c extension is not available.')
+
+
 def pytest_addoption(parser):
     parser.addoption(
         '--node',
@@ -300,6 +315,11 @@ def pytest_addoption(parser):
         action='store_true',
         help='check if examples can be run',
     )
+    parser.addoption(
+        '--force-cext',
+        action='store_true',
+        help='check if examples can be run',
+    )
 
 
 def pytest_generate_tests(metafunc):
@@ -334,5 +354,6 @@ def pytest_generate_tests(metafunc):
 
 def pytest_configure(config):
     config.addinivalue_line(
-        "markers", "examples: mark test to run only if --examples are set"
+        "markers", "examples: mark test to run only if --examples are set\n"
+                   "skip_if_no_cext: mark test to run only if c extension is available"
     )
