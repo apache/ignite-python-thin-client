@@ -181,7 +181,7 @@ def test_long_multipage_query(client):
 
     client.sql('DROP TABLE LongMultipageQuery IF EXISTS')
 
-    client.sql("CREATE TABLE LongMultiPageQuery (%s, %s)" % \
+    client.sql("CREATE TABLE LongMultiPageQuery (%s, %s)" %
                (fields[0] + " INT(11) PRIMARY KEY", ",".join(map(lambda f: f + " INT(11)", fields[1:]))))
 
     for id in range(1, 21):
@@ -250,6 +250,11 @@ def test_query_with_cache(client):
     cache.put(test_key, test_value)
 
     page = client.sql(qry, schema=schema_name)
+    received = next(page)[0]
+
+    assert test_value == received
+
+    page = client.sql(qry, cache=cache)
     received = next(page)[0]
 
     assert test_value == received

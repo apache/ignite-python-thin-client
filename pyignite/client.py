@@ -58,7 +58,7 @@ from .exceptions import (
     BinaryTypeError, CacheError, ReconnectError, SQLError, connection_errors,
 )
 from .utils import (
-    capitalize, entity_id, schema_id, process_delimiter,
+    cache_id, capitalize, entity_id, schema_id, process_delimiter,
     status_to_exception, is_iterable,
 )
 from .binary import GenericObjectMeta
@@ -519,7 +519,8 @@ class Client:
         local: bool = False, replicated_only: bool = False,
         enforce_join_order: bool = False, collocated: bool = False,
         lazy: bool = False, include_field_names: bool = False,
-        max_rows: int = -1, timeout: int = 0, cache: Union[int, str] = None
+        max_rows: int = -1, timeout: int = 0,
+        cache: Union[int, str, Cache] = None
     ):
         """
         Runs an SQL query and returns its result.
@@ -582,19 +583,18 @@ class Client:
 
         conn = self.random_node
 
-        if isinstance(cache, int):
-            cache_id = cache
-        elif isinstance(cache, str):
-            cache_id = self.get_cache(cache).cache_id
+        if cache is None:
+            c_id = 0
+        elif isinstance(cache, Cache):
+            c_id = cache.cache_id
         else:
-            cache_id = 0
+            c_id = cache_id(cache)
 
-        if cache_id != 0:
+        if c_id != 0:
             schema = None
 
         result = sql_fields(
-            conn, cache_id, query_str,
-            page_size, query_args, schema,
+            conn, c_id, query_str, page_size, query_args, schema,
             statement_type, distributed_joins, local, replicated_only,
             enforce_join_order, collocated, lazy, include_field_names,
             max_rows, timeout,
