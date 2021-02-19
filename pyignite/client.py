@@ -583,9 +583,7 @@ class Client:
 
         conn = self.random_node
 
-        if cache is None:
-            c_id = 0
-        elif isinstance(cache, Cache):
+        if isinstance(cache, Cache):
             c_id = cache.cache_id
         else:
             c_id = cache_id(cache)
