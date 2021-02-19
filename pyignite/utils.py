@@ -107,7 +107,8 @@ def hashcode(data: Union[str, bytes, bytearray, memoryview]) -> int:
 def __hashcode_fallback(data: Union[str, bytes, bytearray, memoryview]) -> int:
     if data is None:
         return 0
-    elif isinstance(data, str):
+    
+    if isinstance(data, str):
         """
         For strings we iterate over code point which are of the int type
         and can take up to 4 bytes and can only be positive.

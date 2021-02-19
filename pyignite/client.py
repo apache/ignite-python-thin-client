@@ -583,10 +583,7 @@ class Client:
 
         conn = self.random_node
 
-        if isinstance(cache, Cache):
-            c_id = cache.cache_id
-        else:
-            c_id = cache_id(cache)
+        c_id = cache.cache_id if isinstance(cache, Cache) else cache_id(cache)
 
         if c_id != 0:
             schema = None
