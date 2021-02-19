@@ -245,26 +245,16 @@ def test_query_with_cache(client):
         ],
     })
 
-    qry = f'select value from {table_name}'
-
     cache.put(test_key, test_value)
 
-    page = client.sql(qry, schema=schema_name)
-    received = next(page)[0]
+    args_to_check = [
+        ('schema', schema_name),
+        ('cache', cache),
+        ('cache', cache.name),
+        ('cache', cache.cache_id)
+    ]
 
-    assert test_value == received
-
-    page = client.sql(qry, cache=cache)
-    received = next(page)[0]
-
-    assert test_value == received
-
-    page = client.sql(qry, cache=cache.name)
-    received = next(page)[0]
-
-    assert test_value == received
-
-    page = client.sql(qry, cache=cache.cache_id)
-    received = next(page)[0]
-
-    assert test_value == received
+    for param, value in args_to_check:
+        page = client.sql(f'select value from {table_name}', **{param: value})
+        received = next(page)[0]
+        assert test_value == received
