@@ -20,11 +20,11 @@ from pyignite.api import (
     sql, sql_cursor_get_page,
     cache_get_configuration,
 )
+from pyignite.datatypes.cache_config import CacheMode
 from pyignite.datatypes.prop_codes import *
 from pyignite.exceptions import SQLError
 from pyignite.utils import entity_id
 from pyignite.binary import unwrap_binary
-
 
 initial_data = [
         ('John', 'Doe', 5),
@@ -59,9 +59,10 @@ def test_sql(client):
 
     result = sql_fields(
         conn,
-        'PUBLIC',
+        0,
         create_query,
         page_size,
+        schema='PUBLIC',
         include_field_names=True
     )
     assert result.status == 0, result.message
@@ -70,9 +71,10 @@ def test_sql(client):
         fname, lname, grade = data_line
         result = sql_fields(
             conn,
-            'PUBLIC',
+            0,
             insert_query,
             page_size,
+            schema='PUBLIC',
             query_args=[i, fname, lname, grade],
             include_field_names=True
         )
@@ -108,7 +110,7 @@ def test_sql(client):
             assert data.type_id == entity_id(binary_type_name)
 
     # repeat cleanup
-    result = sql_fields(conn, 'PUBLIC', drop_query, page_size)
+    result = sql_fields(conn, 0, drop_query, page_size, schema='PUBLIC')
     assert result.status == 0
 
 
@@ -121,9 +123,10 @@ def test_sql_fields(client):
 
     result = sql_fields(
         conn,
-        'PUBLIC',
+        0,
         create_query,
         page_size,
+        schema='PUBLIC',
         include_field_names=True
     )
     assert result.status == 0, result.message
@@ -132,9 +135,10 @@ def test_sql_fields(client):
         fname, lname, grade = data_line
         result = sql_fields(
             conn,
-            'PUBLIC',
+            0,
             insert_query,
             page_size,
+            schema='PUBLIC',
             query_args=[i, fname, lname, grade],
             include_field_names=True
         )
@@ -142,9 +146,10 @@ def test_sql_fields(client):
 
     result = sql_fields(
         conn,
-        'PUBLIC',
+        0,
         select_query,
         page_size,
+        schema='PUBLIC',
         include_field_names=True
     )
     assert result.status == 0
@@ -159,7 +164,7 @@ def test_sql_fields(client):
     assert result.value['more'] is False
 
     # repeat cleanup
-    result = sql_fields(conn, 'PUBLIC', drop_query, page_size)
+    result = sql_fields(conn, 0, drop_query, page_size, schema='PUBLIC')
     assert result.status == 0
 
 
@@ -176,7 +181,7 @@ def test_long_multipage_query(client):
 
     client.sql('DROP TABLE LongMultipageQuery IF EXISTS')
 
-    client.sql("CREATE TABLE LongMultiPageQuery (%s, %s)" % \
+    client.sql("CREATE TABLE LongMultiPageQuery (%s, %s)" %
                (fields[0] + " INT(11) PRIMARY KEY", ",".join(map(lambda f: f + " INT(11)", fields[1:]))))
 
     for id in range(1, 21):
@@ -193,6 +198,63 @@ def test_long_multipage_query(client):
     client.sql(drop_query)
 
 
-def test_sql_not_create_cache(client):
+def test_sql_not_create_cache_with_schema(client):
     with pytest.raises(SQLError, match=r".*Cache does not exist.*"):
-        client.sql(schema='IS_NOT_EXISTING', query_str='select * from IsNotExisting')
+        client.sql(schema=None, cache='NOT_EXISTING', query_str='select * from NotExisting')
+
+
+def test_sql_not_create_cache_with_cache(client):
+    with pytest.raises(SQLError, match=r".*Failed to set schema.*"):
+        client.sql(schema='NOT_EXISTING', query_str='select * from NotExisting')
+
+
+def test_query_with_cache(client):
+    test_key = 42
+    test_value = 'Lorem ipsum'
+
+    cache_name = test_query_with_cache.__name__.upper()
+    schema_name = f'{cache_name}_schema'.upper()
+    table_name = f'{cache_name}_table'.upper()
+
+    cache = client.create_cache({
+        PROP_NAME: cache_name,
+        PROP_SQL_SCHEMA: schema_name,
+        PROP_CACHE_MODE: CacheMode.PARTITIONED,
+        PROP_QUERY_ENTITIES: [
+            {
+                'table_name': table_name,
+                'key_field_name': 'KEY',
+                'value_field_name': 'VALUE',
+                'key_type_name': 'java.lang.Long',
+                'value_type_name': 'java.lang.String',
+                'query_indexes': [],
+                'field_name_aliases': [],
+                'query_fields': [
+                    {
+                        'name': 'KEY',
+                        'type_name': 'java.lang.Long',
+                        'is_key_field': True,
+                        'is_notnull_constraint_field': True,
+                    },
+                    {
+                        'name': 'VALUE',
+                        'type_name': 'java.lang.String',
+                    },
+                ],
+            },
+        ],
+    })
+
+    cache.put(test_key, test_value)
+
+    args_to_check = [
+        ('schema', schema_name),
+        ('cache', cache),
+        ('cache', cache.name),
+        ('cache', cache.cache_id)
+    ]
+
+    for param, value in args_to_check:
+        page = client.sql(f'select value from {table_name}', **{param: value})
+        received = next(page)[0]
+        assert test_value == received

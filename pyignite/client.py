@@ -58,7 +58,7 @@ from .exceptions import (
     BinaryTypeError, CacheError, ReconnectError, SQLError, connection_errors,
 )
 from .utils import (
-    capitalize, entity_id, schema_id, process_delimiter,
+    cache_id, capitalize, entity_id, schema_id, process_delimiter,
     status_to_exception, is_iterable,
 )
 from .binary import GenericObjectMeta
@@ -513,13 +513,14 @@ class Client:
         return cache_get_names(self.random_node)
 
     def sql(
-        self, query_str: str, page_size: int = 1024, query_args: Iterable = None,
-        schema: Union[int, str] = 'PUBLIC',
+        self, query_str: str, page_size: int = 1024,
+        query_args: Iterable = None, schema: str = 'PUBLIC',
         statement_type: int = 0, distributed_joins: bool = False,
         local: bool = False, replicated_only: bool = False,
         enforce_join_order: bool = False, collocated: bool = False,
         lazy: bool = False, include_field_names: bool = False,
         max_rows: int = -1, timeout: int = 0,
+        cache: Union[int, str, Cache] = None
     ):
         """
         Runs an SQL query and returns its result.
@@ -553,6 +554,8 @@ class Client:
          (all rows),
         :param timeout: (optional) non-negative timeout value in ms.
          Zero disables timeout (default),
+        :param cache (optional) Name or ID of the cache to use to infer schema.
+         If set, 'schema' argument is ignored,
         :return: generator with result rows as a lists. If
          `include_field_names` was set, the first row will hold field names.
         """
@@ -580,10 +583,13 @@ class Client:
 
         conn = self.random_node
 
-        schema = self.get_cache(schema)
+        c_id = cache.cache_id if isinstance(cache, Cache) else cache_id(cache)
+
+        if c_id != 0:
+            schema = None
+
         result = sql_fields(
-            conn, schema.cache_id, query_str,
-            page_size, query_args, schema.name,
+            conn, c_id, query_str, page_size, query_args, schema,
             statement_type, distributed_joins, local, replicated_only,
             enforce_join_order, collocated, lazy, include_field_names,
             max_rows, timeout,

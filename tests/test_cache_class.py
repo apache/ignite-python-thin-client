@@ -62,9 +62,7 @@ def test_cache_remove(client):
 
 
 def test_cache_get(client):
-    client.get_or_create_cache('my_cache')
-
-    my_cache = client.get_cache('my_cache')
+    my_cache = client.get_or_create_cache('my_cache')
     assert my_cache.settings[PROP_NAME] == 'my_cache'
     my_cache.destroy()
 

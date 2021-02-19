@@ -63,8 +63,6 @@ drop_query = 'DROP TABLE {} IF EXISTS'.format(table_sql_name)
 
 
 def test_sql_read_as_binary(client):
-
-    client.get_or_create_cache(scheme_name)
     client.sql(drop_query)
 
     # create table
@@ -92,9 +90,6 @@ def test_sql_read_as_binary(client):
 
 
 def test_sql_write_as_binary(client):
-
-    client.get_or_create_cache(scheme_name)
-
     # configure cache as an SQL table
     type_name = table_cache_name
 
