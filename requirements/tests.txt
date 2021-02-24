@@ -1,7 +1,7 @@
 # these packages are used for testing
 
-pytest==3.6.1
-pytest-cov==2.5.1
-teamcity-messages==1.21
-psutil==5.6.5
+pytest==6.2.2
+pytest-cov==2.11.1
+teamcity-messages==1.28
+psutil==5.8.0
 jinja2==2.11.3

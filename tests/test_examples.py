@@ -15,37 +15,28 @@
 
 import glob
 import subprocess
-import sys
 
 import pytest
 
+from tests.util import start_ignite_gen
 
 SKIP_LIST = [
     'failover.py',  # it hangs by design
 ]
 
 
-def run_subprocess_34(script: str):
-    return subprocess.call([
-        'python',
-        '../examples/{}'.format(script),
-    ])
-
-
-def run_subprocess_35(script: str):
-    return subprocess.run([
-        'python',
-        '../examples/{}'.format(script),
-    ]).returncode
+@pytest.fixture(scope='module', autouse=True)
+def server():
+    yield from start_ignite_gen(1)
 
 
 @pytest.mark.examples
 def test_examples():
     for script in glob.glob1('../examples', '*.py'):
         if script not in SKIP_LIST:
-            # `subprocess` module was refactored in Python 3.5
-            if sys.version_info >= (3, 5):
-                return_code = run_subprocess_35(script)
-            else:
-                return_code = run_subprocess_34(script)
-            assert return_code == 0
+            proc = subprocess.run([
+                'python',
+                '../examples/{}'.format(script),
+            ])
+
+            assert proc.returncode == 0

@@ -15,6 +15,7 @@
 
 import glob
 import os
+import shutil
 
 import jinja2 as jinja2
 import psutil
@@ -111,7 +112,7 @@ def create_config_file(tpl_name, file_name, **kwargs):
         f.write(template.render(**kwargs))
 
 
-def _start_ignite(idx=1, debug=False, use_ssl=False):
+def start_ignite(idx=1, debug=False, use_ssl=False, use_auth=False):
     clear_logs(idx)
 
     runner = get_ignite_runner()
@@ -122,7 +123,8 @@ def _start_ignite(idx=1, debug=False, use_ssl=False):
         env["JVM_OPTS"] = "-Djava.net.preferIPv4Stack=true -Xdebug -Xnoagent -Djava.compiler=NONE " \
                           "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005 "
 
-    params = {'ignite_instance_idx': str(idx), 'ignite_client_port': 10800 + idx, 'use_ssl': use_ssl}
+    params = {'ignite_instance_idx': str(idx), 'ignite_client_port': 10800 + idx, 'use_ssl': use_ssl,
+              'use_auth': use_auth}
 
     create_config_file('log4j.xml.jinja2', f'log4j-{idx}.xml', **params)
     create_config_file('ignite-config.xml.jinja2', f'ignite-config-{idx}.xml', **params)
@@ -140,8 +142,8 @@ def _start_ignite(idx=1, debug=False, use_ssl=False):
     raise Exception("Failed to start Ignite: timeout while trying to connect")
 
 
-def start_ignite_gen(idx=1, use_ssl=False):
-    srv = _start_ignite(idx, use_ssl=use_ssl)
+def start_ignite_gen(idx=1, use_ssl=False, use_auth=False):
+    srv = start_ignite(idx, use_ssl=use_ssl, use_auth=use_auth)
     yield srv
     kill_process_tree(srv.pid)
 
@@ -149,6 +151,13 @@ def start_ignite_gen(idx=1, use_ssl=False):
 def get_log_files(idx=1):
     logs_pattern = os.path.join(get_test_dir(), "logs", "ignite-log-{0}*.txt".format(idx))
     return glob.glob(logs_pattern)
+
+
+def clear_ignite_work_dir():
+    for ignite_dir in get_ignite_dirs():
+        work_dir = os.path.join(ignite_dir, 'work')
+        if os.path.exists(work_dir):
+            shutil.rmtree(work_dir, ignore_errors=True)
 
 
 def clear_logs(idx=1):

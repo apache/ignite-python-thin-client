@@ -182,7 +182,7 @@ def test_long_multipage_query(client):
     client.sql('DROP TABLE LongMultipageQuery IF EXISTS')
 
     client.sql("CREATE TABLE LongMultiPageQuery (%s, %s)" %
-               (fields[0] + " INT(11) PRIMARY KEY", ",".join(map(lambda f: f + " INT(11)", fields[1:]))))
+                         (fields[0] + " INT(11) PRIMARY KEY", ",".join(map(lambda f: f + " INT(11)", fields[1:]))))
 
     for id in range(1, 21):
         client.sql(

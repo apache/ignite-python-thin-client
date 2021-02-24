@@ -34,7 +34,7 @@ from typing import Union
 
 from pyignite.constants import *
 from pyignite.exceptions import (
-    HandshakeError, ParameterError, SocketError, connection_errors,
+    HandshakeError, ParameterError, SocketError, connection_errors, AuthenticationError,
 )
 from pyignite.datatypes import Byte, Int, Short, String, UUIDObject
 from pyignite.datatypes.internal import Struct
@@ -42,6 +42,8 @@ from pyignite.datatypes.internal import Struct
 from .handshake import HandshakeRequest
 from .ssl import wrap
 from ..stream import BinaryStream, READ_BACKWARD
+
+CLIENT_STATUS_AUTH_FAILURE = 2000
 
 
 class Connection:
@@ -180,7 +182,7 @@ class Connection:
             ('length', Int),
             ('op_code', Byte),
         ])
-        with BinaryStream(self, self.recv()) as stream:
+        with BinaryStream(self, self.recv(reconnect=False)) as stream:
             start_class = response_start.parse(stream)
             start = stream.read_ctype(start_class, direction=READ_BACKWARD)
             data = response_start.to_python(start)
@@ -191,6 +193,7 @@ class Connection:
                     ('version_minor', Short),
                     ('version_patch', Short),
                     ('message', String),
+                    ('client_status', Int)
                 ])
             elif self.get_protocol_version() >= (1, 4, 0):
                 response_end = Struct([
@@ -267,7 +270,7 @@ class Connection:
 
         with BinaryStream(self) as stream:
             hs_request.from_python(stream)
-            self.send(stream.getbuffer())
+            self.send(stream.getbuffer(), reconnect=False)
 
         hs_response = self.read_response()
         if hs_response['op_code'] == 0:
@@ -291,6 +294,8 @@ class Connection:
                     client_patch=protocol_version[2],
                     **hs_response
                 )
+            elif hs_response['client_status'] == CLIENT_STATUS_AUTH_FAILURE:
+                raise AuthenticationError(error_text)
             raise HandshakeError((
                 hs_response['version_major'],
                 hs_response['version_minor'],
@@ -313,12 +318,13 @@ class Connection:
         except connection_errors:
             pass
 
-    def send(self, data: Union[bytes, bytearray, memoryview], flags=None):
+    def send(self, data: Union[bytes, bytearray, memoryview], flags=None, reconnect=True):
         """
         Send data down the socket.
 
         :param data: bytes to send,
         :param flags: (optional) OS-specific flags.
+        :param reconnect: (optional) reconnect on failure, default True.
         """
         if self.closed:
             raise SocketError('Attempt to use closed connection.')
@@ -334,7 +340,13 @@ class Connection:
             self.reconnect()
             raise
 
-    def recv(self, flags=None) -> bytearray:
+    def recv(self, flags=None, reconnect=True) -> bytearray:
+        """
+        Receive data from the socket.
+
+        :param flags: (optional) OS-specific flags.
+        :param reconnect: (optional) reconnect on failure, default True.
+        """
         def _recv(buffer, num_bytes):
             bytes_to_receive = num_bytes
             while bytes_to_receive > 0:
@@ -344,7 +356,8 @@ class Connection:
                         raise SocketError('Connection broken.')
                 except connection_errors:
                     self.failed = True
-                    self.reconnect()
+                    if reconnect:
+                        self.reconnect()
                     raise
 
                 buffer = buffer[bytes_rcvd:]

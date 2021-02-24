@@ -70,10 +70,8 @@ def wait_for_affinity_distribution(cache, key, node_idx, timeout=30):
 
 @pytest.mark.parametrize("key,grid_idx", [(1, 1), (2, 2), (3, 3), (4, 1), (5, 1), (6, 2), (11, 1), (13, 1), (19, 1)])
 @pytest.mark.parametrize("backups", [0, 1, 2, 3])
-def test_cache_operation_on_primitive_key_routes_request_to_primary_node(
-        request, key, grid_idx, backups, client_partition_aware):
-
-    cache = client_partition_aware.get_or_create_cache({
+def test_cache_operation_on_primitive_key_routes_request_to_primary_node(request, key, grid_idx, backups, client):
+    cache = client.get_or_create_cache({
         PROP_NAME: request.node.name + str(backups),
         PROP_BACKUPS_NUMBER: backups,
     })
@@ -132,8 +130,7 @@ def test_cache_operation_on_complex_key_routes_request_to_primary_node():
 
 @pytest.mark.parametrize("key,grid_idx", [(1, 2), (2, 1), (3, 1), (4, 2), (5, 2), (6, 3)])
 @pytest.mark.skip(reason="Custom key objects are not supported yet")
-def test_cache_operation_on_custom_affinity_key_routes_request_to_primary_node(
-        request, client_partition_aware, key, grid_idx):
+def test_cache_operation_on_custom_affinity_key_routes_request_to_primary_node(request, client, key, grid_idx):
     class AffinityTestType1(
         metaclass=GenericObjectMeta,
         type_name='AffinityTestType1',
@@ -153,7 +150,7 @@ def test_cache_operation_on_custom_affinity_key_routes_request_to_primary_node(
             },
         ],
     }
-    cache = client_partition_aware.create_cache(cache_config)
+    cache = client.create_cache(cache_config)
 
     # noinspection PyArgumentList
     key_obj = AffinityTestType1(
@@ -167,17 +164,18 @@ def test_cache_operation_on_custom_affinity_key_routes_request_to_primary_node(
     assert requests.pop() == grid_idx
 
 
-def test_cache_operation_routed_to_new_cluster_node(request, start_ignite_server, start_client):
-    client = start_client(partition_aware=True)
-    client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802), ("127.0.0.1", 10803), ("127.0.0.1", 10804)])
-    cache = client.get_or_create_cache(request.node.name)
+def test_cache_operation_routed_to_new_cluster_node(request, client_not_connected):
+    client_not_connected.connect(
+        [("127.0.0.1", 10801), ("127.0.0.1", 10802), ("127.0.0.1", 10803), ("127.0.0.1", 10804)]
+    )
+    cache = client_not_connected.get_or_create_cache(request.node.name)
     key = 12
     wait_for_affinity_distribution(cache, key, 3)
     cache.put(key, key)
     cache.put(key, key)
     assert requests.pop() == 3
 
-    srv = start_ignite_server(4)
+    srv = start_ignite(idx=4)
     try:
         # Wait for rebalance and partition map exchange
         wait_for_affinity_distribution(cache, key, 4)
@@ -190,8 +188,8 @@ def test_cache_operation_routed_to_new_cluster_node(request, start_ignite_server
         kill_process_tree(srv.pid)
 
 
-def test_replicated_cache_operation_routed_to_random_node(request, client_partition_aware):
-    cache = client_partition_aware.get_or_create_cache({
+def test_replicated_cache_operation_routed_to_random_node(request, client):
+    cache = client.get_or_create_cache({
         PROP_NAME: request.node.name,
         PROP_CACHE_MODE: CacheMode.REPLICATED,
     })
