@@ -27,15 +27,23 @@ You can get the examples of using Complex objects in the
 
 from collections import OrderedDict
 import ctypes
+from io import SEEK_CUR
 from typing import Any
 
 import attr
 
-from pyignite.constants import *
-from .datatypes import *
+from .constants import PROTOCOL_BYTE_ORDER
+from .datatypes import (
+    Null, ByteObject, ShortObject, IntObject, LongObject, FloatObject, DoubleObject, CharObject, BoolObject, UUIDObject,
+    DateObject, TimestampObject, TimeObject, EnumObject, BinaryEnumObject, ByteArrayObject, ShortArrayObject,
+    IntArrayObject, LongArrayObject, FloatArrayObject, DoubleArrayObject, CharArrayObject, BoolArrayObject,
+    UUIDArrayObject, DateArrayObject, TimestampArrayObject, TimeArrayObject, EnumArrayObject, String, StringArrayObject,
+    DecimalObject, DecimalArrayObject, ObjectArrayObject, CollectionObject, MapObject, BinaryObject, WrappedDataObject
+)
 from .datatypes.base import IgniteDataTypeProps
 from .exceptions import ParseError
-from .utils import entity_id, hashcode, schema_id
+from .stream import BinaryStream, READ_BACKWARD
+from .utils import entity_id, schema_id
 
 
 ALLOWED_FIELD_TYPES = [
@@ -111,10 +119,37 @@ class GenericObjectMeta(GenericObjectPropsMeta):
             :param stream: BinaryStream
             :param save_to_buf: Optional. If True, save serialized data to buffer.
             """
+            initial_pos = stream.tell()
+            header, header_class = write_header(self, stream)
 
-            compact_footer = stream.compact_footer
+            offsets = [ctypes.sizeof(header_class)]
+            schema_items = list(self.schema.items())
+            for field_name, field_type in schema_items:
+                val = getattr(self, field_name, getattr(field_type, 'default', None))
+                field_start_pos = stream.tell()
+                field_type.from_python(stream, val)
+                offsets.append(max(offsets) + stream.tell() - field_start_pos)
 
-            # prepare header
+            write_footer(self, stream, header, header_class, schema_items, offsets, initial_pos, save_to_buf)
+
+        async def _from_python_async(self, stream, save_to_buf=False):
+            """
+            Async version of _from_python
+            """
+            initial_pos = stream.tell()
+            header, header_class = write_header(self, stream)
+
+            offsets = [ctypes.sizeof(header_class)]
+            schema_items = list(self.schema.items())
+            for field_name, field_type in schema_items:
+                val = getattr(self, field_name, getattr(field_type, 'default', None))
+                field_start_pos = stream.tell()
+                await field_type.from_python_async(stream, val)
+                offsets.append(max(offsets) + stream.tell() - field_start_pos)
+
+            write_footer(self, stream, header, header_class, schema_items, offsets, initial_pos, save_to_buf)
+
+        def write_header(obj, stream):
             header_class = BinaryObject.build_header()
             header = header_class()
             header.type_code = int.from_bytes(
@@ -122,36 +157,30 @@ class GenericObjectMeta(GenericObjectPropsMeta):
                 byteorder=PROTOCOL_BYTE_ORDER
             )
             header.flags = BinaryObject.USER_TYPE | BinaryObject.HAS_SCHEMA
-            if compact_footer:
+            if stream.compact_footer:
                 header.flags |= BinaryObject.COMPACT_FOOTER
-            header.version = self.version
-            header.type_id = self.type_id
-            header.schema_id = self.schema_id
+            header.version = obj.version
+            header.type_id = obj.type_id
+            header.schema_id = obj.schema_id
 
-            header_len = ctypes.sizeof(header_class)
-            initial_pos = stream.tell()
+            stream.seek(ctypes.sizeof(header_class), SEEK_CUR)
 
-            # create fields and calculate offsets
-            offsets = [ctypes.sizeof(header_class)]
-            schema_items = list(self.schema.items())
+            return header, header_class
 
-            stream.seek(initial_pos + header_len)
-            for field_name, field_type in schema_items:
-                val = getattr(self, field_name, getattr(field_type, 'default', None))
-                field_start_pos = stream.tell()
-                field_type.from_python(stream, val)
-                offsets.append(max(offsets) + stream.tell() - field_start_pos)
-
+        def write_footer(obj, stream, header, header_class, schema_items, offsets, initial_pos, save_to_buf):
             offsets = offsets[:-1]
+            header_len = ctypes.sizeof(header_class)
 
             # create footer
             if max(offsets, default=0) < 255:
                 header.flags |= BinaryObject.OFFSET_ONE_BYTE
             elif max(offsets) < 65535:
                 header.flags |= BinaryObject.OFFSET_TWO_BYTES
+
             schema_class = BinaryObject.schema_type(header.flags) * len(offsets)
             schema = schema_class()
-            if compact_footer:
+
+            if stream.compact_footer:
                 for i, offset in enumerate(offsets):
                     schema[i] = offset
             else:
@@ -171,8 +200,8 @@ class GenericObjectMeta(GenericObjectPropsMeta):
             stream.write(schema)
 
             if save_to_buf:
-                self._buffer = bytes(stream.mem_view(initial_pos, stream.tell() - initial_pos))
-            self._hashcode = header.hash_code
+                obj._buffer = bytes(stream.mem_view(initial_pos, stream.tell() - initial_pos))
+            obj._hashcode = header.hash_code
 
         def _setattr(self, attr_name: str, attr_value: Any):
             # reset binary representation, if any field is changed
@@ -184,6 +213,7 @@ class GenericObjectMeta(GenericObjectPropsMeta):
             super(result, self).__setattr__(attr_name, attr_value)
 
         setattr(result, _from_python.__name__, _from_python)
+        setattr(result, _from_python_async.__name__, _from_python_async)
         setattr(result, '__setattr__', _setattr)
         setattr(result, '_buffer', None)
         setattr(result, '_hashcode', None)
@@ -216,3 +246,32 @@ class GenericObjectMeta(GenericObjectPropsMeta):
         cls._validate_schema(schema)
         cls._schema = schema
         super().__init__(name, base_classes, namespace)
+
+
+def unwrap_binary(client: 'Client', wrapped: tuple) -> object:
+    """
+    Unwrap wrapped BinaryObject and convert it to Python data.
+
+    :param client: connection to Ignite cluster,
+    :param wrapped: `WrappedDataObject` value,
+    :return: dict representing wrapped BinaryObject.
+    """
+    blob, offset = wrapped
+    with BinaryStream(client.random_node, blob) as stream:
+        data_class = BinaryObject.parse(stream)
+        result = BinaryObject.to_python(stream.read_ctype(data_class, direction=READ_BACKWARD), client)
+
+    return result
+
+
+async def unwrap_binary_async(client: 'AioClient', wrapped: tuple) -> object:
+    """
+    Async version of unwrap_binary.
+    """
+    blob, offset = wrapped
+    conn = await client.random_node()
+    with BinaryStream(conn, blob) as stream:
+        data_class = await BinaryObject.parse_async(stream)
+        result = await BinaryObject.to_python_async(stream.read_ctype(data_class, direction=READ_BACKWARD), client)
+
+    return result

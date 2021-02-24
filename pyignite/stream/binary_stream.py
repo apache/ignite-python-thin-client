@@ -29,10 +29,11 @@ class BinaryStream:
         :param buf: Buffer, optional parameter. If not passed, creates empty BytesIO.
         :param conn: Connection instance, required.
         """
-        from pyignite.connection import Connection
+        from pyignite.connection import Connection, AioConnection
 
-        if not isinstance(conn, Connection):
-            raise TypeError(f"invalid parameter: expected instance of {Connection}")
+        if not isinstance(conn, (Connection, AioConnection)):
+            raise TypeError(f"invalid parameter: expected instance of {Connection} "
+                            f"or {AioConnection}")
 
         if buf and not isinstance(buf, (bytearray, bytes, memoryview)):
             raise TypeError(f"invalid parameter: expected bytes-like object")
@@ -110,5 +111,18 @@ class BinaryStream:
             raise RuntimeError('Binary type is not registered')
         return result
 
+    async def get_dataclass_async(self, header):
+        # get field names from outer space
+        result = await self.conn.client.query_binary_type(
+            header.type_id,
+            header.schema_id
+        )
+        if not result:
+            raise RuntimeError('Binary type is not registered')
+        return result
+
     def register_binary_type(self, *args, **kwargs):
         return self.conn.client.register_binary_type(*args, **kwargs)
+
+    async def register_binary_type_async(self, *args, **kwargs):
+        return await self.conn.client.register_binary_type(*args, **kwargs)

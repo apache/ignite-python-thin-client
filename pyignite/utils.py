@@ -15,6 +15,7 @@
 
 import ctypes
 import decimal
+import inspect
 import warnings
 
 from functools import wraps
@@ -243,25 +244,31 @@ def datetime_hashcode(value: int) -> int:
 def status_to_exception(exc: Type[Exception]):
     """
     Converts erroneous status code with error message to an exception
-    of the given class.
+    of the given class. Supports coroutines.
 
     :param exc: the class of exception to raise,
-    :return: decorator.
+    :return: decorated function.
     """
+    def process_result(result):
+        if result.status != 0:
+            raise exc(result.message)
+        return result.value
+
     def ste_decorator(fn):
-        @wraps(fn)
-        def ste_wrapper(*args, **kwargs):
-            result = fn(*args, **kwargs)
-            if result.status != 0:
-                raise exc(result.message)
-            return result.value
-        return ste_wrapper
+        if inspect.iscoroutinefunction(fn):
+            @wraps(fn)
+            async def ste_wrapper_async(*args, **kwargs):
+                return process_result(await fn(*args, **kwargs))
+            return ste_wrapper_async
+        else:
+            @wraps(fn)
+            def ste_wrapper(*args, **kwargs):
+                return process_result(fn(*args, **kwargs))
+            return ste_wrapper
     return ste_decorator
 
 
-def get_field_by_id(
-    obj: 'GenericObjectMeta', field_id: int
-) -> Tuple[Any, IgniteDataType]:
+def get_field_by_id(obj: 'GenericObjectMeta', field_id: int) -> Tuple[Any, IgniteDataType]:
     """
     Returns a complex object's field value, given the field's entity ID.
 

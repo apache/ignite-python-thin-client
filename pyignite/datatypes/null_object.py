@@ -21,13 +21,12 @@ There can't be null type, because null payload takes exactly 0 bytes.
 
 import ctypes
 from io import SEEK_CUR
-from typing import Any
 
 from .base import IgniteDataType
 from .type_codes import TC_NULL
 
 
-__all__ = ['Null']
+__all__ = ['Null', 'Nullable']
 
 from ..constants import PROTOCOL_BYTE_ORDER
 
@@ -36,11 +35,6 @@ class Null(IgniteDataType):
     default = None
     pythonic = type(None)
     _object_c_type = None
-
-    @staticmethod
-    def hashcode(value: Any) -> int:
-        # Null object can not be a cache key.
-        return 0
 
     @classmethod
     def build_c_type(cls):
@@ -63,51 +57,96 @@ class Null(IgniteDataType):
         stream.seek(offset, SEEK_CUR)
         return cls.build_c_type()
 
-    @staticmethod
-    def to_python(*args, **kwargs):
+    @classmethod
+    def to_python(cls, *args, **kwargs):
         return None
 
-    @staticmethod
-    def from_python(stream, *args):
+    @classmethod
+    def from_python(cls, stream, *args):
         stream.write(TC_NULL)
 
 
-class Nullable:
+class Nullable(IgniteDataType):
     @classmethod
     def parse_not_null(cls, stream):
         raise NotImplementedError
 
     @classmethod
-    def parse(cls, stream):
-        type_len = ctypes.sizeof(ctypes.c_byte)
+    async def parse_not_null_async(cls, stream):
+        raise NotImplementedError
 
-        if stream.mem_view(offset=type_len) == TC_NULL:
-            stream.seek(type_len, SEEK_CUR)
-            return Null.build_c_type()
+    @classmethod
+    def parse(cls, stream):
+        is_null, null_type = cls.__check_null_input(stream)
+
+        if is_null:
+            return null_type
 
         return cls.parse_not_null(stream)
+
+    @classmethod
+    async def parse_async(cls, stream):
+        is_null, null_type = cls.__check_null_input(stream)
+
+        if is_null:
+            return null_type
+
+        return await cls.parse_not_null_async(stream)
+
+    @classmethod
+    def from_python_not_null(cls, stream, value, **kwargs):
+        raise NotImplementedError
+
+    @classmethod
+    async def from_python_not_null_async(cls, stream, value, **kwargs):
+        return cls.from_python_not_null(stream, value, **kwargs)
+
+    @classmethod
+    def from_python(cls, stream, value, **kwargs):
+        if value is None:
+            Null.from_python(stream)
+        else:
+            cls.from_python_not_null(stream, value)
+
+    @classmethod
+    async def from_python_async(cls, stream, value, **kwargs):
+        if value is None:
+            Null.from_python(stream)
+        else:
+            await cls.from_python_not_null_async(stream, value, **kwargs)
 
     @classmethod
     def to_python_not_null(cls, ctypes_object, *args, **kwargs):
         raise NotImplementedError
 
     @classmethod
+    async def to_python_not_null_async(cls, ctypes_object, *args, **kwargs):
+        return cls.to_python_not_null(ctypes_object, *args, **kwargs)
+
+    @classmethod
     def to_python(cls, ctypes_object, *args, **kwargs):
-        if ctypes_object.type_code == int.from_bytes(
-                TC_NULL,
-                byteorder=PROTOCOL_BYTE_ORDER
-        ):
+        if cls.__is_null(ctypes_object):
             return None
 
         return cls.to_python_not_null(ctypes_object, *args, **kwargs)
 
     @classmethod
-    def from_python_not_null(cls, stream, value):
-        raise NotImplementedError
+    async def to_python_async(cls, ctypes_object, *args, **kwargs):
+        if cls.__is_null(ctypes_object):
+            return None
+
+        return await cls.to_python_not_null_async(ctypes_object, *args, **kwargs)
 
     @classmethod
-    def from_python(cls, stream, value):
-        if value is None:
-            Null.from_python(stream)
-        else:
-            cls.from_python_not_null(stream, value)
+    def __check_null_input(cls, stream):
+        type_len = ctypes.sizeof(ctypes.c_byte)
+
+        if stream.mem_view(offset=type_len) == TC_NULL:
+            stream.seek(type_len, SEEK_CUR)
+            return True, Null.build_c_type()
+
+        return False, None
+
+    @classmethod
+    def __is_null(cls, ctypes_object):
+        return ctypes_object.type_code == int.from_bytes(TC_NULL, byteorder=PROTOCOL_BYTE_ORDER)

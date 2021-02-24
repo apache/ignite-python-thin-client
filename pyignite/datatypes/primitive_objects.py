@@ -18,11 +18,10 @@ from io import SEEK_CUR
 
 from pyignite.constants import *
 from pyignite.utils import unsigned
-from .base import IgniteDataType
 from .type_codes import *
 from .type_ids import *
 from .type_names import *
-from .null_object import Null, Nullable
+from .null_object import Nullable
 
 __all__ = [
     'DataObject', 'ByteObject', 'ShortObject', 'IntObject', 'LongObject',
@@ -30,7 +29,7 @@ __all__ = [
 ]
 
 
-class DataObject(IgniteDataType, Nullable):
+class DataObject(Nullable):
     """
     Base class for primitive data objects.
 
@@ -65,8 +64,8 @@ class DataObject(IgniteDataType, Nullable):
         stream.seek(ctypes.sizeof(data_type), SEEK_CUR)
         return data_type
 
-    @staticmethod
-    def to_python(ctype_object, *args, **kwargs):
+    @classmethod
+    def to_python(cls, ctype_object, *args, **kwargs):
         return getattr(ctype_object, "value", None)
 
     @classmethod
@@ -89,8 +88,8 @@ class ByteObject(DataObject):
     pythonic = int
     default = 0
 
-    @staticmethod
-    def hashcode(value: int, *args, **kwargs) -> int:
+    @classmethod
+    def hashcode(cls, value: int, *args, **kwargs) -> int:
         return value
 
 
@@ -102,8 +101,8 @@ class ShortObject(DataObject):
     pythonic = int
     default = 0
 
-    @staticmethod
-    def hashcode(value: int, *args, **kwargs) -> int:
+    @classmethod
+    def hashcode(cls, value: int, *args, **kwargs) -> int:
         return value
 
 
@@ -115,8 +114,8 @@ class IntObject(DataObject):
     pythonic = int
     default = 0
 
-    @staticmethod
-    def hashcode(value: int, *args, **kwargs) -> int:
+    @classmethod
+    def hashcode(cls, value: int, *args, **kwargs) -> int:
         return value
 
 
@@ -128,8 +127,8 @@ class LongObject(DataObject):
     pythonic = int
     default = 0
 
-    @staticmethod
-    def hashcode(value: int, *args, **kwargs) -> int:
+    @classmethod
+    def hashcode(cls, value: int, *args, **kwargs) -> int:
         return value ^ (unsigned(value, ctypes.c_ulonglong) >> 32)
 
 
@@ -141,8 +140,8 @@ class FloatObject(DataObject):
     pythonic = float
     default = 0.0
 
-    @staticmethod
-    def hashcode(value: float, *args, **kwargs) -> int:
+    @classmethod
+    def hashcode(cls, value: float, *args, **kwargs) -> int:
         return ctypes.cast(
             ctypes.pointer(ctypes.c_float(value)),
             ctypes.POINTER(ctypes.c_int)
@@ -157,8 +156,8 @@ class DoubleObject(DataObject):
     pythonic = float
     default = 0.0
 
-    @staticmethod
-    def hashcode(value: float, *args, **kwargs) -> int:
+    @classmethod
+    def hashcode(cls, value: float, *args, **kwargs) -> int:
         bits = ctypes.cast(
             ctypes.pointer(ctypes.c_double(value)),
             ctypes.POINTER(ctypes.c_longlong)
@@ -180,8 +179,8 @@ class CharObject(DataObject):
     pythonic = str
     default = ' '
 
-    @staticmethod
-    def hashcode(value: str, *args, **kwargs) -> int:
+    @classmethod
+    def hashcode(cls, value: str, *args, **kwargs) -> int:
         return ord(value)
 
     @classmethod
@@ -216,8 +215,8 @@ class BoolObject(DataObject):
     pythonic = bool
     default = False
 
-    @staticmethod
-    def hashcode(value: bool, *args, **kwargs) -> int:
+    @classmethod
+    def hashcode(cls, value: bool, *args, **kwargs) -> int:
         return 1231 if value else 1237
 
     @classmethod

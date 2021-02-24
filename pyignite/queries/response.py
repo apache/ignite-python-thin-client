@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import asyncio
 from io import SEEK_CUR
 
 import attr
@@ -20,6 +21,7 @@ import ctypes
 
 from pyignite.constants import RHF_TOPOLOGY_CHANGED, RHF_ERROR
 from pyignite.datatypes import AnyDataObject, Bool, Int, Long, String, StringArray, Struct
+from pyignite.datatypes.binary import body_struct, enum_struct, schema_struct
 from pyignite.queries.op_codes import OP_SUCCESS
 from pyignite.stream import READ_BACKWARD
 
@@ -35,7 +37,7 @@ class Response:
         # replace None with empty list
         self.following = self.following or []
 
-    def build_header(self):
+    def __build_header(self):
         if self._response_header is None:
             fields = [
                 ('length', ctypes.c_int),
@@ -57,9 +59,9 @@ class Response:
             )
         return self._response_header
 
-    def parse(self, stream):
+    def __parse_header(self, stream):
         init_pos = stream.tell()
-        header_class = self.build_header()
+        header_class = self.__build_header()
         header_len = ctypes.sizeof(header_class)
         header = stream.read_ctype(header_class)
         stream.seek(header_len, SEEK_CUR)
@@ -85,9 +87,10 @@ class Response:
         if has_error:
             msg_type = String.parse(stream)
             fields.append(('error_message', msg_type))
-        else:
-            self._parse_success(stream, fields)
 
+        return not has_error, init_pos, header_class, fields
+
+    def __build_response_class(self, stream, init_pos, header_class, fields):
         response_class = type(
             self._response_class_name,
             (header_class,),
@@ -100,21 +103,52 @@ class Response:
         stream.seek(init_pos + ctypes.sizeof(response_class))
         return response_class
 
+    def parse(self, stream):
+        success, init_pos, header_class, fields = self.__parse_header(stream)
+        if success:
+            self._parse_success(stream, fields)
+
+        return self.__build_response_class(stream, init_pos, header_class, fields)
+
+    async def parse_async(self, stream):
+        success, init_pos, header_class, fields = self.__parse_header(stream)
+        if success:
+            await self._parse_success_async(stream, fields)
+
+        return self.__build_response_class(stream, init_pos, header_class, fields)
+
     def _parse_success(self, stream, fields: list):
         for name, ignite_type in self.following:
             c_type = ignite_type.parse(stream)
             fields.append((name, c_type))
 
-    def to_python(self, ctype_object, *args, **kwargs):
-        result = OrderedDict()
+    async def _parse_success_async(self, stream, fields: list):
+        for name, ignite_type in self.following:
+            c_type = await ignite_type.parse_async(stream)
+            fields.append((name, c_type))
 
+    def to_python(self, ctype_object, *args, **kwargs):
+        if not self.following:
+            return None
+
+        result = OrderedDict()
         for name, c_type in self.following:
             result[name] = c_type.to_python(
                 getattr(ctype_object, name),
                 *args, **kwargs
             )
 
-        return result if result else None
+        return result
+
+    async def to_python_async(self, ctype_object, *args, **kwargs):
+        if not self.following:
+            return None
+
+        values = await asyncio.gather(
+            *[c_type.to_python(getattr(ctype_object, name), *args, **kwargs) for name, c_type in self.following]
+        )
+
+        return OrderedDict([(name, values[i]) for i, (name, _) in enumerate(self.following)])
 
 
 @attr.s
@@ -135,38 +169,62 @@ class SQLResponse(Response):
         return 'field_count', Int
 
     def _parse_success(self, stream, fields: list):
-        following = [
-            self.fields_or_field_count(),
-            ('row_count', Int),
-        ]
-        if self.has_cursor:
-            following.insert(0, ('cursor', Long))
-        body_struct = Struct(following)
+        body_struct = self.__create_body_struct()
         body_class = body_struct.parse(stream)
         body = stream.read_ctype(body_class, direction=READ_BACKWARD)
 
-        if self.include_field_names:
-            field_count = body.fields.length
-        else:
-            field_count = body.field_count
-
-        data_fields = []
+        data_fields, field_count = [], self.__get_fields_count(body)
         for i in range(body.row_count):
             row_fields = []
             for j in range(field_count):
                 field_class = AnyDataObject.parse(stream)
                 row_fields.append(('column_{}'.format(j), field_class))
 
-            row_class = type(
-                'SQLResponseRow',
-                (ctypes.LittleEndianStructure,),
-                {
-                    '_pack_': 1,
-                    '_fields_': row_fields,
-                }
-            )
-            data_fields.append(('row_{}'.format(i), row_class))
+            self.__row_post_process(i, row_fields, data_fields)
 
+        self.__body_class_post_process(body_class, fields, data_fields)
+
+    async def _parse_success_async(self, stream, fields: list):
+        body_struct = self.__create_body_struct()
+        body_class = await body_struct.parse_async(stream)
+        body = stream.read_ctype(body_class, direction=READ_BACKWARD)
+
+        data_fields, field_count = [], self.__get_fields_count(body)
+        for i in range(body.row_count):
+            row_fields = []
+            for j in range(field_count):
+                field_class = await AnyDataObject.parse_async(stream)
+                row_fields.append(('column_{}'.format(j), field_class))
+
+            self.__row_post_process(i, row_fields, data_fields)
+
+        self.__body_class_post_process(body_class, fields, data_fields)
+
+    def __create_body_struct(self):
+        following = [self.fields_or_field_count(), ('row_count', Int)]
+        if self.has_cursor:
+            following.insert(0, ('cursor', Long))
+        return Struct(following)
+
+    def __get_fields_count(self, body):
+        if self.include_field_names:
+            return body.fields.length
+        return body.field_count
+
+    @staticmethod
+    def __row_post_process(idx, row_fields, data_fields):
+        row_class = type(
+            'SQLResponseRow',
+            (ctypes.LittleEndianStructure,),
+            {
+                '_pack_': 1,
+                '_fields_': row_fields,
+            }
+        )
+        data_fields.append((f'row_{idx}', row_class))
+
+    @staticmethod
+    def __body_class_post_process(body_class, fields, data_fields):
         data_class = type(
             'SQLResponseData',
             (ctypes.LittleEndianStructure,),
@@ -182,24 +240,8 @@ class SQLResponse(Response):
 
     def to_python(self, ctype_object, *args, **kwargs):
         if getattr(ctype_object, 'status_code', 0) == 0:
-            result = {
-                'more': Bool.to_python(
-                    ctype_object.more, *args, **kwargs
-                ),
-                'data': [],
-            }
-            if hasattr(ctype_object, 'fields'):
-                result['fields'] = StringArray.to_python(
-                    ctype_object.fields, *args, **kwargs
-                )
-            else:
-                result['field_count'] = Int.to_python(
-                    ctype_object.field_count, *args, **kwargs
-                )
-            if hasattr(ctype_object, 'cursor'):
-                result['cursor'] = Long.to_python(
-                    ctype_object.cursor, *args, **kwargs
-                )
+            result = self.__to_python_result_header(ctype_object, *args, **kwargs)
+
             for row_item in ctype_object.data._fields_:
                 row_name = row_item[0]
                 row_object = getattr(ctype_object.data, row_name)
@@ -207,8 +249,101 @@ class SQLResponse(Response):
                 for col_item in row_object._fields_:
                     col_name = col_item[0]
                     col_object = getattr(row_object, col_name)
-                    row.append(
-                        AnyDataObject.to_python(col_object, *args, **kwargs)
-                    )
+                    row.append(AnyDataObject.to_python(col_object, *args, **kwargs))
                 result['data'].append(row)
+            return result
+
+    async def to_python_async(self, ctype_object, *args, **kwargs):
+        if getattr(ctype_object, 'status_code', 0) == 0:
+            result = self.__to_python_result_header(ctype_object, *args, **kwargs)
+
+            data_coro = []
+            for row_item in ctype_object.data._fields_:
+                row_name = row_item[0]
+                row_object = getattr(ctype_object.data, row_name)
+                row_coro = []
+                for col_item in row_object._fields_:
+                    col_name = col_item[0]
+                    col_object = getattr(row_object, col_name)
+                    row_coro.append(AnyDataObject.to_python_async(col_object, *args, **kwargs))
+
+                data_coro.append(asyncio.gather(*row_coro))
+
+            result['data'] = await asyncio.gather(*data_coro)
+            return result
+
+    @staticmethod
+    def __to_python_result_header(ctype_object, *args, **kwargs):
+        result = {
+            'more': Bool.to_python(ctype_object.more, *args, **kwargs),
+            'data': [],
+        }
+        if hasattr(ctype_object, 'fields'):
+            result['fields'] = StringArray.to_python(ctype_object.fields, *args, **kwargs)
+        else:
+            result['field_count'] = Int.to_python(ctype_object.field_count, *args, **kwargs)
+
+        if hasattr(ctype_object, 'cursor'):
+            result['cursor'] = Long.to_python(ctype_object.cursor, *args, **kwargs)
+        return result
+
+
+class BinaryTypeResponse(Response):
+    _response_class_name = 'GetBinaryTypeResponse'
+
+    def _parse_success(self, stream, fields: list):
+        type_exists = self.__process_type_exists(stream, fields)
+
+        if type_exists.value:
+            resp_body_type = body_struct.parse(stream)
+            fields.append(('body', resp_body_type))
+            resp_body = stream.read_ctype(resp_body_type, direction=READ_BACKWARD)
+            if resp_body.is_enum:
+                resp_enum = enum_struct.parse(stream)
+                fields.append(('enums', resp_enum))
+
+            resp_schema_type = schema_struct.parse(stream)
+            fields.append(('schema', resp_schema_type))
+
+    async def _parse_success_async(self, stream, fields: list):
+        type_exists = self.__process_type_exists(stream, fields)
+
+        if type_exists.value:
+            resp_body_type = await body_struct.parse_async(stream)
+            fields.append(('body', resp_body_type))
+            resp_body = stream.read_ctype(resp_body_type, direction=READ_BACKWARD)
+            if resp_body.is_enum:
+                resp_enum = await enum_struct.parse_async(stream)
+                fields.append(('enums', resp_enum))
+
+            resp_schema_type = await schema_struct.parse_async(stream)
+            fields.append(('schema', resp_schema_type))
+
+    @staticmethod
+    def __process_type_exists(stream, fields):
+        fields.append(('type_exists', ctypes.c_byte))
+        type_exists = stream.read_ctype(ctypes.c_byte)
+        stream.seek(ctypes.sizeof(ctypes.c_byte), SEEK_CUR)
+
+        return type_exists
+
+    def to_python(self, ctype_object, *args, **kwargs):
+        if getattr(ctype_object, 'status_code', 0) == 0:
+            result = {
+                'type_exists': Bool.to_python(ctype_object.type_exists)
+            }
+
+            if hasattr(ctype_object, 'body'):
+                result.update(body_struct.to_python(ctype_object.body))
+
+            if hasattr(ctype_object, 'enums'):
+                result['enums'] = enum_struct.to_python(ctype_object.enums)
+
+            if hasattr(ctype_object, 'schema'):
+                result['schema'] = {
+                    x['schema_id']: [
+                        z['schema_field_id'] for z in x['schema_fields']
+                    ]
+                    for x in schema_struct.to_python(ctype_object.schema)
+                }
             return result

@@ -15,9 +15,10 @@
 
 from typing import Iterable, Union
 
+from pyignite.connection import AioConnection, Connection
 from pyignite.datatypes import Bool, Int, Long, UUIDObject
 from pyignite.datatypes.internal import StructArray, Conditional, Struct
-from pyignite.queries import Query
+from pyignite.queries import Query, query_perform
 from pyignite.queries.op_codes import OP_CACHE_PARTITIONS
 from pyignite.utils import is_iterable
 from .result import APIResult
@@ -67,10 +68,7 @@ partition_mapping = StructArray([
 ])
 
 
-def cache_get_node_partitions(
-    conn: 'Connection', caches: Union[int, Iterable[int]],
-    query_id: int = None,
-) -> APIResult:
+def cache_get_node_partitions(conn: 'Connection', caches: Union[int, Iterable[int]], query_id: int = None) -> APIResult:
     """
     Gets partition mapping for an Ignite cache or a number of caches. See
     “IEP-23: Best Effort Affinity for thin clients”.
@@ -82,27 +80,18 @@ def cache_get_node_partitions(
      is generated,
     :return: API result data object.
     """
-    query_struct = Query(
-        OP_CACHE_PARTITIONS,
-        [
-            ('cache_ids', cache_ids),
-        ],
-        query_id=query_id
-    )
-    if not is_iterable(caches):
-        caches = [caches]
+    return __cache_get_node_partitions(conn, caches, query_id)()
 
-    result = query_struct.perform(
-        conn,
-        query_params={
-            'cache_ids': [{'cache_id': cache} for cache in caches],
-        },
-        response_config=[
-            ('version_major', Long),
-            ('version_minor', Int),
-            ('partition_mapping', partition_mapping),
-        ],
-    )
+
+async def cache_get_node_partitions_async(conn: 'AioConnection', caches: Union[int, Iterable[int]],
+                                          query_id: int = None) -> APIResult:
+    """
+    Async version of cache_get_node_partitions.
+    """
+    return await __cache_get_node_partitions(conn, caches, query_id)()
+
+
+def __post_process_partitions(result):
     if result.status == 0:
         # tidying up the result
         value = {
@@ -133,5 +122,30 @@ def cache_get_node_partitions(
                     for p in partition_map['node_mapping']
                 }
         result.value = value
-
     return result
+
+
+def __cache_get_node_partitions(conn, caches, query_id):
+    query_struct = Query(
+        OP_CACHE_PARTITIONS,
+        [
+            ('cache_ids', cache_ids),
+        ],
+        query_id=query_id
+    )
+    if not is_iterable(caches):
+        caches = [caches]
+
+    return query_perform(
+        query_struct,
+        conn,
+        query_params={
+            'cache_ids': [{'cache_id': cache} for cache in caches],
+        },
+        response_config=[
+            ('version_major', Long),
+            ('version_minor', Int),
+            ('partition_mapping', partition_mapping),
+        ],
+        post_process_fun=__post_process_partitions
+    )

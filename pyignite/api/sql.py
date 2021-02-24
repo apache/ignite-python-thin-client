@@ -15,23 +15,18 @@
 
 from typing import Union
 
-from pyignite.constants import *
-from pyignite.datatypes import (
-    AnyDataArray, AnyDataObject, Bool, Byte, Int, Long, Map, Null, String,
-    StructArray,
-)
+from pyignite.connection import AioConnection, Connection
+from pyignite.datatypes import AnyDataArray, AnyDataObject, Bool, Byte, Int, Long, Map, Null, String, StructArray
 from pyignite.datatypes.sql import StatementType
-from pyignite.queries import Query
+from pyignite.queries import Query, query_perform
 from pyignite.queries.op_codes import *
 from pyignite.utils import cache_id, deprecated
 from .result import APIResult
+from ..queries.response import SQLResponse
 
 
-def scan(
-    conn: 'Connection', cache: Union[str, int], page_size: int,
-    partitions: int = -1, local: bool = False, binary: bool = False,
-    query_id: int = None,
-) -> APIResult:
+def scan(conn: 'Connection', cache: Union[str, int], page_size: int, partitions: int = -1, local: bool = False,
+         binary: bool = False, query_id: int = None) -> APIResult:
     """
     Performs scan query.
 
@@ -58,7 +53,24 @@ def scan(
      * `more`: bool, True if more data is available for subsequent
        ‘scan_cursor_get_page’ calls.
     """
+    return __scan(conn, cache, page_size, partitions, local, binary, query_id)()
 
+
+async def scan_async(conn: 'AioConnection', cache: Union[str, int], page_size: int, partitions: int = -1,
+                     local: bool = False, binary: bool = False,query_id: int = None) -> APIResult:
+    """
+    Async version of scan.
+    """
+    return await __scan(conn, cache, page_size, partitions, local, binary, query_id)()
+
+
+def __query_result_post_process(result):
+    if result.status == 0:
+        result.value = dict(result.value)
+    return result
+
+
+def __scan(conn, cache, page_size, partitions, local, binary, query_id):
     query_struct = Query(
         OP_QUERY_SCAN,
         [
@@ -71,8 +83,8 @@ def scan(
         ],
         query_id=query_id,
     )
-    result = query_struct.perform(
-        conn,
+    return query_perform(
+        query_struct, conn,
         query_params={
             'hash_code': cache_id(cache),
             'flag': 1 if binary else 0,
@@ -86,15 +98,11 @@ def scan(
             ('data', Map),
             ('more', Bool),
         ],
+        post_process_fun=__query_result_post_process
     )
-    if result.status == 0:
-        result.value = dict(result.value)
-    return result
 
 
-def scan_cursor_get_page(
-    conn: 'Connection', cursor: int, query_id: int = None,
-) -> APIResult:
+def scan_cursor_get_page(conn: 'Connection', cursor: int, query_id: int = None) -> APIResult:
     """
     Fetches the next scan query cursor page by cursor ID that is obtained
     from `scan` function.
@@ -114,7 +122,14 @@ def scan_cursor_get_page(
      * `more`: bool, True if more data is available for subsequent
        ‘scan_cursor_get_page’ calls.
     """
+    return __scan_cursor_get_page(conn, cursor, query_id)()
 
+
+async def scan_cursor_get_page_async(conn: 'AioConnection', cursor: int, query_id: int = None) -> APIResult:
+    return await __scan_cursor_get_page(conn, cursor, query_id)()
+
+
+def __scan_cursor_get_page(conn, cursor, query_id):
     query_struct = Query(
         OP_QUERY_SCAN_CURSOR_GET_PAGE,
         [
@@ -122,8 +137,8 @@ def scan_cursor_get_page(
         ],
         query_id=query_id,
     )
-    result = query_struct.perform(
-        conn,
+    return query_perform(
+        query_struct, conn,
         query_params={
             'cursor': cursor,
         },
@@ -131,10 +146,8 @@ def scan_cursor_get_page(
             ('data', Map),
             ('more', Bool),
         ],
+        post_process_fun=__query_result_post_process
     )
-    if result.status == 0:
-        result.value = dict(result.value)
-    return result
 
 
 @deprecated(version='1.2.0', reason="This API is deprecated and will be removed in the following major release. "
@@ -322,6 +335,31 @@ def sql_fields(
      * `more`: bool, True if more data is available for subsequent
        ‘sql_fields_cursor_get_page’ calls.
     """
+    return __sql_fields(conn, cache, query_str, page_size, query_args, schema, statement_type, distributed_joins,
+                        local, replicated_only, enforce_join_order, collocated, lazy, include_field_names, max_rows,
+                        timeout, binary, query_id)()
+
+
+async def sql_fields_async(
+        conn: 'AioConnection', cache: Union[str, int],
+        query_str: str, page_size: int, query_args=None, schema: str = None,
+        statement_type: int = StatementType.ANY, distributed_joins: bool = False,
+        local: bool = False, replicated_only: bool = False,
+        enforce_join_order: bool = False, collocated: bool = False,
+        lazy: bool = False, include_field_names: bool = False, max_rows: int = -1,
+        timeout: int = 0, binary: bool = False, query_id: int = None
+) -> APIResult:
+    """
+    Async version of sql_fields.
+    """
+    return await __sql_fields(conn, cache, query_str, page_size, query_args, schema, statement_type, distributed_joins,
+                              local, replicated_only, enforce_join_order, collocated, lazy, include_field_names,
+                              max_rows, timeout, binary, query_id)()
+
+
+def __sql_fields(conn, cache, query_str, page_size, query_args, schema, statement_type, distributed_joins, local,
+                 replicated_only, enforce_join_order, collocated, lazy, include_field_names, max_rows, timeout,
+                 binary, query_id):
     if query_args is None:
         query_args = []
 
@@ -346,10 +384,11 @@ def sql_fields(
             ('include_field_names', Bool),
         ],
         query_id=query_id,
+        response_type=SQLResponse
     )
 
-    return query_struct.perform(
-        conn,
+    return query_perform(
+        query_struct, conn,
         query_params={
             'hash_code': cache_id(cache),
             'flag': 1 if binary else 0,
@@ -368,15 +407,12 @@ def sql_fields(
             'timeout': timeout,
             'include_field_names': include_field_names,
         },
-        sql=True,
         include_field_names=include_field_names,
         has_cursor=True,
     )
 
 
-def sql_fields_cursor_get_page(
-    conn: 'Connection', cursor: int, field_count: int, query_id: int = None,
-) -> APIResult:
+def sql_fields_cursor_get_page(conn: 'Connection', cursor: int, field_count: int, query_id: int = None) -> APIResult:
     """
     Retrieves the next query result page by cursor ID from `sql_fields`.
 
@@ -396,7 +432,18 @@ def sql_fields_cursor_get_page(
      * `more`: bool, True if more data is available for subsequent
        ‘sql_fields_cursor_get_page’ calls.
     """
+    return __sql_fields_cursor_get_page(conn, cursor, field_count, query_id)()
 
+
+async def sql_fields_cursor_get_page_async(conn: 'AioConnection', cursor: int, field_count: int,
+                                           query_id: int = None) -> APIResult:
+    """
+    Async version sql_fields_cursor_get_page.
+    """
+    return await __sql_fields_cursor_get_page(conn, cursor, field_count, query_id)()
+
+
+def __sql_fields_cursor_get_page(conn, cursor, field_count, query_id):
     query_struct = Query(
         OP_QUERY_SQL_FIELDS_CURSOR_GET_PAGE,
         [
@@ -404,16 +451,20 @@ def sql_fields_cursor_get_page(
         ],
         query_id=query_id,
     )
-    result = query_struct.perform(
-        conn,
+    return query_perform(
+        query_struct, conn,
         query_params={
             'cursor': cursor,
         },
         response_config=[
             ('data', StructArray([(f'field_{i}', AnyDataObject) for i in range(field_count)])),
             ('more', Bool),
-        ]
+        ],
+        post_process_fun=__post_process_sql_fields_cursor
     )
+
+
+def __post_process_sql_fields_cursor(result):
     if result.status != 0:
         return result
 
@@ -427,9 +478,7 @@ def sql_fields_cursor_get_page(
     return result
 
 
-def resource_close(
-    conn: 'Connection', cursor: int, query_id: int = None
-) -> APIResult:
+def resource_close(conn: 'Connection', cursor: int, query_id: int = None) -> APIResult:
     """
     Closes a resource, such as query cursor.
 
@@ -441,7 +490,14 @@ def resource_close(
     :return: API result data object. Contains zero status on success,
      non-zero status and an error description otherwise.
     """
+    return __resource_close(conn, cursor, query_id)()
 
+
+async def resource_close_async(conn: 'AioConnection', cursor: int, query_id: int = None) -> APIResult:
+    return await __resource_close(conn, cursor, query_id)()
+
+
+def __resource_close(conn, cursor, query_id):
     query_struct = Query(
         OP_RESOURCE_CLOSE,
         [
@@ -449,9 +505,9 @@ def resource_close(
         ],
         query_id=query_id,
     )
-    return query_struct.perform(
-        conn,
+    return query_perform(
+        query_struct, conn,
         query_params={
             'cursor': cursor,
-        },
+        }
     )

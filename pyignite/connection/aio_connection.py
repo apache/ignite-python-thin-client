@@ -28,68 +28,43 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
+from asyncio import Lock, AbstractEventLoop
 from collections import OrderedDict
-import socket
+from io import BytesIO
 from typing import Union
 
-from pyignite.constants import *
-from pyignite.exceptions import (
-    HandshakeError, ParameterError, SocketError, connection_errors, AuthenticationError,
-)
+from pyignite.constants import PROTOCOLS, IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT, PROTOCOL_BYTE_ORDER
+from pyignite.exceptions import HandshakeError, SocketError, connection_errors, AuthenticationError
 from pyignite.datatypes import Byte, Int, Short, String, UUIDObject
 from pyignite.datatypes.internal import Struct
+from .connection import CLIENT_STATUS_AUTH_FAILURE
 
 from .handshake import HandshakeRequest, HandshakeResponse
-from .ssl import wrap
+from .ssl import create_ssl_context, check_ssl_params
 from ..stream import BinaryStream, READ_BACKWARD
 
-CLIENT_STATUS_AUTH_FAILURE = 2000
 
-
-class Connection:
+class AioConnection:
     """
-    This is a `pyignite` class, that represents a connection to Ignite
-    node. It serves multiple purposes:
-
-     * socket wrapper. Detects fragmentation and network errors. See also
-       https://docs.python.org/3/howto/sockets.html,
-     * binary protocol connector. Incapsulates handshake and failover reconnection.
     """
 
-    _socket = None
+    _reader = None
+    _writer = None
     _failed = None
+    _loop = None
+    _mux = None
 
     client = None
     host = None
     port = None
-    timeout = None
     username = None
     password = None
     ssl_params = {}
     uuid = None
 
-    @staticmethod
-    def _check_ssl_params(params):
-        expected_args = [
-            'use_ssl',
-            'ssl_version',
-            'ssl_ciphers',
-            'ssl_cert_reqs',
-            'ssl_keyfile',
-            'ssl_keyfile_password',
-            'ssl_certfile',
-            'ssl_ca_certfile',
-        ]
-        for param in params:
-            if param not in expected_args:
-                raise ParameterError((
-                    'Unexpected parameter for connection initialization: `{}`'
-                ).format(param))
-
-    def __init__(
-        self, client: 'Client', timeout: float = 2.0,
-        username: str = None, password: str = None, **ssl_params
-    ):
+    def __init__(self, client: 'Client', username: str = None, password: str = None,
+                 loop: AbstractEventLoop = None, **ssl_params):
         """
         Initialize connection.
 
@@ -131,19 +106,28 @@ class Connection:
         :param password: (optional) password to authenticate to Ignite cluster.
         """
         self.client = client
-        self.timeout = timeout
         self.username = username
         self.password = password
-        self._check_ssl_params(ssl_params)
+        check_ssl_params(ssl_params)
+
         if self.username and self.password and 'use_ssl' not in ssl_params:
             ssl_params['use_ssl'] = True
+
         self.ssl_params = ssl_params
+
+        if loop:
+            self._loop = loop
+        else:
+            self._loop = asyncio.get_event_loop()
+
+        self.ssl_params = ssl_params
+        self._mux = Lock()
         self._failed = False
 
     @property
     def closed(self) -> bool:
         """ Tells if socket is closed. """
-        return self._socket is None
+        return self._writer is None
 
     @property
     def failed(self) -> bool:
@@ -162,8 +146,6 @@ class Connection:
     def __repr__(self) -> str:
         return '{}:{}'.format(self.host or '?', self.port or '?')
 
-    _wrap = wrap
-
     def get_protocol_version(self):
         """
         Returns the tuple of major, minor, and revision numbers of the used
@@ -172,15 +154,17 @@ class Connection:
         """
         return self.client.protocol_version
 
-    def connect(
-        self, host: str = None, port: int = None
-    ) -> Union[dict, OrderedDict]:
+    async def connect(self, host: str = None, port: int = None) -> Union[dict, OrderedDict]:
         """
         Connect to the given server node with protocol version fallback.
 
         :param host: Ignite server node's host name or IP,
         :param port: Ignite server node's port number.
         """
+        async with self._mux:
+            return await self._connect(host, port)
+
+    async def _connect(self, host: str = None, port: int = None) -> Union[dict, OrderedDict]:
         detecting_protocol = False
 
         # choose highest version first
@@ -189,11 +173,11 @@ class Connection:
             self.client.protocol_version = max(PROTOCOLS)
 
         try:
-            result = self._connect_version(host, port)
+            result = await self._connect_version(host, port)
         except HandshakeError as e:
             if e.expected_version in PROTOCOLS:
                 self.client.protocol_version = e.expected_version
-                result = self._connect_version(host, port)
+                result = await self._connect_version(host, port)
             else:
                 raise e
         except connection_errors:
@@ -203,11 +187,12 @@ class Connection:
             raise
 
         # connection is ready for end user
-        self.uuid = result.node_uuid  # version-specific (1.4+)
+        self.uuid = result.get('node_uuid', None)  # version-specific (1.4+)
+
         self.failed = False
         return result
 
-    def _connect_version(
+    async def _connect_version(
         self, host: str = None, port: int = None,
     ) -> Union[dict, OrderedDict]:
         """
@@ -221,10 +206,8 @@ class Connection:
         host = host or IGNITE_DEFAULT_HOST
         port = port or IGNITE_DEFAULT_PORT
 
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._socket.settimeout(self.timeout)
-        self._socket = self._wrap(self._socket)
-        self._socket.connect((host, port))
+        ssl_context = create_ssl_context(self.ssl_params)
+        self._reader, self._writer = await asyncio.open_connection(host, port, ssl=ssl_context, loop=self._loop)
 
         protocol_version = self.client.protocol_version
 
@@ -235,14 +218,14 @@ class Connection:
         )
 
         with BinaryStream(self) as stream:
-            hs_request.from_python(stream)
-            self.send(stream.getbuffer(), reconnect=False)
+            await hs_request.from_python_async(stream)
+            await self._send(stream.getbuffer(), reconnect=False)
 
-        with BinaryStream(self, self.recv(reconnect=False)) as stream:
-            hs_response = HandshakeResponse.parse(stream, self.get_protocol_version())
+        with BinaryStream(self, await self._recv(reconnect=False)) as stream:
+            hs_response = await HandshakeResponse.parse_async(stream, self.get_protocol_version())
 
             if hs_response.op_code == 0:
-                self.close()
+                self._close()
 
                 error_text = f'Handshake error: {hs_response.message}'
                 # if handshake fails for any reason other than protocol mismatch
@@ -260,91 +243,77 @@ class Connection:
             self.host, self.port = host, port
             return hs_response
 
-    def reconnect(self):
+    async def reconnect(self):
+        with self._mux:
+            return await self._reconnect()
+
+    async def _reconnect(self):
         # do not reconnect if connection is already working
         # or was closed on purpose
         if not self.failed:
             return
 
-        self.close()
+        self._close()
 
         # connect and silence the connection errors
         try:
-            self.connect(self.host, self.port)
+            await self._connect(self.host, self.port)
         except connection_errors:
             pass
 
-    def send(self, data: Union[bytes, bytearray, memoryview], flags=None, reconnect=True):
-        """
-        Send data down the socket.
+    async def send(self, data: Union[bytes, bytearray, memoryview]):
+        async with self._mux:
+            return await self._send(data)
 
-        :param data: bytes to send,
-        :param flags: (optional) OS-specific flags.
-        :param reconnect: (optional) reconnect on failure, default True.
-        """
+    async def _send(self, data: Union[bytes, bytearray, memoryview], reconnect=True):
         if self.closed:
             raise SocketError('Attempt to use closed connection.')
-
-        kwargs = {}
-        if flags is not None:
-            kwargs['flags'] = flags
 
         try:
-            self._socket.sendall(data, **kwargs)
+            self._writer.write(data)
+            await self._writer.drain()
         except connection_errors:
             self.failed = True
-            self.reconnect()
+            if reconnect:
+                await self._reconnect()
             raise
 
-    def recv(self, flags=None, reconnect=True) -> bytearray:
-        """
-        Receive data from the socket.
+    async def recv(self) -> bytearray:
+        async with self._mux:
+            return await self._recv()
 
-        :param flags: (optional) OS-specific flags.
-        :param reconnect: (optional) reconnect on failure, default True.
-        """
-        def _recv(buffer, num_bytes):
-            bytes_to_receive = num_bytes
-            while bytes_to_receive > 0:
-                try:
-                    bytes_rcvd = self._socket.recv_into(buffer, bytes_to_receive, **kwargs)
-                    if bytes_rcvd == 0:
-                        raise SocketError('Connection broken.')
-                except connection_errors:
-                    self.failed = True
-                    if reconnect:
-                        self.reconnect()
-                    raise
-
-                buffer = buffer[bytes_rcvd:]
-                bytes_to_receive -= bytes_rcvd
-
+    async def _recv(self, reconnect=True) -> bytearray:
         if self.closed:
             raise SocketError('Attempt to use closed connection.')
 
-        kwargs = {}
-        if flags is not None:
-            kwargs['flags'] = flags
-
-        data = bytearray(4)
-        _recv(memoryview(data), 4)
-        response_len = int.from_bytes(data, PROTOCOL_BYTE_ORDER)
-
-        data.extend(bytearray(response_len))
-        _recv(memoryview(data)[4:], response_len)
-        return data
-
-    def close(self):
-        """
-        Try to mark socket closed, then unlink it. This is recommended but
-        not required, since sockets are automatically closed when
-        garbage-collected.
-        """
-        if self._socket:
+        with BytesIO() as stream:
             try:
-                self._socket.shutdown(socket.SHUT_RDWR)
-                self._socket.close()
+                buf = await self._reader.readexactly(4)
+                response_len = int.from_bytes(buf, PROTOCOL_BYTE_ORDER)
+
+                stream.write(buf)
+
+                stream.write(await self._reader.readexactly(response_len))
+            except connection_errors:
+                self.failed = True
+                if reconnect:
+                    await self._reconnect()
+                raise
+
+            return bytearray(stream.getbuffer())
+
+    async def close(self):
+        async with self._mux:
+            self._close()
+
+    def _close(self):
+        """
+        Close connection.
+        """
+        if self._writer:
+            try:
+                self._writer.close()
             except connection_errors:
                 pass
 
-            self._socket = None
+            self._writer, self._reader = None, None

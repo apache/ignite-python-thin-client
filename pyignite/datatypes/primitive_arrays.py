@@ -18,8 +18,6 @@ from io import SEEK_CUR
 from typing import Any
 
 from pyignite.constants import *
-from . import Null
-from .base import IgniteDataType
 from .null_object import Nullable
 from .primitive import *
 from .type_codes import *
@@ -35,7 +33,7 @@ __all__ = [
 ]
 
 
-class PrimitiveArray(IgniteDataType, Nullable):
+class PrimitiveArray(Nullable):
     """
     Base class for array of primitives. Payload-only.
     """
@@ -43,11 +41,6 @@ class PrimitiveArray(IgniteDataType, Nullable):
     _type_id = None
     primitive_type = None
     type_code = None
-
-    @staticmethod
-    def hashcode(value: Any) -> int:
-        # Arrays are not supported as keys at the moment.
-        return 0
 
     @classmethod
     def build_header_class(cls):
@@ -312,7 +305,5 @@ class BoolArrayObject(PrimitiveArrayObject):
         length = getattr(ctype_object, "length", None)
         if length is None:
             return None
-        result = [False] * length
-        for i in range(length):
-            result[i] = ctype_object.data[i] != 0
-        return result
+
+        return [ctype_object.data[i] != 0 for i in range(length)]

@@ -112,10 +112,16 @@ class PropBase:
         return prop_class
 
     @classmethod
+    async def parse_async(cls, stream):
+        return cls.parse(stream)
+
+    @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
-        return cls.prop_data_class.to_python(
-            ctype_object.data, *args, **kwargs
-        )
+        return cls.prop_data_class.to_python(ctype_object.data, *args, **kwargs)
+
+    @classmethod
+    async def to_python_async(cls, ctype_object, *args, **kwargs):
+        return cls.to_python(ctype_object, *args, **kwargs)
 
     @classmethod
     def from_python(cls, stream, value):
@@ -124,6 +130,10 @@ class PropBase:
         header.prop_code = cls.prop_code
         stream.write(bytes(header))
         cls.prop_data_class.from_python(stream, value)
+
+    @classmethod
+    async def from_python_async(cls, stream, value):
+        return cls.to_python(stream, value)
 
 
 class PropName(PropBase):

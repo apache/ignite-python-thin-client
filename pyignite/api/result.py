@@ -32,7 +32,7 @@ class APIResult:
     message = 'Success'
     value = None
 
-    def __init__(self, response: 'Response'):
+    def __init__(self, response):
         self.status = getattr(response, 'status_code', OP_SUCCESS)
         self.query_id = response.query_id
         if hasattr(response, 'error_message'):

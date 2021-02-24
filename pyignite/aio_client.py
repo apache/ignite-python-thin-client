@@ -12,90 +12,39 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-"""
-This module contains `Client` class, that lets you communicate with Apache
-Ignite cluster node by the means of Ignite binary client protocol.
-
-To start the communication, you may connect to the node of their choice
-by instantiating the `Client` object and calling
-:py:meth:`~pyignite.connection.Connection.connect` method with proper
-parameters.
-
-The whole storage room of Ignite cluster is split up into named structures,
-called caches. For accessing the particular cache in key-value style
-(a-la Redis or memcached) you should first create
-the :class:`~pyignite.cache.Cache` object by calling
-:py:meth:`~pyignite.client.Client.create_cache` or
-:py:meth:`~pyignite.client.Client.get_or_create_cache()` methods, than call
-:class:`~pyignite.cache.Cache` methods. If you wish to create a cache object
-without communicating with server, there is also a
-:py:meth:`~pyignite.client.Client.get_cache()` method that does just that.
-
-For using Ignite SQL, call :py:meth:`~pyignite.client.Client.sql` method.
-It returns a generator with result rows.
-
-:py:meth:`~pyignite.client.Client.register_binary_type` and
-:py:meth:`~pyignite.client.Client.query_binary_type` methods operates
-the local (class-wise) registry for Ignite Complex objects.
-"""
-
+import asyncio
 from collections import defaultdict, OrderedDict
 import random
 import re
 from itertools import chain
 from typing import Dict, Iterable, List, Optional, Tuple, Type, Union
 
-from .api.binary import get_binary_type, put_binary_type
-from .api.cache_config import cache_get_names
-from .api.sql import sql_fields, sql_fields_cursor_get_page
-from .cache import Cache
-from .connection import Connection
-from .constants import *
+from .api.binary import get_binary_type_async, put_binary_type_async
+from .api.cache_config import cache_get_names_async
+from .api.sql import sql_fields_async, sql_fields_cursor_get_page_async
+from .aio_cache import AioCache, get_cache, create_cache, get_or_create_cache
+from .connection import AioConnection
+from .constants import IGNITE_DEFAULT_HOST, PROTOCOL_BYTE_ORDER, IGNITE_DEFAULT_PORT
 from .datatypes import BinaryObject
 from .datatypes.internal import tc_map
-from .exceptions import (
-    BinaryTypeError, CacheError, ReconnectError, SQLError, connection_errors,
-)
-from .utils import (
-    cache_id, capitalize, entity_id, schema_id, process_delimiter,
-    status_to_exception, is_iterable,
-)
+from .exceptions import BinaryTypeError, CacheError, ReconnectError, SQLError, connection_errors
+from .utils import cache_id, capitalize, entity_id, schema_id, process_delimiter, status_to_exception, is_iterable
 from .binary import GenericObjectMeta
 
 
-__all__ = ['Client']
+__all__ = ['AioClient']
 
 
-class Client:
+class AioClient:
     """
-    This is a main `pyignite` class, that is build upon the
-    :class:`~pyignite.connection.Connection`. In addition to the attributes,
-    properties and methods of its parent class, `Client` implements
-    the following features:
-
-     * cache factory. Cache objects are used for key-value operations,
-     * Ignite SQL endpoint,
-     * binary types registration endpoint.
+    Asynchronous Client implementation.
     """
-
-    _registry = defaultdict(dict)
-    _compact_footer: bool = None
-    _connection_args: Dict = None
-    _current_node: int = None
-    _nodes: List[Connection] = None
 
     # used for Complex object data class names sanitizing
     _identifier = re.compile(r'[^0-9a-zA-Z_.+$]', re.UNICODE)
     _ident_start = re.compile(r'^[^a-zA-Z_]+', re.UNICODE)
 
-    affinity_version: Optional[Tuple] = None
-    protocol_version: Optional[Tuple] = None
-
-    def __init__(
-        self, compact_footer: bool = None, partition_aware: bool = False,
-        **kwargs
-    ):
+    def __init__(self, compact_footer: bool = None, partition_aware: bool = False, **kwargs):
         """
         Initialize client.
 
@@ -113,9 +62,16 @@ class Client:
         """
         self._compact_footer = compact_footer
         self._connection_args = kwargs
+
+        self._compact_footer = compact_footer
+        self._registry = {}
+        self._registry_mux = asyncio.Lock()
+        self._partition_aware = partition_aware
+
         self._nodes = []
         self._current_node = 0
-        self._partition_aware = partition_aware
+
+        self.protocol_version = None
         self.affinity_version = (0, 0)
 
     def get_protocol_version(self) -> Optional[Tuple]:
@@ -136,12 +92,9 @@ class Client:
 
     @property
     def partition_awareness_supported_by_protocol(self):
-        # TODO: Need to re-factor this. I believe, we need separate class or
-        #  set of functions to work with protocol versions without manually
-        #  comparing versions with just some random tuples
         return self.protocol_version is not None and self.protocol_version >= (1, 4, 0)
 
-    def connect(self, *args):
+    async def connect(self, *args):
         """
         Connect to Ignite cluster node(s).
 
@@ -163,44 +116,53 @@ class Client:
         else:
             raise ConnectionError('Connection parameters are not valid.')
 
-        # the following code is quite twisted, because the protocol version
-        # is initially unknown
-
-        # TODO: open first node in foreground, others − in background
         for i, node in enumerate(nodes):
             host, port = node
-            conn = Connection(self, **self._connection_args)
+            conn = AioConnection(self, **self._connection_args)
             conn.host = host
             conn.port = port
 
-            try:
-                if self.protocol_version is None or self.partition_aware:
-                    # open connection before adding to the pool
-                    conn.connect(host, port)
+            if not self.partition_aware:
+                try:
+                    if self.protocol_version is None:
+                        # open connection before adding to the pool
+                        await conn.connect(host, port)
 
-                    # now we have the protocol version
-                    if not self.partition_aware:
                         # do not try to open more nodes
                         self._current_node = i
 
-            except connection_errors:
-                conn.failed = True
-                if self.partition_aware:
-                    # schedule the reconnection
-                    conn.reconnect()
+                except connection_errors:
+                    conn.failed = True
+                    if self.partition_aware:
+                        # schedule the reconnection
+                        await conn.reconnect()
 
             self._nodes.append(conn)
+
+        if self.partition_aware:
+            connect_results = await asyncio.gather(
+                *[conn.connect(conn.host, conn.port) for conn in self._nodes],
+                return_exceptions=True
+            )
+
+            reconnect_coro = []
+            for i, res in enumerate(connect_results):
+                if isinstance(res, Exception):
+                    if isinstance(res, connection_errors):
+                        reconnect_coro.append(self._nodes[i].reconnect())
+                    else:
+                        raise res
+
+            await asyncio.gather(*reconnect_coro, return_exceptions=True)
 
         if self.protocol_version is None:
             raise ReconnectError('Can not connect.')
 
-    def close(self):
-        for conn in self._nodes:
-            conn.close()
+    async def close(self):
+        await asyncio.gather(*[conn.close() for conn in self._nodes], return_exceptions=True)
         self._nodes.clear()
 
-    @property
-    def random_node(self) -> Connection:
+    async def random_node(self) -> AioConnection:
         """
         Returns random usable node.
 
@@ -211,9 +173,7 @@ class Client:
         if self.partition_aware:
             # if partition awareness is used just pick a random connected node
             try:
-                return random.choice(
-                    list(n for n in self._nodes if n.alive)
-                )
+                return random.choice([n for n in self._nodes if n.alive])
             except IndexError:
                 # cannot choose from an empty sequence
                 raise ReconnectError('Can not reconnect: out of nodes.') from None
@@ -226,7 +186,7 @@ class Client:
                 return node
 
             # close current (supposedly failed) node
-            self._nodes[self._current_node].close()
+            await self._nodes[self._current_node].close()
 
             # advance the node index
             self._current_node += 1
@@ -234,11 +194,10 @@ class Client:
                 self._current_node = 0
 
             # prepare the list of node indexes to try to connect to
-            num_nodes = len(self._nodes)
-            for i in chain(range(self._current_node, num_nodes), range(self._current_node)):
+            for i in chain(range(self._current_node, len(self._nodes)), range(self._current_node)):
                 node = self._nodes[i]
                 try:
-                    node.connect(node.host, node.port)
+                    await node.connect(node.host, node.port)
                 except connection_errors:
                     pass
                 else:
@@ -248,7 +207,7 @@ class Client:
             raise ReconnectError('Can not reconnect: out of nodes.')
 
     @status_to_exception(BinaryTypeError)
-    def get_binary_type(self, binary_type: Union[str, int]) -> dict:
+    async def get_binary_type(self, binary_type: Union[str, int]) -> dict:
         """
         Gets the binary type information from the Ignite server. This is quite
         a low-level implementation of Ignite thin client protocol's
@@ -290,9 +249,9 @@ class Client:
                 )
             return converted_schema
 
-        conn = self.random_node
+        conn = await self.random_node()
 
-        result = get_binary_type(conn, binary_type)
+        result = await get_binary_type_async(conn, binary_type)
         if result.status != 0 or not result.value['type_exists']:
             return result
 
@@ -320,21 +279,18 @@ class Client:
 
         # use compact schema by default, but leave initial (falsy) backing
         # value unchanged
-        return self.__class__._compact_footer or self.__class__._compact_footer is None
+        return self._compact_footer or self._compact_footer is None
 
     @compact_footer.setter
     def compact_footer(self, value: bool):
         # normally schema approach should not change
-        if self.__class__._compact_footer not in (value, None):
+        if self._compact_footer not in (value, None):
             raise Warning('Can not change client schema approach.')
         else:
-            self.__class__._compact_footer = value
+            self._compact_footer = value
 
     @status_to_exception(BinaryTypeError)
-    def put_binary_type(
-        self, type_name: str, affinity_key_field: str = None,
-        is_enum=False, schema: dict = None
-    ):
+    async def put_binary_type(self, type_name: str, affinity_key_field: str = None, is_enum=False, schema: dict = None):
         """
         Registers binary type information in cluster. Do not update binary
         registry. This is a literal implementation of Ignite thin client
@@ -350,9 +306,8 @@ class Client:
          When register binary type, pass a dict of field names: field types.
          Binary type with no fields is OK.
         """
-        return put_binary_type(
-            self.random_node, type_name, affinity_key_field, is_enum, schema
-        )
+        conn = await self.random_node()
+        return await put_binary_type_async(conn, type_name, affinity_key_field, is_enum, schema)
 
     @staticmethod
     def _create_dataclass(type_name: str, schema: OrderedDict = None) -> Type:
@@ -366,22 +321,23 @@ class Client:
         schema = schema or {}
         return GenericObjectMeta(type_name, (), {}, schema=schema)
 
-    def _sync_binary_registry(self, type_id: int):
+    async def _sync_binary_registry(self, type_id: int):
         """
         Reads Complex object description from Ignite server. Creates default
         Complex object classes and puts in registry, if not already there.
 
         :param type_id: Complex object type ID.
         """
-        type_info = self.get_binary_type(type_id)
+        type_info = await self.get_binary_type(type_id)
         if type_info['type_exists']:
-            for schema in type_info['schemas']:
-                if not self._registry[type_id].get(schema_id(schema), None):
-                    data_class = self._create_dataclass(
-                        self._create_type_name(type_info['type_name']),
-                        schema,
-                    )
-                    self._registry[type_id][schema_id(schema)] = data_class
+            async with self._registry_mux:
+                for schema in type_info['schemas']:
+                    if not self._registry[type_id].get(schema_id(schema), None):
+                        data_class = self._create_dataclass(
+                            self._create_type_name(type_info['type_name']),
+                            schema
+                        )
+                        self._registry[type_id][schema_id(schema)] = data_class
 
     @classmethod
     def _create_type_name(cls, type_name: str) -> str:
@@ -412,9 +368,7 @@ class Client:
 
         return type_name
 
-    def register_binary_type(
-        self, data_class: Type, affinity_key_field: str = None,
-    ):
+    async def register_binary_type_async(self, data_class: Type, affinity_key_field: str = None):
         """
         Register the given class as a representation of a certain Complex
         object type. Discards autogenerated or previously registered class.
@@ -422,20 +376,13 @@ class Client:
         :param data_class: Complex object class,
         :param affinity_key_field: (optional) affinity parameter.
         """
-        if not self.query_binary_type(
-            data_class.type_id, data_class.schema_id
-        ):
-            self.put_binary_type(
-                data_class.type_name,
-                affinity_key_field,
-                schema=data_class.schema,
-            )
-        self._registry[data_class.type_id][data_class.schema_id] = data_class
+        if not await self.query_binary_type(data_class.type_id, data_class.schema_id):
+            await self.put_binary_type(data_class.type_name, affinity_key_field, schema=data_class.schema)
 
-    def query_binary_type(
-        self, binary_type: Union[int, str], schema: Union[int, dict] = None,
-        sync: bool = True
-    ):
+        async with self._registry_mux:
+            self._registry[data_class.type_id][data_class.schema_id] = data_class
+
+    async def query_binary_type(self, binary_type: Union[int, str], schema: Union[int, dict] = None, sync: bool = True):
         """
         Queries the registry of Complex object classes.
 
@@ -449,21 +396,22 @@ class Client:
         type_id = entity_id(binary_type)
         s_id = schema_id(schema)
 
-        if schema:
-            try:
-                result = self._registry[type_id][s_id]
-            except KeyError:
-                result = None
-        else:
-            result = self._registry[type_id]
+        async with self._registry_mux:
+            if schema:
+                try:
+                    result = self._registry[type_id][s_id]
+                except KeyError:
+                    result = None
+            else:
+                result = self._registry[type_id]
 
         if sync and not result:
-            self._sync_binary_registry(type_id)
-            return self.query_binary_type(type_id, s_id, sync=False)
+            await self._sync_binary_registry(type_id)
+            return await self.query_binary_type(type_id, s_id, sync=False)
 
         return result
 
-    def create_cache(self, settings: Union[str, dict]) -> 'Cache':
+    async def create_cache(self, settings: Union[str, dict]) -> 'AioCache':
         """
         Creates Ignite cache by name. Raises `CacheError` if such a cache is
         already exists.
@@ -474,9 +422,9 @@ class Client:
          :ref:`cache creation example <sql_cache_create>`,
         :return: :class:`~pyignite.cache.Cache` object.
         """
-        return Cache(self, settings)
+        return await create_cache(self, settings)
 
-    def get_or_create_cache(self, settings: Union[str, dict]) -> 'Cache':
+    async def get_or_create_cache(self, settings: Union[str, dict]) -> 'AioCache':
         """
         Creates Ignite cache, if not exist.
 
@@ -486,9 +434,9 @@ class Client:
          :ref:`cache creation example <sql_cache_create>`,
         :return: :class:`~pyignite.cache.Cache` object.
         """
-        return Cache(self, settings, with_get=True)
+        return await get_or_create_cache(self, settings)
 
-    def get_cache(self, settings: Union[str, dict]) -> 'Cache':
+    async def get_cache(self, settings: Union[str, dict]) -> 'AioCache':
         """
         Creates Cache object with a given cache name without checking it up
         on server. If such a cache does not exist, some kind of exception
@@ -498,18 +446,19 @@ class Client:
          property is allowed),
         :return: :class:`~pyignite.cache.Cache` object.
         """
-        return Cache(self, settings, get_only=True)
+        return await get_cache(self, settings)
 
     @status_to_exception(CacheError)
-    def get_cache_names(self) -> list:
+    async def get_cache_names(self) -> list:
         """
         Gets existing cache names.
 
         :return: list of cache names.
         """
-        return cache_get_names(self.random_node)
+        conn = await self.random_node()
+        return await cache_get_names_async(conn)
 
-    def sql(
+    async def sql(
         self, query_str: str, page_size: int = 1024,
         query_args: Iterable = None, schema: str = 'PUBLIC',
         statement_type: int = 0, distributed_joins: bool = False,
@@ -517,7 +466,7 @@ class Client:
         enforce_join_order: bool = False, collocated: bool = False,
         lazy: bool = False, include_field_names: bool = False,
         max_rows: int = -1, timeout: int = 0,
-        cache: Union[int, str, Cache] = None
+        cache: Union[int, str, 'AioCache'] = None
     ):
         """
         Runs an SQL query and returns its result.
@@ -556,7 +505,7 @@ class Client:
         :return: generator with result rows as a lists. If
          `include_field_names` was set, the first row will hold field names.
         """
-        def generate_result(value):
+        async def generate_result(value):
             cursor = value['cursor']
             more = value['more']
 
@@ -569,28 +518,26 @@ class Client:
                 yield line
 
             while more:
-                inner_result = sql_fields_cursor_get_page(
-                    conn, cursor, field_count
-                )
+                inner_result = await sql_fields_cursor_get_page_async(conn, cursor, field_count)
+
                 if inner_result.status != 0:
                     raise SQLError(result.message)
+
                 more = inner_result.value['more']
                 for line in inner_result.value['data']:
                     yield line
 
-        conn = self.random_node
+        conn = await self.random_node()
 
-        c_id = cache.cache_id if isinstance(cache, Cache) else cache_id(cache)
+        c_id = cache.cache_id if isinstance(cache, AioCache) else cache_id(cache)
 
         if c_id != 0:
             schema = None
 
-        result = sql_fields(
-            conn, c_id, query_str, page_size, query_args, schema,
-            statement_type, distributed_joins, local, replicated_only,
-            enforce_join_order, collocated, lazy, include_field_names,
-            max_rows, timeout,
-        )
+        result = await sql_fields_async(conn, c_id, query_str, page_size, query_args, schema, statement_type,
+                                        distributed_joins, local, replicated_only, enforce_join_order, collocated,
+                                        lazy, include_field_names, max_rows, timeout)
+
         if result.status != 0:
             raise SQLError(result.message)
 
