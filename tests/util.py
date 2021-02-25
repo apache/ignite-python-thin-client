@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import contextlib
 import glob
 import os
 import shutil
@@ -23,6 +23,26 @@ import re
 import signal
 import subprocess
 import time
+
+from pyignite import Client
+
+
+@contextlib.contextmanager
+def get_client(**kwargs):
+    client = Client(**kwargs)
+    try:
+        yield client
+    finally:
+        client.close()
+
+
+@contextlib.contextmanager
+def get_or_create_cache(client, cache_name):
+    cache = client.get_or_create_cache(cache_name)
+    try:
+        yield cache
+    finally:
+        cache.destroy()
 
 
 def wait_for_condition(condition, interval=0.1, timeout=10, error=None):
@@ -144,8 +164,10 @@ def start_ignite(idx=1, debug=False, use_ssl=False, use_auth=False):
 
 def start_ignite_gen(idx=1, use_ssl=False, use_auth=False):
     srv = start_ignite(idx, use_ssl=use_ssl, use_auth=use_auth)
-    yield srv
-    kill_process_tree(srv.pid)
+    try:
+        yield srv
+    finally:
+        kill_process_tree(srv.pid)
 
 
 def get_log_files(idx=1):

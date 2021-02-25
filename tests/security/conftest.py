@@ -19,12 +19,12 @@ import pytest
 from tests.util import get_test_dir
 
 
-@pytest.fixture(scope='package', autouse=True)
+@pytest.fixture
 def ssl_params():
     yield __create_ssl_param(False)
 
 
-@pytest.fixture(scope='package', autouse=True)
+@pytest.fixture
 def ssl_params_with_password():
     yield __create_ssl_param(True)
 

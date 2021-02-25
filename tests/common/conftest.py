@@ -21,8 +21,18 @@ from tests.util import start_ignite_gen
 
 
 @pytest.fixture(scope='module', autouse=True)
-def server():
-    yield from start_ignite_gen()
+def server1():
+    yield from start_ignite_gen(1)
+
+
+@pytest.fixture(scope='module', autouse=True)
+def server2():
+    yield from start_ignite_gen(2)
+
+
+@pytest.fixture(scope='module', autouse=True)
+def server3():
+    yield from start_ignite_gen(3)
 
 
 @pytest.fixture(scope='module')

@@ -14,18 +14,21 @@
 # limitations under the License.
 import pytest
 
-from pyignite import Client
 from pyignite.exceptions import AuthenticationError
-from tests.util import start_ignite_gen, clear_ignite_work_dir
-
+from tests.util import start_ignite_gen, clear_ignite_work_dir, get_client
 
 DEFAULT_IGNITE_USERNAME = 'ignite'
 DEFAULT_IGNITE_PASSWORD = 'ignite'
 
 
-@pytest.fixture(scope='module', autouse=True)
-def server(cleanup):
-    yield from start_ignite_gen(use_ssl=True, use_auth=True)
+@pytest.fixture(params=['with-ssl', 'without-ssl'])
+def with_ssl(request):
+    return request.param == 'with-ssl'
+
+
+@pytest.fixture(autouse=True)
+def server(with_ssl, cleanup):
+    yield from start_ignite_gen(use_ssl=with_ssl, use_auth=True)
 
 
 @pytest.fixture(scope='module', autouse=True)
@@ -35,12 +38,13 @@ def cleanup():
     clear_ignite_work_dir()
 
 
-def test_auth_success(ssl_params):
-    client = Client(username=DEFAULT_IGNITE_USERNAME, password=DEFAULT_IGNITE_PASSWORD, **ssl_params)
+def test_auth_success(with_ssl, ssl_params):
+    ssl_params['use_ssl'] = with_ssl
 
-    client.connect("127.0.0.1", 10801)
+    with get_client(username=DEFAULT_IGNITE_USERNAME, password=DEFAULT_IGNITE_PASSWORD, **ssl_params) as client:
+        client.connect("127.0.0.1", 10801)
 
-    assert all(node.alive for node in client._nodes)
+        assert all(node.alive for node in client._nodes)
 
 
 @pytest.mark.parametrize(
@@ -51,11 +55,9 @@ def test_auth_success(ssl_params):
         [None, None]
     ]
 )
-def test_connection_error_with_incorrect_config(username, password, ssl_params):
-    if not username or not password:
-        ssl_params['use_ssl'] = True
+def test_auth_failed(username, password, with_ssl, ssl_params):
+    ssl_params['use_ssl'] = with_ssl
 
     with pytest.raises(AuthenticationError):
-        client = Client(username=username, password=password, **ssl_params)
-
-        client.connect("127.0.0.1", 10801)
+        with get_client(username=username, password=password, **ssl_params) as client:
+            client.connect("127.0.0.1", 10801)

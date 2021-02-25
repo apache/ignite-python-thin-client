@@ -12,13 +12,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import pytest
 
-from pyignite import Client
 from pyignite.exceptions import ReconnectError
-
-from tests.util import start_ignite_gen, kill_process_tree
+from tests.util import start_ignite_gen, get_client, get_or_create_cache
 
 
 @pytest.fixture(scope='module', autouse=True)
@@ -33,28 +30,27 @@ def test_connect_ssl_keystore_with_password(ssl_params_with_password):
 def test_connect_ssl(ssl_params):
     __test_connect_ssl(**ssl_params)
 
-
 def __test_connect_ssl(**kwargs):
-    if 'use_ssl' not in kwargs:
-        kwargs['use_ssl'] = True
+    kwargs['use_ssl'] = True
 
-    client = Client(**kwargs)
+    with get_client(**kwargs) as client:
+        client.connect("127.0.0.1", 10801)
 
-    client.connect("127.0.0.1", 10801)
+        with get_or_create_cache(client, 'test-cache') as cache:
+            cache.put(1, 1)
 
-    assert all(node.alive for node in client._nodes)
+            assert cache.get(1) == 1
 
 
 @pytest.mark.parametrize(
-    'ssl_params',
+    'invalid_ssl_params',
     [
         {'use_ssl': False},
         {'use_ssl': True},
-        {'use_ssl': True, 'ssl_keyfile': 'invalid.pem'}
+        {'use_ssl': True, 'ssl_keyfile': 'invalid.pem', 'ssl_certfile': 'invalid.pem'}
     ]
 )
-def test_connection_error_with_incorrect_config(ssl_params):
+def test_connection_error_with_incorrect_config(invalid_ssl_params):
     with pytest.raises(ReconnectError):
-        client = Client(use_ssl=False)
-
-        client.connect([("127.0.0.1", 10801)])
+        with get_client(**invalid_ssl_params) as client:
+            client.connect([("127.0.0.1", 10801)])

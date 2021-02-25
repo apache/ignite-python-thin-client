@@ -12,31 +12,41 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import glob
+import os
 import subprocess
+import sys
 
 import pytest
 
-from tests.util import start_ignite_gen
+from tests.util import get_test_dir, start_ignite_gen
 
 SKIP_LIST = [
     'failover.py',  # it hangs by design
 ]
 
 
-@pytest.fixture(scope='module', autouse=True)
+def examples_scripts_gen():
+    examples_dir = os.path.join(get_test_dir(), '..', 'examples')
+    for script in glob.glob1(examples_dir, '*.py'):
+        if script not in SKIP_LIST:
+            yield os.path.join(examples_dir, script)
+
+
+@pytest.fixture(autouse=True)
 def server():
-    yield from start_ignite_gen(1)
+    yield from start_ignite_gen(idx=0)  # idx=0, because 10800 port is needed for examples.
 
 
 @pytest.mark.examples
-def test_examples():
-    for script in glob.glob1('../examples', '*.py'):
-        if script not in SKIP_LIST:
-            proc = subprocess.run([
-                'python',
-                '../examples/{}'.format(script),
-            ])
+@pytest.mark.parametrize(
+    'example_script',
+    examples_scripts_gen()
+)
+def test_examples(example_script):
+    proc = subprocess.run([
+        sys.executable,
+        example_script
+    ])
 
-            assert proc.returncode == 0
+    assert proc.returncode == 0
