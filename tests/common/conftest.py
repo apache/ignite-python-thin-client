@@ -13,21 +13,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-[tox]
-skipsdist = True
-envlist = py{36,37,38,39}
+import pytest
 
-[testenv]
-passenv = TEAMCITY_VERSION IGNITE_HOME
-envdir = {homedir}/.virtualenvs/pyignite-{envname}
-deps =
-    -r ./requirements/install.txt
-    -r ./requirements/tests.txt
-recreate = True
-usedevelop = True
-commands =
-    pytest {env:PYTESTARGS:} {posargs} --force-cext --examples
+from pyignite import Client
+from pyignite.api import cache_create, cache_destroy
+from tests.util import start_ignite_gen
 
-[testenv:py{36,37,38,39}-jenkins]
-setenv:
-    PYTESTARGS = --junitxml=junit-{envname}.xml
+
+@pytest.fixture(scope='module', autouse=True)
+def server1():
+    yield from start_ignite_gen(1)
+
+
+@pytest.fixture(scope='module', autouse=True)
+def server2():
+    yield from start_ignite_gen(2)
+
+
+@pytest.fixture(scope='module', autouse=True)
+def server3():
+    yield from start_ignite_gen(3)
+
+
+@pytest.fixture(scope='module')
+def client():
+    client = Client()
+
+    client.connect('127.0.0.1', 10801)
+
+    yield client
+
+    client.close()
+
+
+@pytest.fixture
+def cache(client):
+    cache_name = 'my_bucket'
+    conn = client.random_node
+
+    cache_create(conn, cache_name)
+    yield cache_name
+    cache_destroy(conn, cache_name)

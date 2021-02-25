@@ -12,41 +12,38 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import glob
 import os
-import subprocess
-import sys
 
 import pytest
 
-from tests.util import get_test_dir, start_ignite_gen
-
-SKIP_LIST = [
-    'failover.py',  # it hangs by design
-]
+from tests.util import get_test_dir
 
 
-def examples_scripts_gen():
-    examples_dir = os.path.join(get_test_dir(), '..', 'examples')
-    for script in glob.glob1(examples_dir, '*.py'):
-        if script not in SKIP_LIST:
-            yield os.path.join(examples_dir, script)
+@pytest.fixture
+def ssl_params():
+    yield __create_ssl_param(False)
 
 
-@pytest.fixture(autouse=True)
-def server():
-    yield from start_ignite_gen(idx=0)  # idx=0, because 10800 port is needed for examples.
+@pytest.fixture
+def ssl_params_with_password():
+    yield __create_ssl_param(True)
 
 
-@pytest.mark.examples
-@pytest.mark.parametrize(
-    'example_script',
-    examples_scripts_gen()
-)
-def test_examples(example_script):
-    proc = subprocess.run([
-        sys.executable,
-        example_script
-    ])
+def __create_ssl_param(with_password=False):
+    cert_path = os.path.join(get_test_dir(), 'config', 'ssl')
 
-    assert proc.returncode == 0
+    if with_password:
+        cert = os.path.join(cert_path, 'client_with_pass_full.pem')
+        return {
+            'ssl_keyfile': cert,
+            'ssl_keyfile_password': '654321',
+            'ssl_certfile': cert,
+            'ssl_ca_certfile': cert,
+        }
+    else:
+        cert = os.path.join(cert_path, 'client_full.pem')
+        return {
+            'ssl_keyfile': cert,
+            'ssl_certfile': cert,
+            'ssl_ca_certfile': cert
+        }

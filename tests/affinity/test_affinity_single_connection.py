@@ -13,9 +13,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
 
-def test_all_cache_operations_with_partition_aware_client_on_single_server(request, client_partition_aware_single_server):
-    cache = client_partition_aware_single_server.get_or_create_cache(request.node.name)
+from pyignite import Client
+
+
+@pytest.fixture(scope='module')
+def client():
+    client = Client(partition_aware=True)
+    client.connect('127.0.0.1', 10801)
+    yield client
+    client.close()
+
+
+def test_all_cache_operations_with_partition_aware_client_on_single_server(request, client):
+    cache = client.get_or_create_cache(request.node.name)
     key = 1
     key2 = 2
 

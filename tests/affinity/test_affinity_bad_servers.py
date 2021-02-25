@@ -16,22 +16,20 @@
 import pytest
 
 from pyignite.exceptions import ReconnectError
-from tests.util import *
+from tests.util import start_ignite, kill_process_tree
 
 
-def test_client_with_multiple_bad_servers(start_client):
-    client = start_client(partition_aware=True)
+def test_client_with_multiple_bad_servers(client_not_connected):
     with pytest.raises(ReconnectError) as e_info:
-        client.connect([("127.0.0.1", 10900), ("127.0.0.1", 10901)])
+        client_not_connected.connect([("127.0.0.1", 10900), ("127.0.0.1", 10901)])
     assert str(e_info.value) == "Can not connect."
 
 
-def test_client_with_failed_server(request, start_ignite_server, start_client):
-    srv = start_ignite_server(4)
+def test_client_with_failed_server(request, client_not_connected):
+    srv = start_ignite(idx=4)
     try:
-        client = start_client()
-        client.connect([("127.0.0.1", 10804)])
-        cache = client.get_or_create_cache(request.node.name)
+        client_not_connected.connect([("127.0.0.1", 10804)])
+        cache = client_not_connected.get_or_create_cache(request.node.name)
         cache.put(1, 1)
         kill_process_tree(srv.pid)
         with pytest.raises(ConnectionResetError):
@@ -40,17 +38,16 @@ def test_client_with_failed_server(request, start_ignite_server, start_client):
         kill_process_tree(srv.pid)
 
 
-def test_client_with_recovered_server(request, start_ignite_server, start_client):
-    srv = start_ignite_server(4)
+def test_client_with_recovered_server(request, client_not_connected):
+    srv = start_ignite(idx=4)
     try:
-        client = start_client()
-        client.connect([("127.0.0.1", 10804)])
-        cache = client.get_or_create_cache(request.node.name)
+        client_not_connected.connect([("127.0.0.1", 10804)])
+        cache = client_not_connected.get_or_create_cache(request.node.name)
         cache.put(1, 1)
 
         # Kill and restart server
         kill_process_tree(srv.pid)
-        srv = start_ignite_server(4)
+        srv = start_ignite(idx=4)
 
         # First request fails
         with pytest.raises(Exception):

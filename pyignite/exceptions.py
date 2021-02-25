@@ -25,6 +25,15 @@ class ParseError(Exception):
     pass
 
 
+class AuthenticationError(Exception):
+    """
+    This exception is raised on authentication failure.
+    """
+
+    def __init__(self, message: str):
+        self.message = message
+
+
 class HandshakeError(SocketError):
     """
     This exception is raised on Ignite binary protocol handshake failure,
