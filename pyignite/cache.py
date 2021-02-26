@@ -264,6 +264,7 @@ class Cache:
                         break
                     except connection_errors:
                         # retry if connection failed
+                        conn = self._client.random_node
                         pass
                     except CacheError:
                         # server did not create mapping in time

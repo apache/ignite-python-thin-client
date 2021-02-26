@@ -19,6 +19,10 @@ from pyignite import Client
 from pyignite.api import cache_create, cache_destroy
 from tests.util import start_ignite_gen
 
+# Sometimes on slow testing servers and unstable topology
+# default timeout is not enough for cache ops.
+CLIENT_SOCKET_TIMEOUT = 20.0
+
 
 @pytest.fixture(scope='module', autouse=True)
 def server1():
@@ -37,7 +41,7 @@ def server3():
 
 @pytest.fixture
 def client():
-    client = Client(partition_aware=True)
+    client = Client(partition_aware=True, timeout=CLIENT_SOCKET_TIMEOUT)
 
     client.connect([('127.0.0.1', 10800 + i) for i in range(1, 4)])
 
@@ -48,7 +52,7 @@ def client():
 
 @pytest.fixture
 def client_not_connected():
-    client = Client(partition_aware=True)
+    client = Client(partition_aware=True, timeout=CLIENT_SOCKET_TIMEOUT)
     yield client
     client.close()
 
