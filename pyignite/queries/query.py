@@ -23,12 +23,12 @@ from pyignite.api.result import APIResult
 from pyignite.connection import Connection, AioConnection
 from pyignite.constants import MIN_LONG, MAX_LONG, RHF_TOPOLOGY_CHANGED
 from pyignite.queries.response import Response
-from pyignite.stream import BinaryStream, READ_BACKWARD
+from pyignite.stream import AioBinaryStream, BinaryStream, READ_BACKWARD
 
 
 def query_perform(query_struct, conn, post_process_fun=None, **kwargs):
     async def _async_internal():
-        result =  await query_struct.perform_async(conn, **kwargs)
+        result = await query_struct.perform_async(conn, **kwargs)
         if post_process_fun:
             return post_process_fun(result)
         return result
@@ -40,8 +40,8 @@ def query_perform(query_struct, conn, post_process_fun=None, **kwargs):
         return result
 
     if isinstance(conn, AioConnection):
-        return _async_internal
-    return _internal
+        return _async_internal()
+    return _internal()
 
 
 @attr.s
@@ -83,7 +83,7 @@ class Query:
         values = values if values else None
 
         for name, c_type in self.following:
-            c_type.from_python_async(stream, values[name])
+            await c_type.from_python_async(stream, values[name])
 
         self.__write_header(stream, header, init_pos)
 
@@ -120,14 +120,14 @@ class Query:
         :return: instance of :class:`~pyignite.api.result.APIResult` with raw
          value (may undergo further processing in API functions).
         """
-        with BinaryStream(conn) as stream:
+        with BinaryStream(conn.client) as stream:
             self.from_python(stream, query_params)
             conn.send(stream.getbuffer())
 
         response_struct = self.response_type(protocol_version=conn.get_protocol_version(),
                                              following=response_config, **kwargs)
 
-        with BinaryStream(conn, conn.recv()) as stream:
+        with BinaryStream(conn.client, conn.recv()) as stream:
             response_ctype = response_struct.parse(stream)
             response = stream.read_ctype(response_ctype, direction=READ_BACKWARD)
 
@@ -152,14 +152,14 @@ class Query:
         :return: instance of :class:`~pyignite.api.result.APIResult` with raw
          value (may undergo further processing in API functions).
         """
-        with BinaryStream(conn) as stream:
+        with AioBinaryStream(conn.client) as stream:
             await self.from_python_async(stream, query_params)
             await conn.send(stream.getbuffer())
 
         response_struct = self.response_type(protocol_version=conn.get_protocol_version(),
                                              following=response_config, **kwargs)
 
-        with BinaryStream(conn, await conn.recv()) as stream:
+        with AioBinaryStream(conn.client, await conn.recv()) as stream:
             response_ctype = await response_struct.parse_async(stream)
             response = stream.read_ctype(response_ctype, direction=READ_BACKWARD)
 

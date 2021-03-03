@@ -14,40 +14,23 @@
 # limitations under the License.
 import ctypes
 from io import BytesIO
+from typing import Union, Optional
 
+import pyignite
 import pyignite.utils as ignite_utils
 
 READ_FORWARD = 0
 READ_BACKWARD = 1
 
 
-class BinaryStream:
-    def __init__(self, conn, buf=None):
-        """
-        Initialize binary stream around buffers.
-
-        :param buf: Buffer, optional parameter. If not passed, creates empty BytesIO.
-        :param conn: Connection instance, required.
-        """
-        from pyignite.connection import Connection, AioConnection
-
-        if not isinstance(conn, (Connection, AioConnection)):
-            raise TypeError(f"invalid parameter: expected instance of {Connection} "
-                            f"or {AioConnection}")
-
-        if buf and not isinstance(buf, (bytearray, bytes, memoryview)):
-            raise TypeError(f"invalid parameter: expected bytes-like object")
-
-        self.conn = conn
-        self.stream = BytesIO(buf) if buf else BytesIO()
-
+class BinaryStreamBaseMixin:
     @property
     def compact_footer(self) -> bool:
-        return self.conn.client.compact_footer
+        return self.client.compact_footer
 
     @compact_footer.setter
     def compact_footer(self, value: bool):
-        self.conn.client.compact_footer = value
+        self.client.compact_footer = value
 
     def read(self, size):
         buf = bytearray(size)
@@ -87,10 +70,10 @@ class BinaryStream:
 
     def mem_view(self, start=-1, offset=0):
         start = start if start >= 0 else self.tell()
-        return self.stream.getbuffer()[start:start+offset]
+        return self.stream.getbuffer()[start:start + offset]
 
     def hashcode(self, start, bytes_len):
-        return ignite_utils.hashcode(self.stream.getbuffer()[start:start+bytes_len])
+        return ignite_utils.hashcode(self.stream.getbuffer()[start:start + bytes_len])
 
     def __enter__(self):
         return self
@@ -101,19 +84,21 @@ class BinaryStream:
         except BufferError:
             pass
 
-    def get_dataclass(self, header):
-        # get field names from outer space
-        result = self.conn.client.query_binary_type(
-            header.type_id,
-            header.schema_id
-        )
-        if not result:
-            raise RuntimeError('Binary type is not registered')
-        return result
 
-    async def get_dataclass_async(self, header):
-        # get field names from outer space
-        result = await self.conn.client.query_binary_type(
+class BinaryStream(BinaryStreamBaseMixin):
+    """
+    Synchronous binary stream.
+    """
+    def __init__(self, client:'pyignite.Client', buf: Optional[Union[bytes, bytearray, memoryview]] = None):
+        """
+        :param client: Client instance, required.
+        :param buf: Buffer, optional parameter. If not passed, creates empty BytesIO.
+        """
+        self.client = client
+        self.stream = BytesIO(buf) if buf else BytesIO()
+
+    def get_dataclass(self, header):
+        result = self.client.query_binary_type(
             header.type_id,
             header.schema_id
         )
@@ -122,7 +107,28 @@ class BinaryStream:
         return result
 
     def register_binary_type(self, *args, **kwargs):
-        return self.conn.client.register_binary_type(*args, **kwargs)
+        self.client.register_binary_type(*args, **kwargs)
 
-    async def register_binary_type_async(self, *args, **kwargs):
-        return await self.conn.client.register_binary_type(*args, **kwargs)
+
+class AioBinaryStream(BinaryStreamBaseMixin):
+    """
+    Asyncio binary stream.
+    """
+    def __init__(self, client: 'pyignite.AioClient', buf: Optional[Union[bytes, bytearray, memoryview]] = None):
+        """
+        Initialize binary stream around buffers.
+
+        :param client: AioClient instance, required.
+        :param buf: Buffer, optional parameter. If not passed, creates empty BytesIO.
+        """
+        self.client = client
+        self.stream = BytesIO(buf) if buf else BytesIO()
+
+    async def get_dataclass(self, header):
+        result = await self.client.query_binary_type(header.type_id, header.schema_id)
+        if not result:
+            raise RuntimeError('Binary type is not registered')
+        return result
+
+    async def register_binary_type(self, *args, **kwargs):
+        await self.client.register_binary_type(*args, **kwargs)

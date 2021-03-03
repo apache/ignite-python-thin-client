@@ -19,66 +19,56 @@ from decimal import Decimal
 import pytest
 
 from pyignite import GenericObjectMeta
-from pyignite.datatypes import (
-    BoolObject, DecimalObject, FloatObject, IntObject, String,
-)
-from pyignite.datatypes.prop_codes import *
+from pyignite.datatypes import BoolObject, DecimalObject, FloatObject, IntObject, String
+from pyignite.datatypes.prop_codes import PROP_NAME, PROP_CACHE_KEY_CONFIGURATION
 from pyignite.exceptions import CacheError, ParameterError
 
 
 def test_cache_create(client):
     cache = client.get_or_create_cache('my_oop_cache')
-    assert cache.name == cache.settings[PROP_NAME] == 'my_oop_cache'
-    cache.destroy()
+    try:
+        assert cache.name == cache.settings[PROP_NAME] == 'my_oop_cache'
+    finally:
+        cache.destroy()
 
 
-def test_cache_remove(client):
-    cache = client.get_or_create_cache('my_cache')
-    cache.clear()
-    assert cache.get_size() == 0
-
-    cache.put_all({
-        'key_1': 1,
-        'key_2': 2,
-        'key_3': 3,
-        'key_4': 4,
-        'key_5': 5,
-    })
-    assert cache.get_size() == 5
-
-    result = cache.remove_if_equals('key_1', 42)
-    assert result is False
-    assert cache.get_size() == 5
-
-    result = cache.remove_if_equals('key_1', 1)
-    assert result is True
-    assert cache.get_size() == 4
-
-    cache.remove_keys(['key_1', 'key_3', 'key_5', 'key_7'])
-    assert cache.get_size() == 2
-
-    cache.remove_all()
-    assert cache.get_size() == 0
+@pytest.mark.asyncio
+async def test_cache_create_async(async_client):
+    cache = await async_client.get_or_create_cache('my_oop_cache')
+    try:
+        assert (await cache.name()) == (await cache.settings())[PROP_NAME] == 'my_oop_cache'
+    finally:
+        await cache.destroy()
 
 
-def test_cache_get(client):
+def test_get_cache(client):
     my_cache = client.get_or_create_cache('my_cache')
-    assert my_cache.settings[PROP_NAME] == 'my_cache'
-    my_cache.destroy()
-
-    error = None
+    try:
+        assert my_cache.settings[PROP_NAME] == 'my_cache'
+    finally:
+        my_cache.destroy()
 
     my_cache = client.get_cache('my_cache')
-    try:
+    with pytest.raises(CacheError):
         _ = my_cache.settings[PROP_NAME]
-    except CacheError as e:
-        error = e
-
-    assert type(error) is CacheError
 
 
-def test_cache_config(client):
-    cache_config = {
+@pytest.mark.asyncio
+async def test_get_cache_async(async_client):
+    my_cache = await async_client.get_or_create_cache('my_cache')
+    try:
+        assert (await my_cache.settings())[PROP_NAME] == 'my_cache'
+    finally:
+        await my_cache.destroy()
+
+    my_cache = await async_client.get_cache('my_cache')
+    with pytest.raises(CacheError):
+        _ = (await my_cache.settings())[PROP_NAME]
+
+
+@pytest.fixture
+def cache_config():
+    yield {
         PROP_NAME: 'my_oop_cache',
         PROP_CACHE_KEY_CONFIGURATION: [
             {
@@ -87,28 +77,31 @@ def test_cache_config(client):
             },
         ],
     }
+
+
+def test_cache_config(client, cache_config):
     client.create_cache(cache_config)
-
     cache = client.get_or_create_cache('my_oop_cache')
-    assert cache.name == cache_config[PROP_NAME]
-    assert (
-        cache.settings[PROP_CACHE_KEY_CONFIGURATION]
-        == cache_config[PROP_CACHE_KEY_CONFIGURATION]
-    )
-
-    cache.destroy()
+    try:
+        assert cache.name == cache_config[PROP_NAME]
+        assert cache.settings[PROP_CACHE_KEY_CONFIGURATION] == cache_config[PROP_CACHE_KEY_CONFIGURATION]
+    finally:
+        cache.destroy()
 
 
-def test_cache_get_put(client):
-    cache = client.get_or_create_cache('my_oop_cache')
-    cache.put('my_key', 42)
-    result = cache.get('my_key')
-    assert result, 42
-    cache.destroy()
+@pytest.mark.asyncio
+async def test_cache_config_async(async_client, cache_config):
+    await async_client.create_cache(cache_config)
+    cache = await async_client.get_or_create_cache('my_oop_cache')
+    try:
+        assert await cache.name() == cache_config[PROP_NAME]
+        assert (await cache.settings())[PROP_CACHE_KEY_CONFIGURATION] == cache_config[PROP_CACHE_KEY_CONFIGURATION]
+    finally:
+        await cache.destroy()
 
 
-def test_cache_binary_get_put(client):
-
+@pytest.fixture
+def binary_type_fixture():
     class TestBinaryType(
         metaclass=GenericObjectMeta,
         schema=OrderedDict([
@@ -120,52 +113,63 @@ def test_cache_binary_get_put(client):
     ):
         pass
 
-    cache = client.create_cache('my_oop_cache')
-
-    my_value = TestBinaryType(
+    return TestBinaryType(
         test_bool=True,
         test_str='This is a test',
         test_int=42,
         test_decimal=Decimal('34.56'),
     )
-    cache.put('my_key', my_value)
 
+
+def test_cache_binary_get_put(cache, binary_type_fixture):
+    cache.put('my_key', binary_type_fixture)
     value = cache.get('my_key')
-    assert value.test_bool is True
-    assert value.test_str == 'This is a test'
-    assert value.test_int == 42
-    assert value.test_decimal == Decimal('34.56')
-
-    cache.destroy()
+    assert value.test_bool == binary_type_fixture.test_bool
+    assert value.test_str == binary_type_fixture.test_str
+    assert value.test_int == binary_type_fixture.test_int
+    assert value.test_decimal == binary_type_fixture.test_decimal
 
 
-def test_get_binary_type(client):
-    client.put_binary_type(
-        'TestBinaryType',
-        schema=OrderedDict([
+@pytest.mark.asyncio
+async def test_cache_binary_get_put_async(async_cache, binary_type_fixture):
+    await async_cache.put('my_key', binary_type_fixture)
+
+    value = await async_cache.get('my_key')
+    assert value.test_bool == binary_type_fixture.test_bool
+    assert value.test_str == binary_type_fixture.test_str
+    assert value.test_int == binary_type_fixture.test_int
+    assert value.test_decimal == binary_type_fixture.test_decimal
+
+
+@pytest.fixture
+def binary_type_schemas_fixture():
+    schemas = [
+        OrderedDict([
             ('TEST_BOOL', BoolObject),
             ('TEST_STR', String),
             ('TEST_INT', IntObject),
-        ])
-    )
-    client.put_binary_type(
-        'TestBinaryType',
-        schema=OrderedDict([
+        ]),
+        OrderedDict([
             ('TEST_BOOL', BoolObject),
             ('TEST_STR', String),
             ('TEST_INT', IntObject),
             ('TEST_FLOAT', FloatObject),
-        ])
-    )
-    client.put_binary_type(
-        'TestBinaryType',
-        schema=OrderedDict([
+        ]),
+        OrderedDict([
             ('TEST_BOOL', BoolObject),
             ('TEST_STR', String),
             ('TEST_INT', IntObject),
             ('TEST_DECIMAL', DecimalObject),
         ])
-    )
+    ]
+    yield 'TestBinaryType', schemas
+
+
+def test_get_binary_type(client, binary_type_schemas_fixture):
+    type_name, schemas = binary_type_schemas_fixture
+
+    for schema in schemas:
+        client.put_binary_type(type_name, schema=schema)
 
     binary_type_info = client.get_binary_type('TestBinaryType')
     assert len(binary_type_info['schemas']) == 3
@@ -175,60 +179,37 @@ def test_get_binary_type(client):
     assert len(binary_type_info) == 1
 
 
-@pytest.mark.parametrize('page_size', range(1, 17, 5))
-def test_cache_scan(request, client, page_size):
-    test_data = {
-        1: 'This is a test',
-        2: 'One more test',
-        3: 'Foo',
-        4: 'Buzz',
-        5: 'Bar',
-        6: 'Lorem ipsum',
-        7: 'dolor sit amet',
-        8: 'consectetur adipiscing elit',
-        9: 'Nullam aliquet',
-        10: 'nisl at ante',
-        11: 'suscipit',
-        12: 'ut cursus',
-        13: 'metus interdum',
-        14: 'Nulla tincidunt',
-        15: 'sollicitudin iaculis',
-    }
+@pytest.mark.asyncio
+async def test_get_binary_type_async(async_client, binary_type_schemas_fixture):
+    type_name, schemas = binary_type_schemas_fixture
 
-    cache = client.get_or_create_cache(request.node.name)
-    cache.put_all(test_data)
+    for schema in schemas:
+        await async_client.put_binary_type(type_name, schema=schema)
 
-    gen = cache.scan(page_size=page_size)
-    received_data = []
-    for k, v in gen:
-        assert k in test_data.keys()
-        assert v in test_data.values()
-        received_data.append((k, v))
-    assert len(received_data) == len(test_data)
+    binary_type_info = await async_client.get_binary_type('TestBinaryType')
+    assert len(binary_type_info['schemas']) == 3
 
-    cache.destroy()
+    binary_type_info = await async_client.get_binary_type('NonExistentType')
+    assert binary_type_info['type_exists'] is False
+    assert len(binary_type_info) == 1
 
 
-def test_get_and_put_if_absent(client):
-    cache = client.get_or_create_cache('my_oop_cache')
-
-    value = cache.get_and_put_if_absent('my_key', 42)
-    assert value is None
-    cache.put('my_key', 43)
-    value = cache.get_and_put_if_absent('my_key', 42)
-    assert value is 43
-
-
-def test_cache_get_when_cache_does_not_exist(client):
+def test_get_cache_errors(client):
     cache = client.get_cache('missing-cache')
-    with pytest.raises(CacheError) as e_info:
+
+    with pytest.raises(CacheError, match=r'Cache does not exist \[cacheId='):
         cache.put(1, 1)
-    assert str(e_info.value) == "Cache does not exist [cacheId= 1665146971]"
 
-
-def test_cache_create_with_none_name(client):
-    with pytest.raises(ParameterError) as e_info:
+    with pytest.raises(ParameterError, match="You should supply at least cache name"):
         client.create_cache(None)
-    assert str(e_info.value) == "You should supply at least cache name"
 
 
+@pytest.mark.asyncio
+async def test_get_cache_errors_async(async_client):
+    cache = await async_client.get_cache('missing-cache')
+
+    with pytest.raises(CacheError, match=r'Cache does not exist \[cacheId='):
+        await cache.put(1, 1)
+
+    with pytest.raises(ParameterError, match="You should supply at least cache name"):
+        await async_client.create_cache(None)

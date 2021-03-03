@@ -53,7 +53,7 @@ def scan(conn: 'Connection', cache: Union[str, int], page_size: int, partitions:
      * `more`: bool, True if more data is available for subsequent
        ‘scan_cursor_get_page’ calls.
     """
-    return __scan(conn, cache, page_size, partitions, local, binary, query_id)()
+    return __scan(conn, cache, page_size, partitions, local, binary, query_id)
 
 
 async def scan_async(conn: 'AioConnection', cache: Union[str, int], page_size: int, partitions: int = -1,
@@ -61,7 +61,7 @@ async def scan_async(conn: 'AioConnection', cache: Union[str, int], page_size: i
     """
     Async version of scan.
     """
-    return await __scan(conn, cache, page_size, partitions, local, binary, query_id)()
+    return await __scan(conn, cache, page_size, partitions, local, binary, query_id)
 
 
 def __query_result_post_process(result):
@@ -122,11 +122,11 @@ def scan_cursor_get_page(conn: 'Connection', cursor: int, query_id: int = None) 
      * `more`: bool, True if more data is available for subsequent
        ‘scan_cursor_get_page’ calls.
     """
-    return __scan_cursor_get_page(conn, cursor, query_id)()
+    return __scan_cursor_get_page(conn, cursor, query_id)
 
 
 async def scan_cursor_get_page_async(conn: 'AioConnection', cursor: int, query_id: int = None) -> APIResult:
-    return await __scan_cursor_get_page(conn, cursor, query_id)()
+    return await __scan_cursor_get_page(conn, cursor, query_id)
 
 
 def __scan_cursor_get_page(conn, cursor, query_id):
@@ -337,7 +337,7 @@ def sql_fields(
     """
     return __sql_fields(conn, cache, query_str, page_size, query_args, schema, statement_type, distributed_joins,
                         local, replicated_only, enforce_join_order, collocated, lazy, include_field_names, max_rows,
-                        timeout, binary, query_id)()
+                        timeout, binary, query_id)
 
 
 async def sql_fields_async(
@@ -354,7 +354,7 @@ async def sql_fields_async(
     """
     return await __sql_fields(conn, cache, query_str, page_size, query_args, schema, statement_type, distributed_joins,
                               local, replicated_only, enforce_join_order, collocated, lazy, include_field_names,
-                              max_rows, timeout, binary, query_id)()
+                              max_rows, timeout, binary, query_id)
 
 
 def __sql_fields(conn, cache, query_str, page_size, query_args, schema, statement_type, distributed_joins, local,
@@ -432,7 +432,7 @@ def sql_fields_cursor_get_page(conn: 'Connection', cursor: int, field_count: int
      * `more`: bool, True if more data is available for subsequent
        ‘sql_fields_cursor_get_page’ calls.
     """
-    return __sql_fields_cursor_get_page(conn, cursor, field_count, query_id)()
+    return __sql_fields_cursor_get_page(conn, cursor, field_count, query_id)
 
 
 async def sql_fields_cursor_get_page_async(conn: 'AioConnection', cursor: int, field_count: int,
@@ -440,7 +440,7 @@ async def sql_fields_cursor_get_page_async(conn: 'AioConnection', cursor: int, f
     """
     Async version sql_fields_cursor_get_page.
     """
-    return await __sql_fields_cursor_get_page(conn, cursor, field_count, query_id)()
+    return await __sql_fields_cursor_get_page(conn, cursor, field_count, query_id)
 
 
 def __sql_fields_cursor_get_page(conn, cursor, field_count, query_id):
@@ -490,11 +490,11 @@ def resource_close(conn: 'Connection', cursor: int, query_id: int = None) -> API
     :return: API result data object. Contains zero status on success,
      non-zero status and an error description otherwise.
     """
-    return __resource_close(conn, cursor, query_id)()
+    return __resource_close(conn, cursor, query_id)
 
 
 async def resource_close_async(conn: 'AioConnection', cursor: int, query_id: int = None) -> APIResult:
-    return await __resource_close(conn, cursor, query_id)()
+    return await __resource_close(conn, cursor, query_id)
 
 
 def __resource_close(conn, cursor, query_id):

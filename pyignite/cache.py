@@ -42,7 +42,7 @@ from .api.key_value import (
     cache_remove_key, cache_remove_keys, cache_remove_all,
     cache_remove_if_equals, cache_replace_if_equals, cache_get_size,
 )
-from .api.sql import scan, scan_cursor_get_page, sql, sql_cursor_get_page
+from .cursors import ScanCursor, SqlCursor
 from .api.affinity import cache_get_node_partitions
 
 
@@ -466,6 +466,16 @@ class Cache:
         )
 
     @status_to_exception(CacheError)
+    def clear_keys(self, keys: Iterable):
+        """
+        Clears the cache key without notifying listeners or cache writers.
+
+        :param keys: a list of keys or (key, type hint) tuples
+        """
+
+        return cache_clear_keys(self.get_best_node(), self._cache_id, keys)
+
+    @status_to_exception(CacheError)
     def contains_key(self, key, key_hint=None) -> bool:
         """
         Returns a value indicating whether given key is present in cache.
@@ -727,9 +737,7 @@ class Cache:
             self.get_best_node(), self._cache_id, peek_modes
         )
 
-    def scan(
-        self, page_size: int = 1, partitions: int = -1, local: bool = False
-    ):
+    def scan(self, page_size: int = 1, partitions: int = -1, local: bool = False):
         """
         Returns all key-value pairs from the cache, similar to `get_all`, but
         with internal pagination, which is slower, but safer.
@@ -740,35 +748,9 @@ class Cache:
          (negative to query entire cache),
         :param local: (optional) pass True if this query should be executed
          on local node only. Defaults to False,
-        :return: generator with key-value pairs.
+        :return: Scan query cursor.
         """
-        node = self.get_best_node()
-
-        result = scan(
-            node,
-            self._cache_id,
-            page_size,
-            partitions,
-            local
-        )
-        if result.status != 0:
-            raise CacheError(result.message)
-
-        cursor = result.value['cursor']
-        for k, v in result.value['data'].items():
-            k = self._process_binary(k)
-            v = self._process_binary(v)
-            yield k, v
-
-        while result.value['more']:
-            result = scan_cursor_get_page(node, cursor)
-            if result.status != 0:
-                raise CacheError(result.message)
-
-            for k, v in result.value['data'].items():
-                k = self._process_binary(k)
-                v = self._process_binary(v)
-                yield k, v
+        return ScanCursor(self.client, self._cache_id, page_size, partitions, local)
 
     def select_row(
         self, query_str: str, page_size: int = 1,
@@ -791,46 +773,13 @@ class Cache:
          on local node only. Defaults to False,
         :param timeout: (optional) non-negative timeout value in ms. Zero
          disables timeout (default),
-        :return: generator with key-value pairs.
+        :return: Sql cursor.
         """
-        node = self.get_best_node()
-
-        def generate_result(value):
-            cursor = value['cursor']
-            more = value['more']
-            for k, v in value['data'].items():
-                k = self._process_binary(k)
-                v = self._process_binary(v)
-                yield k, v
-
-            while more:
-                inner_result = sql_cursor_get_page(node, cursor)
-                if result.status != 0:
-                    raise SQLError(result.message)
-                more = inner_result.value['more']
-                for k, v in inner_result.value['data'].items():
-                    k = self._process_binary(k)
-                    v = self._process_binary(v)
-                    yield k, v
-
         type_name = self.settings[
             prop_codes.PROP_QUERY_ENTITIES
         ][0]['value_type_name']
         if not type_name:
             raise SQLError('Value type is unknown')
-        result = sql(
-            node,
-            self._cache_id,
-            type_name,
-            query_str,
-            page_size,
-            query_args,
-            distributed_joins,
-            replicated_only,
-            local,
-            timeout
-        )
-        if result.status != 0:
-            raise SQLError(result.message)
 
-        return generate_result(result.value)
+        return SqlCursor(self.client, self._cache_id, type_name,query_str, page_size, query_args,
+                         distributed_joins, replicated_only, local, timeout)

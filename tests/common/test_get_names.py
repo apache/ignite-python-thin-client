@@ -12,21 +12,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import asyncio
 
-from pyignite.api import cache_create, cache_get_names
+import pytest
 
 
 def test_get_names(client):
-
-    conn = client.random_node
-
-    bucket_names = ['my_bucket', 'my_bucket_2', 'my_bucket_3']
+    bucket_names = {'my_bucket', 'my_bucket_2', 'my_bucket_3'}
     for name in bucket_names:
-        cache_create(conn, name)
+        client.get_or_create_cache(name)
 
-    result = cache_get_names(conn)
-    assert result.status == 0
-    assert type(result.value) == list
-    assert len(result.value) >= len(bucket_names)
-    for i, name in enumerate(bucket_names):
-        assert name in result.value
+    assert set(client.get_cache_names()) == bucket_names
+
+
+@pytest.mark.asyncio
+async def test_get_names_async(async_client):
+    bucket_names = {'my_bucket', 'my_bucket_2', 'my_bucket_3'}
+    await asyncio.gather(*[async_client.get_or_create_cache(name) for name in bucket_names])
+
+    assert set(await async_client.get_cache_names()) == bucket_names

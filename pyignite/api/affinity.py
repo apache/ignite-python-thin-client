@@ -80,7 +80,7 @@ def cache_get_node_partitions(conn: 'Connection', caches: Union[int, Iterable[in
      is generated,
     :return: API result data object.
     """
-    return __cache_get_node_partitions(conn, caches, query_id)()
+    return __cache_get_node_partitions(conn, caches, query_id)
 
 
 async def cache_get_node_partitions_async(conn: 'AioConnection', caches: Union[int, Iterable[int]],
@@ -88,7 +88,7 @@ async def cache_get_node_partitions_async(conn: 'AioConnection', caches: Union[i
     """
     Async version of cache_get_node_partitions.
     """
-    return await __cache_get_node_partitions(conn, caches, query_id)()
+    return await __cache_get_node_partitions(conn, caches, query_id)
 
 
 def __post_process_partitions(result):

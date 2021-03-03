@@ -48,19 +48,14 @@ from typing import Dict, Iterable, List, Optional, Tuple, Type, Union
 
 from .api.binary import get_binary_type, put_binary_type
 from .api.cache_config import cache_get_names
-from .api.sql import sql_fields, sql_fields_cursor_get_page
+from .cursors import SqlFieldsCursor
 from .cache import Cache
 from .connection import Connection
 from .constants import *
 from .datatypes import BinaryObject
 from .datatypes.internal import tc_map
-from .exceptions import (
-    BinaryTypeError, CacheError, ReconnectError, SQLError, connection_errors,
-)
-from .utils import (
-    cache_id, capitalize, entity_id, schema_id, process_delimiter,
-    status_to_exception, is_iterable,
-)
+from .exceptions import BinaryTypeError, CacheError, ReconnectError, connection_errors
+from .utils import cache_id, capitalize, entity_id, schema_id, process_delimiter, status_to_exception, is_iterable
 from .binary import GenericObjectMeta
 
 
@@ -556,42 +551,12 @@ class Client:
         :return: generator with result rows as a lists. If
          `include_field_names` was set, the first row will hold field names.
         """
-        def generate_result(value):
-            cursor = value['cursor']
-            more = value['more']
-
-            if include_field_names:
-                yield value['fields']
-                field_count = len(value['fields'])
-            else:
-                field_count = value['field_count']
-            for line in value['data']:
-                yield line
-
-            while more:
-                inner_result = sql_fields_cursor_get_page(
-                    conn, cursor, field_count
-                )
-                if inner_result.status != 0:
-                    raise SQLError(result.message)
-                more = inner_result.value['more']
-                for line in inner_result.value['data']:
-                    yield line
-
-        conn = self.random_node
 
         c_id = cache.cache_id if isinstance(cache, Cache) else cache_id(cache)
 
         if c_id != 0:
             schema = None
 
-        result = sql_fields(
-            conn, c_id, query_str, page_size, query_args, schema,
-            statement_type, distributed_joins, local, replicated_only,
-            enforce_join_order, collocated, lazy, include_field_names,
-            max_rows, timeout,
-        )
-        if result.status != 0:
-            raise SQLError(result.message)
-
-        return generate_result(result.value)
+        return SqlFieldsCursor(self, c_id, query_str, page_size, query_args, schema, statement_type, distributed_joins,
+                               local, replicated_only, enforce_join_order, collocated, lazy, include_field_names,
+                               max_rows, timeout)

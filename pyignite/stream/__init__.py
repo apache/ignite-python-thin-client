@@ -13,4 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .binary_stream import BinaryStream, READ_FORWARD, READ_BACKWARD
+from .binary_stream import BinaryStream, AioBinaryStream, READ_FORWARD, READ_BACKWARD
+
+__all__ = ['BinaryStream', 'AioBinaryStream', 'READ_BACKWARD', 'READ_FORWARD']

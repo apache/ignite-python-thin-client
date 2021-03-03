@@ -145,7 +145,7 @@ class Response:
             return None
 
         values = await asyncio.gather(
-            *[c_type.to_python(getattr(ctype_object, name), *args, **kwargs) for name, c_type in self.following]
+            *[c_type.to_python_async(getattr(ctype_object, name), *args, **kwargs) for name, c_type in self.following]
         )
 
         return OrderedDict([(name, values[i]) for i, (name, _) in enumerate(self.following)])
@@ -347,3 +347,6 @@ class BinaryTypeResponse(Response):
                     for x in schema_struct.to_python(ctype_object.schema)
                 }
             return result
+
+    async def to_python_async(self, ctype_object, *args, **kwargs):
+        return self.to_python(ctype_object, *args, **kwargs)

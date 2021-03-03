@@ -16,7 +16,6 @@ import asyncio
 from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
 from .constants import AFFINITY_RETRIES, AFFINITY_DELAY
-from .aio_client import AioClient
 from .connection import AioConnection
 from .binary import GenericObjectMeta, unwrap_binary_async
 from .datatypes import prop_codes
@@ -34,7 +33,7 @@ from .api.key_value import (
     cache_get_and_replace_async, cache_remove_key_async, cache_remove_keys_async, cache_remove_all_async,
     cache_remove_if_equals_async, cache_replace_if_equals_async, cache_get_size_async,
 )
-from .api.sql import scan_async, scan_cursor_get_page_async
+from .cursors import AioScanCursor, AioSqlFieldsCursor
 from .api.affinity import cache_get_node_partitions_async
 
 PROP_CODES = set([
@@ -46,7 +45,7 @@ PROP_CODES = set([
 
 async def get_cache(client: 'AioClient', settings: Union[str, dict]) -> 'AioCache':
     name, settings = __parse_settings(settings)
-    if not settings:
+    if settings:
         raise ParameterError('Only cache name allowed as a parameter')
 
     return AioCache(client, name)
@@ -93,7 +92,7 @@ def __parse_settings(settings: Union[str, dict]) -> Tuple[Optional[str], Optiona
         if not set(settings).issubset(PROP_CODES):
             raise ParameterError('One or more settings was not recognized')
 
-        return None, settings
+        return name, settings
     else:
         raise ParameterError('You should supply at least cache name')
 
@@ -437,6 +436,16 @@ class AioCache:
         return await cache_clear_key_async(conn, self._cache_id, key, key_hint=key_hint)
 
     @status_to_exception(CacheError)
+    async def clear_keys(self, keys: Iterable):
+        """
+        Clears the cache key without notifying listeners or cache writers.
+
+        :param keys: a list of keys or (key, type hint) tuples
+        """
+        conn = await self.get_best_node()
+        return await cache_clear_keys_async(conn, self._cache_id, keys)
+
+    @status_to_exception(CacheError)
     async def contains_key(self, key, key_hint=None) -> bool:
         """
         Returns a value indicating whether given key is present in cache.
@@ -660,7 +669,7 @@ class AioCache:
         conn = await self.get_best_node()
         return await cache_get_size_async(conn, self._cache_id, peek_modes)
 
-    async def scan(self, page_size: int = 1, partitions: int = -1, local: bool = False):
+    def scan(self, page_size: int = 1, partitions: int = -1, local: bool = False):
         """
         Returns all key-value pairs from the cache, similar to `get_all`, but
         with internal pagination, which is slower, but safer.
@@ -671,26 +680,6 @@ class AioCache:
          (negative to query entire cache),
         :param local: (optional) pass True if this query should be executed
          on local node only. Defaults to False,
-        :return: generator with key-value pairs.
+        :return: async scan query cursor
         """
-        node = await self.get_best_node()
-
-        result = await scan_async(node, self._cache_id, page_size, partitions, local)
-
-        if result.status != 0:
-            raise CacheError(result.message)
-
-        cursor = result.value['cursor']
-        for k, v in result.value['data'].items():
-            k, v = await asyncio.gather(*[self._process_binary(k), self._process_binary(v)])
-            yield k, v
-
-        while result.value['more']:
-            result = await scan_cursor_get_page_async(node, cursor)
-
-            if result.status != 0:
-                raise CacheError(result.message)
-
-            for k, v in result.value['data'].items():
-                k, v = await asyncio.gather(*[self._process_binary(k), self._process_binary(v)])
-                yield k, v
+        return AioScanCursor(self.client, self._cache_id, page_size, partitions, local)

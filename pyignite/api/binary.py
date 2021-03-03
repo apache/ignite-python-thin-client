@@ -37,14 +37,14 @@ def get_binary_type(conn: 'Connection', binary_type: Union[str, int], query_id=N
      is generated,
     :return: API result data object.
     """
-    return __get_binary_type(conn, binary_type, query_id)()
+    return __get_binary_type(conn, binary_type, query_id)
 
 
 async def get_binary_type_async(conn: 'AioConnection', binary_type: Union[str, int], query_id=None) -> APIResult:
     """
     Async version of get_binary_type.
     """
-    return await __get_binary_type(conn, binary_type, query_id)()
+    return await __get_binary_type(conn, binary_type, query_id)
 
 
 def __get_binary_type(conn, binary_type, query_id):
@@ -81,7 +81,7 @@ def put_binary_type(connection: 'Connection', type_name: str, affinity_key_field
      is generated,
     :return: API result data object.
     """
-    return __put_binary_type(connection, type_name, affinity_key_field, is_enum, schema, query_id)()
+    return __put_binary_type(connection, type_name, affinity_key_field, is_enum, schema, query_id)
 
 
 async def put_binary_type_async(connection: 'AioConnection', type_name: str, affinity_key_field: str = None,
@@ -89,7 +89,7 @@ async def put_binary_type_async(connection: 'AioConnection', type_name: str, aff
     """
     Async version of put_binary_type.
     """
-    return await __put_binary_type(connection, type_name, affinity_key_field, is_enum, schema, query_id)()
+    return await __put_binary_type(connection, type_name, affinity_key_field, is_enum, schema, query_id)
 
 
 def __post_process_put_binary(type_id):

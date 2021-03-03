@@ -14,11 +14,10 @@
 # limitations under the License.
 
 from pyignite import GenericObjectMeta
-from pyignite.datatypes import *
+from pyignite.datatypes import IntObject, String
 
 
 def test_go():
-
     class GenericObject(
         metaclass=GenericObjectMeta,
         schema={

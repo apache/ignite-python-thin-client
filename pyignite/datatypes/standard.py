@@ -330,7 +330,7 @@ class TimestampObject(StandardObject):
         return cls._object_c_type
 
     @classmethod
-    def from_python_not_null(cls, stream, value: tuple):
+    def from_python_not_null(cls, stream, value: tuple, **kwargs):
         data_type = cls.build_c_type()
         data_object = data_type()
         data_object.type_code = int.from_bytes(
@@ -569,7 +569,11 @@ class StandardArray(Nullable):
         return result
 
     @classmethod
-    def from_python_not_null(cls, stream, value):
+    async def to_python_async(cls, ctypes_object, *args, **kwargs):
+        return cls.to_python(ctypes_object, *args, **kwargs)
+
+    @classmethod
+    def from_python_not_null(cls, stream, value, **kwargs):
         header_class = cls.build_header_class()
         header = header_class()
         if hasattr(header, 'type_code'):
@@ -730,7 +734,7 @@ class EnumArrayObject(StandardArrayObject):
         )
 
     @classmethod
-    def from_python_not_null(cls, stream, value):
+    def from_python_not_null(cls, stream, value, **kwargs):
         type_id, value = value
         header_class = cls.build_header_class()
         header = header_class()
@@ -748,7 +752,7 @@ class EnumArrayObject(StandardArrayObject):
             cls.standard_type.from_python(stream, x)
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
+    def to_python_not_null(cls, ctype_object, *args, **kwargs):
         type_id = getattr(ctype_object, "type_id", None)
         if type_id is None:
             return None

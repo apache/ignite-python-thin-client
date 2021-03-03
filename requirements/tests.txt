@@ -1,5 +1,6 @@
 # these packages are used for testing
 
+async_generator==1.10; python_version < '3.7'
 pytest==6.2.2
 pytest-cov==2.11.1
 pytest-asyncio==0.14.0

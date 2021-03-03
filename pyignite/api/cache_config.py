@@ -69,7 +69,7 @@ def cache_get_configuration(connection: 'Connection', cache: Union[str, int],
     :return: API result data object. Result value is OrderedDict with
      the cache configuration parameters.
     """
-    return __cache_get_configuration(connection, cache, flags, query_id)()
+    return __cache_get_configuration(connection, cache, flags, query_id)
 
 
 async def cache_get_configuration_async(connection: 'AioConnection', cache: Union[str, int],
@@ -77,7 +77,7 @@ async def cache_get_configuration_async(connection: 'AioConnection', cache: Unio
     """
     Async version of cache_get_configuration.
     """
-    return await __cache_get_configuration(connection, cache, flags, query_id)()
+    return await __cache_get_configuration(connection, cache, flags, query_id)
 
 
 def __post_process_cache_config(result):
@@ -121,7 +121,7 @@ def cache_create(connection: 'Connection', name: str, query_id=None) -> 'APIResu
      created successfully, non-zero status and an error description otherwise.
     """
 
-    return __cache_create_with_name(OP_CACHE_CREATE_WITH_NAME, connection, name, query_id)()
+    return __cache_create_with_name(OP_CACHE_CREATE_WITH_NAME, connection, name, query_id)
 
 
 async def cache_create_async(connection: 'AioConnection', name: str, query_id=None) -> 'APIResult':
@@ -129,7 +129,7 @@ async def cache_create_async(connection: 'AioConnection', name: str, query_id=No
     Async version of cache_create.
     """
 
-    return await __cache_create_with_name(OP_CACHE_CREATE_WITH_NAME, connection, name, query_id)()
+    return await __cache_create_with_name(OP_CACHE_CREATE_WITH_NAME, connection, name, query_id)
 
 
 def cache_get_or_create(connection: 'Connection', name: str, query_id=None) -> 'APIResult':
@@ -145,14 +145,14 @@ def cache_get_or_create(connection: 'Connection', name: str, query_id=None) -> '
      created successfully, non-zero status and an error description otherwise.
     """
 
-    return __cache_create_with_name(OP_CACHE_GET_OR_CREATE_WITH_NAME, connection, name, query_id)()
+    return __cache_create_with_name(OP_CACHE_GET_OR_CREATE_WITH_NAME, connection, name, query_id)
 
 
 async def cache_get_or_create_async(connection: 'AioConnection', name: str, query_id=None) -> 'APIResult':
     """
     Async version of cache_get_or_create.
     """
-    return await __cache_create_with_name(OP_CACHE_GET_OR_CREATE_WITH_NAME, connection, name, query_id)()
+    return await __cache_create_with_name(OP_CACHE_GET_OR_CREATE_WITH_NAME, connection, name, query_id)
 
 
 def __cache_create_with_name(op_code, conn, name, query_id):
@@ -171,14 +171,14 @@ def cache_destroy(connection: 'Connection', cache: Union[str, int], query_id=Non
      is generated,
     :return: API result data object.
     """
-    return __cache_destroy(connection, cache, query_id)()
+    return __cache_destroy(connection, cache, query_id)
 
 
 async def cache_destroy_async(connection: 'AioConnection', cache: Union[str, int], query_id=None) -> 'APIResult':
     """
     Async version of cache_destroy.
     """
-    return await __cache_destroy(connection, cache, query_id)()
+    return await __cache_destroy(connection, cache, query_id)
 
 
 def __cache_destroy(connection, cache, query_id):
@@ -199,14 +199,14 @@ def cache_get_names(connection: 'Connection', query_id=None) -> 'APIResult':
      names, non-zero status and an error description otherwise.
     """
 
-    return __cache_get_names(connection, query_id)()
+    return __cache_get_names(connection, query_id)
 
 
 async def cache_get_names_async(connection: 'AioConnection', query_id=None) -> 'APIResult':
     """
     Async version of cache_get_names.
     """
-    return await __cache_get_names(connection, query_id)()
+    return await __cache_get_names(connection, query_id)
 
 
 def __post_process_cache_names(result):
@@ -237,14 +237,14 @@ def cache_create_with_config(connection: 'Connection', cache_props: dict, query_
     :return: API result data object. Contains zero status if cache was created,
      non-zero status and an error description otherwise.
     """
-    return __cache_create_with_config(OP_CACHE_CREATE_WITH_CONFIGURATION, connection, cache_props, query_id)()
+    return __cache_create_with_config(OP_CACHE_CREATE_WITH_CONFIGURATION, connection, cache_props, query_id)
 
 
 async def cache_create_with_config_async(connection: 'AioConnection', cache_props: dict, query_id=None) -> 'APIResult':
     """
     Async version of cache_create_with_config.
     """
-    return await __cache_create_with_config(OP_CACHE_CREATE_WITH_CONFIGURATION, connection, cache_props, query_id)()
+    return await __cache_create_with_config(OP_CACHE_CREATE_WITH_CONFIGURATION, connection, cache_props, query_id)
 
 
 def cache_get_or_create_with_config(connection: 'Connection', cache_props: dict, query_id=None) -> 'APIResult':
@@ -262,7 +262,7 @@ def cache_get_or_create_with_config(connection: 'Connection', cache_props: dict,
     :return: API result data object. Contains zero status if cache was created,
      non-zero status and an error description otherwise.
     """
-    return __cache_create_with_config(OP_CACHE_GET_OR_CREATE_WITH_CONFIGURATION, connection, cache_props, query_id)()
+    return __cache_create_with_config(OP_CACHE_GET_OR_CREATE_WITH_CONFIGURATION, connection, cache_props, query_id)
 
 
 async def cache_get_or_create_with_config_async(connection: 'AioConnection', cache_props: dict,
@@ -271,7 +271,7 @@ async def cache_get_or_create_with_config_async(connection: 'AioConnection', cac
     Async version of cache_get_or_create_with_config.
     """
     return await __cache_create_with_config(OP_CACHE_GET_OR_CREATE_WITH_CONFIGURATION, connection, cache_props,
-                                            query_id)()
+                                            query_id)
 
 
 def __cache_create_with_config(op_code, connection, cache_props, query_id):

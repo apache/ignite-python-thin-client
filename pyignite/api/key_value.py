@@ -45,7 +45,7 @@ def cache_put(connection: 'Connection', cache: Union[str, int], key: Any, value:
     :return: API result data object. Contains zero status if a value
      is written, non-zero status and an error description otherwise.
     """
-    return __cache_put(connection, cache, key, value, key_hint, value_hint, binary, query_id)()
+    return __cache_put(connection, cache, key, value, key_hint, value_hint, binary, query_id)
 
 
 async def cache_put_async(connection: 'AioConnection', cache: Union[str, int], key: Any, value: Any,
@@ -54,7 +54,7 @@ async def cache_put_async(connection: 'AioConnection', cache: Union[str, int], k
     """
     Async version of cache_put
     """
-    return await __cache_put(connection, cache, key, value, key_hint, value_hint, binary, query_id)()
+    return await __cache_put(connection, cache, key, value, key_hint, value_hint, binary, query_id)
 
 
 def __cache_put(connection, cache, key, value, key_hint, value_hint, binary, query_id):
@@ -97,7 +97,7 @@ def cache_get(connection: 'Connection', cache: Union[str, int], key: Any, key_hi
     :return: API result data object. Contains zero status and a value
      retrieved on success, non-zero status and an error description on failure.
     """
-    return __cache_get(connection, cache, key, key_hint, binary, query_id)()
+    return __cache_get(connection, cache, key, key_hint, binary, query_id)
 
 
 async def cache_get_async(connection: 'AioConnection', cache: Union[str, int], key: Any,
@@ -106,7 +106,7 @@ async def cache_get_async(connection: 'AioConnection', cache: Union[str, int], k
     """
     Async version of cache_get
     """
-    return await __cache_get(connection, cache, key, key_hint, binary, query_id)()
+    return await __cache_get(connection, cache, key, key_hint, binary, query_id)
 
 
 def __cache_get(connection, cache, key, key_hint, binary, query_id):
@@ -150,7 +150,7 @@ def cache_get_all(connection: 'Connection', cache: Union[str, int], keys: Iterab
      retrieved key-value pairs, non-zero status and an error description
      on failure.
     """
-    return __cache_get_all(connection, cache, keys, binary, query_id)()
+    return __cache_get_all(connection, cache, keys, binary, query_id)
 
 
 async def cache_get_all_async(connection: 'AioConnection', cache: Union[str, int], keys: Iterable, binary: bool = False,
@@ -158,7 +158,7 @@ async def cache_get_all_async(connection: 'AioConnection', cache: Union[str, int
     """
     Async version of cache_get_all.
     """
-    return await __cache_get_all(connection, cache, keys, binary, query_id)()
+    return await __cache_get_all(connection, cache, keys, binary, query_id)
 
 
 def __cache_get_all(connection, cache, keys, binary, query_id):
@@ -204,7 +204,7 @@ def cache_put_all(connection: 'Connection', cache: Union[str, int], pairs: dict,
     :return: API result data object. Contains zero status if key-value pairs
      are written, non-zero status and an error description otherwise.
     """
-    return __cache_put_all(connection, cache, pairs, binary, query_id)()
+    return __cache_put_all(connection, cache, pairs, binary, query_id)
 
 
 async def cache_put_all_async(connection: 'AioConnection', cache: Union[str, int], pairs: dict, binary: bool = False,
@@ -212,7 +212,7 @@ async def cache_put_all_async(connection: 'AioConnection', cache: Union[str, int
     """
     Async version of cache_put_all.
     """
-    return await __cache_put_all(connection, cache, pairs, binary, query_id)()
+    return await __cache_put_all(connection, cache, pairs, binary, query_id)
 
 
 def __cache_put_all(connection, cache, pairs, binary, query_id):
@@ -254,7 +254,7 @@ def cache_contains_key(connection: 'Connection', cache: Union[str, int], key: An
      retrieved on success: `True` when key is present, `False` otherwise,
      non-zero status and an error description on failure.
     """
-    return __cache_contains_key(connection, cache, key, key_hint, binary, query_id)()
+    return __cache_contains_key(connection, cache, key, key_hint, binary, query_id)
 
 
 async def cache_contains_key_async(connection: 'AioConnection', cache: Union[str, int], key: Any,
@@ -263,7 +263,7 @@ async def cache_contains_key_async(connection: 'AioConnection', cache: Union[str
     """
     Async version of cache_contains_key.
     """
-    return await __cache_contains_key(connection, cache, key, key_hint, binary, query_id)()
+    return await __cache_contains_key(connection, cache, key, key_hint, binary, query_id)
 
 
 def __cache_contains_key(connection, cache, key, key_hint, binary, query_id):
@@ -307,7 +307,7 @@ def cache_contains_keys(connection: 'Connection', cache: Union[str, int], keys: 
      retrieved on success: `True` when all keys are present, `False` otherwise,
      non-zero status and an error description on failure.
     """
-    return __cache_contains_keys(connection, cache, keys, binary, query_id)()
+    return __cache_contains_keys(connection, cache, keys, binary, query_id)
 
 
 async def cache_contains_keys_async(connection: 'AioConnection', cache: Union[str, int], keys: Iterable,
@@ -315,7 +315,7 @@ async def cache_contains_keys_async(connection: 'AioConnection', cache: Union[st
     """
     Async version of cache_contains_keys.
     """
-    return await __cache_contains_keys(connection, cache, keys, binary, query_id)()
+    return await __cache_contains_keys(connection, cache, keys, binary, query_id)
 
 
 def __cache_contains_keys(connection, cache, keys, binary, query_id):
@@ -366,7 +366,7 @@ def cache_get_and_put(connection: 'Connection', cache: Union[str, int], key: Any
      or None if a value is written, non-zero status and an error description
      in case of error.
     """
-    return __cache_get_and_put(connection, cache, key, value, key_hint, value_hint, binary, query_id)()
+    return __cache_get_and_put(connection, cache, key, value, key_hint, value_hint, binary, query_id)
 
 
 async def cache_get_and_put_async(connection: 'AioConnection', cache: Union[str, int], key: Any, value: Any,
@@ -375,7 +375,7 @@ async def cache_get_and_put_async(connection: 'AioConnection', cache: Union[str,
     """
     Async version of cache_get_and_put.
     """
-    return await __cache_get_and_put(connection, cache, key, value, key_hint, value_hint, binary, query_id)()
+    return await __cache_get_and_put(connection, cache, key, value, key_hint, value_hint, binary, query_id)
 
 
 def __cache_get_and_put(connection, cache, key, value, key_hint, value_hint, binary, query_id):
@@ -428,7 +428,7 @@ def cache_get_and_replace(connection: 'Connection', cache: Union[str, int], key:
     :return: API result data object. Contains zero status and an old value
      or None on success, non-zero status and an error description otherwise.
     """
-    return __cache_get_and_replace(connection, cache, key, key_hint, value, value_hint, binary, query_id)()
+    return __cache_get_and_replace(connection, cache, key, key_hint, value, value_hint, binary, query_id)
 
 
 async def cache_get_and_replace_async(connection: 'AioConnection', cache: Union[str, int], key: Any, value: Any,
@@ -437,7 +437,7 @@ async def cache_get_and_replace_async(connection: 'AioConnection', cache: Union[
     """
     Async version of cache_get_and_replace.
     """
-    return await __cache_get_and_replace(connection, cache, key, key_hint, value, value_hint, binary, query_id)()
+    return await __cache_get_and_replace(connection, cache, key, key_hint, value, value_hint, binary, query_id)
 
 
 def __cache_get_and_replace(connection, cache, key, key_hint, value, value_hint, binary, query_id):
@@ -483,13 +483,13 @@ def cache_get_and_remove(connection: 'Connection', cache: Union[str, int], key: 
     :return: API result data object. Contains zero status and an old value
      or None, non-zero status and an error description otherwise.
     """
-    return __cache_get_and_remove(connection, cache, key, key_hint, binary, query_id)()
+    return __cache_get_and_remove(connection, cache, key, key_hint, binary, query_id)
 
 
 async def cache_get_and_remove_async(connection: 'AioConnection', cache: Union[str, int], key: Any,
                                      key_hint: 'IgniteDataType' = None, binary: bool = False,
                                      query_id: Optional[int] = None) -> 'APIResult':
-    return await __cache_get_and_remove(connection, cache, key, key_hint, binary, query_id)()
+    return await __cache_get_and_remove(connection, cache, key, key_hint, binary, query_id)
 
 
 def __cache_get_and_remove(connection, cache, key, key_hint, binary, query_id):
@@ -538,7 +538,7 @@ def cache_put_if_absent(connection: 'Connection', cache: Union[str, int], key: A
     :return: API result data object. Contains zero status on success,
      non-zero status and an error description otherwise.
     """
-    return __cache_put_if_absent(connection, cache, key, value, key_hint, value_hint, binary, query_id)()
+    return __cache_put_if_absent(connection, cache, key, value, key_hint, value_hint, binary, query_id)
 
 
 async def cache_put_if_absent_async(connection: 'AioConnection', cache: Union[str, int], key: Any, value: Any,
@@ -547,7 +547,7 @@ async def cache_put_if_absent_async(connection: 'AioConnection', cache: Union[st
     """
     Async version of cache_put_if_absent.
     """
-    return await __cache_put_if_absent(connection, cache, key, value, key_hint, value_hint, binary, query_id)()
+    return await __cache_put_if_absent(connection, cache, key, value, key_hint, value_hint, binary, query_id)
 
 
 def __cache_put_if_absent(connection, cache, key, value, key_hint, value_hint, binary, query_id):
@@ -599,7 +599,7 @@ def cache_get_and_put_if_absent(connection: 'Connection', cache: Union[str, int]
     :return: API result data object. Contains zero status and an old value
      or None on success, non-zero status and an error description otherwise.
     """
-    return __cache_get_and_put_if_absent(connection, cache, key, value, key_hint, value_hint, binary, query_id)()
+    return __cache_get_and_put_if_absent(connection, cache, key, value, key_hint, value_hint, binary, query_id)
 
 
 async def cache_get_and_put_if_absent_async(connection: 'AioConnection', cache: Union[str, int], key: Any, value: Any,
@@ -608,7 +608,7 @@ async def cache_get_and_put_if_absent_async(connection: 'AioConnection', cache: 
     """
     Async version of cache_get_and_put_if_absent.
     """
-    return await __cache_get_and_put_if_absent(connection, cache, key, value, key_hint, value_hint, binary, query_id)()
+    return await __cache_get_and_put_if_absent(connection, cache, key, value, key_hint, value_hint, binary, query_id)
 
 
 def __cache_get_and_put_if_absent(connection, cache, key, value, key_hint, value_hint, binary, query_id):
@@ -660,7 +660,7 @@ def cache_replace(connection: 'Connection', cache: Union[str, int], key: Any, va
      success code, or non-zero status and an error description if something
      has gone wrong.
     """
-    return __cache_replace(connection, cache, key, value, key_hint, value_hint, binary, query_id)()
+    return __cache_replace(connection, cache, key, value, key_hint, value_hint, binary, query_id)
 
 
 async def cache_replace_async(connection: 'AioConnection', cache: Union[str, int], key: Any, value: Any,
@@ -669,7 +669,7 @@ async def cache_replace_async(connection: 'AioConnection', cache: Union[str, int
     """
     Async version of cache_replace.
     """
-    return await __cache_replace(connection, cache, key, value, key_hint, value_hint, binary, query_id)()
+    return await __cache_replace(connection, cache, key, value, key_hint, value_hint, binary, query_id)
 
 
 def __cache_replace(connection, cache, key, value, key_hint, value_hint, binary, query_id):
@@ -727,7 +727,7 @@ def cache_replace_if_equals(connection: 'Connection', cache: Union[str, int], ke
      has gone wrong.
     """
     return __cache_replace_if_equals(connection, cache, key, sample, value, key_hint, sample_hint, value_hint, binary,
-                                     query_id)()
+                                     query_id)
 
 
 async def cache_replace_if_equals_async(
@@ -738,7 +738,7 @@ async def cache_replace_if_equals_async(
     Async version of cache_replace_if_equals.
     """
     return await __cache_replace_if_equals(connection, cache, key, sample, value, key_hint, sample_hint, value_hint,
-                                           binary, query_id)()
+                                           binary, query_id)
 
 
 def __cache_replace_if_equals(connection, cache, key, sample, value, key_hint, sample_hint, value_hint, binary,
@@ -785,7 +785,7 @@ def cache_clear(connection: 'Connection', cache: Union[str, int], binary: bool =
     :return: API result data object. Contains zero status on success,
      non-zero status and an error description otherwise.
     """
-    return __cache_clear(connection, cache, binary, query_id)()
+    return __cache_clear(connection, cache, binary, query_id)
 
 
 async def cache_clear_async(connection: 'AioConnection', cache: Union[str, int], binary: bool = False,
@@ -793,7 +793,7 @@ async def cache_clear_async(connection: 'AioConnection', cache: Union[str, int],
     """
     Async version of cache_clear.
     """
-    return await __cache_clear(connection, cache, binary, query_id)()
+    return await __cache_clear(connection, cache, binary, query_id)
 
 
 def __cache_clear(connection, cache, binary, query_id):
@@ -832,7 +832,7 @@ def cache_clear_key(connection: 'Connection', cache: Union[str, int], key: Any, 
     :return: API result data object. Contains zero status on success,
      non-zero status and an error description otherwise.
     """
-    return __cache_clear_key(connection, cache, key, key_hint, binary, query_id)()
+    return __cache_clear_key(connection, cache, key, key_hint, binary, query_id)
 
 
 async def cache_clear_key_async(connection: 'AioConnection', cache: Union[str, int], key: Any,
@@ -841,7 +841,7 @@ async def cache_clear_key_async(connection: 'AioConnection', cache: Union[str, i
     """
     Async version of cache_clear_key.
     """
-    return await __cache_clear_key(connection, cache, key, key_hint, binary, query_id)()
+    return await __cache_clear_key(connection, cache, key, key_hint, binary, query_id)
 
 
 def __cache_clear_key(connection, cache, key, key_hint, binary, query_id):
@@ -864,7 +864,7 @@ def __cache_clear_key(connection, cache, key, key_hint, binary, query_id):
     )
 
 
-def cache_clear_keys(connection: 'Connection', cache: Union[str, int], keys: list, binary: bool = False,
+def cache_clear_keys(connection: 'Connection', cache: Union[str, int], keys: Iterable, binary: bool = False,
                      query_id: Optional[int] = None) -> 'APIResult':
     """
     Clears the cache keys without notifying listeners or cache writers.
@@ -880,15 +880,15 @@ def cache_clear_keys(connection: 'Connection', cache: Union[str, int], keys: lis
     :return: API result data object. Contains zero status on success,
      non-zero status and an error description otherwise.
     """
-    return __cache_clear_keys(connection, cache, keys, binary, query_id)()
+    return __cache_clear_keys(connection, cache, keys, binary, query_id)
 
 
-async def cache_clear_keys_async(connection: 'AioConnection', cache: Union[str, int], keys: list, binary: bool = False,
-                           query_id: Optional[int] = None) -> 'APIResult':
+async def cache_clear_keys_async(connection: 'AioConnection', cache: Union[str, int], keys: Iterable,
+                                 binary: bool = False, query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_clear_keys.
     """
-    return await __cache_clear_keys(connection, cache, keys, binary, query_id)()
+    return await __cache_clear_keys(connection, cache, keys, binary, query_id)
 
 
 def __cache_clear_keys(connection, cache, keys, binary, query_id):
@@ -930,7 +930,7 @@ def cache_remove_key(connection: 'Connection', cache: Union[str, int], key: Any,
      success code, or non-zero status and an error description if something
      has gone wrong.
     """
-    return __cache_remove_key(connection, cache, key, key_hint, binary, query_id)()
+    return __cache_remove_key(connection, cache, key, key_hint, binary, query_id)
 
 
 async def cache_remove_key_async(connection: 'AioConnection', cache: Union[str, int], key: Any,
@@ -939,7 +939,7 @@ async def cache_remove_key_async(connection: 'AioConnection', cache: Union[str, 
     """
     Async version of cache_remove_key.
     """
-    return await __cache_remove_key(connection, cache, key, key_hint, binary, query_id)()
+    return await __cache_remove_key(connection, cache, key, key_hint, binary, query_id)
 
 
 def __cache_remove_key(connection, cache, key, key_hint, binary, query_id):
@@ -990,7 +990,7 @@ def cache_remove_if_equals(connection: 'Connection', cache: Union[str, int], key
      success code, or non-zero status and an error description if something
      has gone wrong.
     """
-    return __cache_remove_if_equals(connection, cache, key, sample, key_hint, sample_hint, binary, query_id)()
+    return __cache_remove_if_equals(connection, cache, key, sample, key_hint, sample_hint, binary, query_id)
 
 
 async def cache_remove_if_equals_async(
@@ -999,7 +999,7 @@ async def cache_remove_if_equals_async(
     """
     Async version of cache_remove_if_equals.
     """
-    return await __cache_remove_if_equals(connection, cache, key, sample, key_hint, sample_hint, binary, query_id)()
+    return await __cache_remove_if_equals(connection, cache, key, sample, key_hint, sample_hint, binary, query_id)
 
 
 def __cache_remove_if_equals(connection, cache, key, sample, key_hint, sample_hint, binary, query_id):
@@ -1044,14 +1044,15 @@ def cache_remove_keys(connection: 'Connection', cache: Union[str, int], keys: It
     :return: API result data object. Contains zero status on success,
      non-zero status and an error description otherwise.
     """
-    return __cache_remove_keys(connection, cache, keys, binary, query_id)()
+    return __cache_remove_keys(connection, cache, keys, binary, query_id)
+
 
 async def cache_remove_keys_async(connection: 'AioConnection', cache: Union[str, int], keys: Iterable,
                                   binary: bool = False, query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_remove_keys.
     """
-    return await __cache_remove_keys(connection, cache, keys, binary, query_id)()
+    return await __cache_remove_keys(connection, cache, keys, binary, query_id)
 
 
 def __cache_remove_keys(connection, cache, keys, binary, query_id):
@@ -1089,7 +1090,7 @@ def cache_remove_all(connection: 'Connection', cache: Union[str, int], binary: b
     :return: API result data object. Contains zero status on success,
      non-zero status and an error description otherwise.
     """
-    return __cache_remove_all(connection, cache, binary, query_id)()
+    return __cache_remove_all(connection, cache, binary, query_id)
 
 
 async def cache_remove_all_async(connection: 'AioConnection', cache: Union[str, int], binary: bool = False,
@@ -1097,7 +1098,7 @@ async def cache_remove_all_async(connection: 'AioConnection', cache: Union[str, 
     """
     Async version of cache_remove_all.
     """
-    return await __cache_remove_all(connection, cache, binary, query_id)()
+    return await __cache_remove_all(connection, cache, binary, query_id)
 
 
 def __cache_remove_all(connection, cache, binary, query_id):
@@ -1137,13 +1138,13 @@ def cache_get_size(connection: 'Connection', cache: Union[str, int], peek_modes:
      cache entries on success, non-zero status and an error description
      otherwise.
     """
-    return __cache_get_size(connection, cache, peek_modes, binary, query_id)()
+    return __cache_get_size(connection, cache, peek_modes, binary, query_id)
 
 
 async def cache_get_size_async(connection: 'AioConnection', cache: Union[str, int],
                                peek_modes: Union[int, list, tuple] = 0, binary: bool = False,
                                query_id: Optional[int] = None) -> 'APIResult':
-    return await  __cache_get_size(connection, cache, peek_modes, binary, query_id)()
+    return await  __cache_get_size(connection, cache, peek_modes, binary, query_id)
 
 
 def __cache_get_size(connection, cache, peek_modes, binary, query_id):
@@ -1198,7 +1199,7 @@ def cache_local_peek(conn: 'Connection', cache: Union[str, int], key: Any, key_h
     :return: API result data object. Contains zero status and a peeked value
      (null if not found).
     """
-    return __cache_local_peek(conn, cache, key, key_hint, peek_modes, binary, query_id)()
+    return __cache_local_peek(conn, cache, key, key_hint, peek_modes, binary, query_id)
 
 
 async def cache_local_peek_async(
@@ -1207,7 +1208,7 @@ async def cache_local_peek_async(
     """
     Async version of cache_local_peek.
     """
-    return await __cache_local_peek(conn, cache, key, key_hint, peek_modes, binary, query_id)()
+    return await __cache_local_peek(conn, cache, key, key_hint, peek_modes, binary, query_id)
 
 
 def __cache_local_peek(conn, cache, key, key_hint, peek_modes, binary, query_id):

@@ -14,4 +14,5 @@
 # limitations under the License.
 
 from pyignite.client import Client
+from pyignite.aio_client import AioClient
 from pyignite.binary import GenericObjectMeta

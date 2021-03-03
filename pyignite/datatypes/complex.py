@@ -25,7 +25,7 @@ from .type_codes import *
 from .type_ids import *
 from .type_names import *
 from .null_object import Null, Nullable
-from ..stream import BinaryStream
+from ..stream import AioBinaryStream, BinaryStream
 
 __all__ = ['Map', 'ObjectArrayObject', 'CollectionObject', 'MapObject', 'WrappedDataObject', 'BinaryObject']
 
@@ -143,7 +143,7 @@ class ObjectArrayObject(Nullable):
 
         cls.__write_header(stream, type_or_id, length)
         for x in value:
-            await infer_from_python(stream, x)
+            await infer_from_python_async(stream, x)
 
     @classmethod
     def __write_header(cls, stream, type_or_id, length):
@@ -205,7 +205,7 @@ class WrappedDataObject(Nullable):
         return final_class
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
+    def to_python_not_null(cls, ctype_object, *args, **kwargs):
         return bytes(ctype_object.payload), ctype_object.offset
 
     @classmethod
@@ -422,7 +422,7 @@ class Map(Nullable):
 
         fields = []
         for i in range(header.length << 1):
-            c_type = await AnyDataObject.parse(stream)
+            c_type = await AnyDataObject.parse_async(stream)
             fields.append(('element_{}'.format(i), c_type))
 
         return cls.__build_final_class(header_class, fields)
@@ -601,8 +601,7 @@ class BinaryObject(Nullable):
         # that you need to fully serialize the object to calculate
         # its hashcode
         if not value._hashcode and client:
-
-            with BinaryStream(client.random_node) as stream:
+            with BinaryStream(client) as stream:
                 value._from_python(stream, save_to_buf=True)
 
         return value._hashcode
@@ -610,9 +609,7 @@ class BinaryObject(Nullable):
     @classmethod
     async def hashcode_async(cls, value: object, client: Optional['AioClient']) -> int:
         if not value._hashcode and client:
-
-            conn = await client.random_node()
-            with BinaryStream(conn) as stream:
+            with AioBinaryStream(client) as stream:
                 await value._from_python_async(stream, save_to_buf=True)
 
         return value._hashcode
@@ -667,7 +664,8 @@ class BinaryObject(Nullable):
 
         # ignore full schema, always retrieve fields' types and order
         # from complex types registry
-        object_fields_struct = cls.__build_object_fields_struct(stream, header)
+        data_class = stream.get_dataclass(header)
+        object_fields_struct = cls.__build_object_fields_struct(data_class)
         object_fields = object_fields_struct.parse(stream)
 
         return cls.__build_final_class(stream, header, header_class, object_fields,
@@ -679,7 +677,8 @@ class BinaryObject(Nullable):
 
         # ignore full schema, always retrieve fields' types and order
         # from complex types registry
-        object_fields_struct = cls.__build_object_fields_struct(stream, header)
+        data_class = await stream.get_dataclass(header)
+        object_fields_struct = cls.__build_object_fields_struct(data_class)
         object_fields = await object_fields_struct.parse_async(stream)
 
         return cls.__build_final_class(stream, header, header_class, object_fields,
@@ -692,9 +691,8 @@ class BinaryObject(Nullable):
         stream.seek(ctypes.sizeof(header_class), SEEK_CUR)
         return header, header_class
 
-    @classmethod
-    def __build_object_fields_struct(cls, stream, header):
-        data_class = stream.get_dataclass(header)
+    @staticmethod
+    def __build_object_fields_struct(data_class):
         fields = data_class.schema.items()
         return Struct(fields)
 
@@ -779,7 +777,7 @@ class BinaryObject(Nullable):
     @classmethod
     async def from_python_not_null_async(cls, stream, value, **kwargs):
         if cls.__write_fast_path(stream, value):
-            await stream.register_binary_type_async(value.__class__)
+            await stream.register_binary_type(value.__class__)
             await value._from_python_async(stream)
 
     @classmethod

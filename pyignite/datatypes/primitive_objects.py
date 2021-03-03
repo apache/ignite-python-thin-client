@@ -69,7 +69,11 @@ class DataObject(Nullable):
         return getattr(ctype_object, "value", None)
 
     @classmethod
-    def from_python_not_null(cls, stream, value):
+    async def to_python_async(cls, ctype_object, *args, **kwargs):
+        return cls.to_python(ctype_object, *args, **kwargs)
+
+    @classmethod
+    def from_python_not_null(cls, stream, value, **kwargs):
         data_type = cls.build_c_type()
         data_object = data_type()
         data_object.type_code = int.from_bytes(
@@ -194,7 +198,7 @@ class CharObject(DataObject):
         ).decode(PROTOCOL_CHAR_ENCODING)
 
     @classmethod
-    def from_python_not_null(cls, stream, value):
+    def from_python_not_null(cls, stream, value, **kwargs):
         if type(value) is str:
             value = value.encode(PROTOCOL_CHAR_ENCODING)
         # assuming either a bytes or an integer

@@ -36,12 +36,10 @@ from pyignite.constants import *
 from pyignite.exceptions import (
     HandshakeError, ParameterError, SocketError, connection_errors, AuthenticationError,
 )
-from pyignite.datatypes import Byte, Int, Short, String, UUIDObject
-from pyignite.datatypes.internal import Struct
 
 from .handshake import HandshakeRequest, HandshakeResponse
 from .ssl import wrap
-from ..stream import BinaryStream, READ_BACKWARD
+from ..stream import BinaryStream
 
 CLIENT_STATUS_AUTH_FAILURE = 2000
 
@@ -234,11 +232,11 @@ class Connection:
             self.password
         )
 
-        with BinaryStream(self) as stream:
+        with BinaryStream(self.client) as stream:
             hs_request.from_python(stream)
             self.send(stream.getbuffer(), reconnect=False)
 
-        with BinaryStream(self, self.recv(reconnect=False)) as stream:
+        with BinaryStream(self.client, self.recv(reconnect=False)) as stream:
             hs_response = HandshakeResponse.parse(stream, self.get_protocol_version())
 
             if hs_response.op_code == 0:

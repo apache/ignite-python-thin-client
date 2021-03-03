@@ -42,7 +42,7 @@ from .datatypes import (
 )
 from .datatypes.base import IgniteDataTypeProps
 from .exceptions import ParseError
-from .stream import BinaryStream, READ_BACKWARD
+from .stream import AioBinaryStream, BinaryStream, READ_BACKWARD
 from .utils import entity_id, schema_id
 
 
@@ -257,7 +257,7 @@ def unwrap_binary(client: 'Client', wrapped: tuple) -> object:
     :return: dict representing wrapped BinaryObject.
     """
     blob, offset = wrapped
-    with BinaryStream(client.random_node, blob) as stream:
+    with BinaryStream(client, blob) as stream:
         data_class = BinaryObject.parse(stream)
         result = BinaryObject.to_python(stream.read_ctype(data_class, direction=READ_BACKWARD), client)
 
@@ -269,8 +269,7 @@ async def unwrap_binary_async(client: 'AioClient', wrapped: tuple) -> object:
     Async version of unwrap_binary.
     """
     blob, offset = wrapped
-    conn = await client.random_node()
-    with BinaryStream(conn, blob) as stream:
+    with AioBinaryStream(client, blob) as stream:
         data_class = await BinaryObject.parse_async(stream)
         result = await BinaryObject.to_python_async(stream.read_ctype(data_class, direction=READ_BACKWARD), client)
 

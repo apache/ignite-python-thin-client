@@ -77,4 +77,4 @@ class IgniteDataType(metaclass=IgniteDataTypeMeta):
 
     @classmethod
     async def to_python_async(cls, ctype_object, *args, **kwargs):
-        return cls.to_python(cls, ctype_object, *args, **kwargs)
+        return cls.to_python(ctype_object, *args, **kwargs)

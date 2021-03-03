@@ -24,7 +24,12 @@ import signal
 import subprocess
 import time
 
-from pyignite import Client
+from pyignite import Client, AioClient
+
+try:
+    from contextlib import asynccontextmanager
+except ImportError:
+    from async_generator import asynccontextmanager
 
 
 @contextlib.contextmanager
@@ -36,6 +41,15 @@ def get_client(**kwargs):
         client.close()
 
 
+@asynccontextmanager
+async def get_client_async(**kwargs):
+    client = AioClient(**kwargs)
+    try:
+        yield client
+    finally:
+        await client.close()
+
+
 @contextlib.contextmanager
 def get_or_create_cache(client, cache_name):
     cache = client.get_or_create_cache(cache_name)
@@ -43,6 +57,14 @@ def get_or_create_cache(client, cache_name):
         yield cache
     finally:
         cache.destroy()
+
+@asynccontextmanager
+async def get_or_create_cache_async(client, cache_name):
+    cache = await client.get_or_create_cache(cache_name)
+    try:
+        yield cache
+    finally:
+        await cache.destroy()
 
 
 def wait_for_condition(condition, interval=0.1, timeout=10, error=None):

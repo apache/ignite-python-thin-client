@@ -81,7 +81,11 @@ class PrimitiveArray(Nullable):
         return [ctype_object.data[i] for i in range(ctype_object.length)]
 
     @classmethod
-    def from_python_not_null(cls, stream, value):
+    async def to_python_async(cls, ctypes_object, *args, **kwargs):
+        return cls.to_python(ctypes_object, *args, **kwargs)
+
+    @classmethod
+    def from_python_not_null(cls, stream, value, **kwargs):
         header_class = cls.build_header_class()
         header = header_class()
         if hasattr(header, 'type_code'):

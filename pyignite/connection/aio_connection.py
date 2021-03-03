@@ -36,13 +36,11 @@ from typing import Union
 
 from pyignite.constants import PROTOCOLS, IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT, PROTOCOL_BYTE_ORDER
 from pyignite.exceptions import HandshakeError, SocketError, connection_errors, AuthenticationError
-from pyignite.datatypes import Byte, Int, Short, String, UUIDObject
-from pyignite.datatypes.internal import Struct
 from .connection import CLIENT_STATUS_AUTH_FAILURE
 
 from .handshake import HandshakeRequest, HandshakeResponse
 from .ssl import create_ssl_context, check_ssl_params
-from ..stream import BinaryStream, READ_BACKWARD
+from ..stream import BinaryStream, AioBinaryStream
 
 
 class AioConnection:
@@ -217,11 +215,11 @@ class AioConnection:
             self.password
         )
 
-        with BinaryStream(self) as stream:
+        with AioBinaryStream(self.client) as stream:
             await hs_request.from_python_async(stream)
             await self._send(stream.getbuffer(), reconnect=False)
 
-        with BinaryStream(self, await self._recv(reconnect=False)) as stream:
+        with AioBinaryStream(self.client, await self._recv(reconnect=False)) as stream:
             hs_response = await HandshakeResponse.parse_async(stream, self.get_protocol_version())
 
             if hs_response.op_code == 0:

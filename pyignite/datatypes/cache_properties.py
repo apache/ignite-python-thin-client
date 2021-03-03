@@ -133,7 +133,7 @@ class PropBase:
 
     @classmethod
     async def from_python_async(cls, stream, value):
-        return cls.to_python(stream, value)
+        return cls.from_python(stream, value)
 
 
 class PropName(PropBase):

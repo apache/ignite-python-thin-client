@@ -73,7 +73,7 @@ class Nullable(IgniteDataType):
 
     @classmethod
     async def parse_not_null_async(cls, stream):
-        raise NotImplementedError
+        return cls.parse_not_null(stream)
 
     @classmethod
     def parse(cls, stream):
