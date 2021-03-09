@@ -36,6 +36,8 @@ from pyignite.queries.op_codes import (
 )
 from pyignite.utils import cache_id
 
+from .result import APIResult
+
 
 def compact_cache_config(cache_config: dict) -> dict:
     """

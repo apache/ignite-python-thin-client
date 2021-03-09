@@ -18,7 +18,7 @@ from datetime import date, datetime, time, timedelta
 import decimal
 from io import SEEK_CUR
 from math import ceil
-from typing import Any, Tuple
+from typing import Tuple
 import uuid
 
 from pyignite.constants import *
@@ -179,11 +179,7 @@ class DecimalObject(Nullable):
             range(len(data))
         ])
         # apply scale
-        result = (
-            result
-            / decimal.Decimal('10')
-            ** decimal.Decimal(ctype_object.scale)
-        )
+        result = result / decimal.Decimal('10') ** decimal.Decimal(ctype_object.scale)
         if sign:
             # apply sign
             result = -result
@@ -194,7 +190,7 @@ class DecimalObject(Nullable):
         sign, digits, scale = value.normalize().as_tuple()
         integer = int(''.join([str(d) for d in digits]))
         # calculate number of bytes (at least one, and not forget the sign bit)
-        length = ceil((integer.bit_length() + 1)/8)
+        length = ceil((integer.bit_length() + 1) / 8)
         # write byte string
         data = []
         for i in range(length):
@@ -345,7 +341,7 @@ class TimestampObject(StandardObject):
     @classmethod
     def to_python_not_null(cls, ctypes_object, *args, **kwargs):
         return (
-            datetime.fromtimestamp(ctypes_object.epoch/1000),
+            datetime.fromtimestamp(ctypes_object.epoch / 1000),
             ctypes_object.fraction
         )
 
@@ -400,7 +396,7 @@ class DateObject(StandardObject):
 
     @classmethod
     def to_python_not_null(cls, ctypes_object, *args, **kwargs):
-        return datetime.fromtimestamp(ctypes_object.epoch/1000)
+        return datetime.fromtimestamp(ctypes_object.epoch / 1000)
 
 
 class TimeObject(StandardObject):
@@ -521,7 +517,7 @@ class StandardArray(Nullable):
     @classmethod
     def build_header_class(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
@@ -646,7 +642,7 @@ class StandardArrayObject(StandardArray):
     @classmethod
     def build_header_class(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
@@ -721,7 +717,7 @@ class EnumArrayObject(StandardArrayObject):
     @classmethod
     def build_header_class(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,

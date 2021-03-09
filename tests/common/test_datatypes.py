@@ -20,7 +20,11 @@ import decimal
 import pytest
 import uuid
 
-from pyignite.datatypes import *
+from pyignite.datatypes import (
+    ByteObject, IntObject, FloatObject, CharObject, ShortObject, BoolObject, ByteArrayObject, IntArrayObject,
+    ShortArrayObject, FloatArrayObject, BoolArrayObject, CharArrayObject, TimestampObject, String, BinaryEnumObject,
+    TimestampArrayObject, BinaryEnumArrayObject, ObjectArrayObject, CollectionObject, MapObject
+)
 from pyignite.utils import unsigned
 
 put_get_data_params = [

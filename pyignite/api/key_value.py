@@ -16,11 +16,20 @@
 from typing import Any, Iterable, Optional, Union
 
 from pyignite.connection import AioConnection, Connection
-from pyignite.queries.op_codes import *
+from pyignite.queries.op_codes import (
+    OP_CACHE_PUT, OP_CACHE_GET, OP_CACHE_GET_ALL, OP_CACHE_PUT_ALL, OP_CACHE_CONTAINS_KEY, OP_CACHE_CONTAINS_KEYS,
+    OP_CACHE_GET_AND_PUT, OP_CACHE_GET_AND_REPLACE, OP_CACHE_GET_AND_REMOVE, OP_CACHE_PUT_IF_ABSENT,
+    OP_CACHE_GET_AND_PUT_IF_ABSENT, OP_CACHE_REPLACE, OP_CACHE_REPLACE_IF_EQUALS, OP_CACHE_CLEAR, OP_CACHE_CLEAR_KEY,
+    OP_CACHE_CLEAR_KEYS, OP_CACHE_REMOVE_KEY, OP_CACHE_REMOVE_IF_EQUALS, OP_CACHE_REMOVE_KEYS, OP_CACHE_REMOVE_ALL,
+    OP_CACHE_GET_SIZE, OP_CACHE_LOCAL_PEEK
+)
 from pyignite.datatypes import Map, Bool, Byte, Int, Long, AnyDataArray, AnyDataObject
+from pyignite.datatypes.base import IgniteDataType
 from pyignite.datatypes.key_value import PeekModes
 from pyignite.queries import Query, query_perform
 from pyignite.utils import cache_id
+
+from .result import APIResult
 
 
 def cache_put(connection: 'Connection', cache: Union[str, int], key: Any, value: Any,
@@ -127,7 +136,7 @@ def __cache_get(connection, cache, key, key_hint, binary, query_id):
             'key': key,
         },
         response_config=[
-           ('value', AnyDataObject),
+            ('value', AnyDataObject),
         ],
         post_process_fun=__post_process_value_by_key('value')
     )
@@ -1144,7 +1153,7 @@ def cache_get_size(connection: 'Connection', cache: Union[str, int], peek_modes:
 async def cache_get_size_async(connection: 'AioConnection', cache: Union[str, int],
                                peek_modes: Union[int, list, tuple] = 0, binary: bool = False,
                                query_id: Optional[int] = None) -> 'APIResult':
-    return await  __cache_get_size(connection, cache, peek_modes, binary, query_id)
+    return await __cache_get_size(connection, cache, peek_modes, binary, query_id)
 
 
 def __cache_get_size(connection, cache, peek_modes, binary, query_id):
@@ -1180,7 +1189,7 @@ def cache_local_peek(conn: 'Connection', cache: Union[str, int], key: Any, key_h
     """
     Peeks at in-memory cached value using default optional peek mode.
 
-    This method will not load value from any persistent store or from a remote
+    This method will not load value from any cache store or from a remote
     node.
 
     :param conn: connection: connection to Ignite server,

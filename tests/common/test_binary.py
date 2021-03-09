@@ -56,7 +56,7 @@ CREATE TABLE {} (
 
 insert_query = '''
 INSERT INTO {} (
-  test_pk, test_bool, test_str, test_int, test_decimal, 
+  test_pk, test_bool, test_str, test_int, test_decimal,
 ) VALUES (?, ?, ?, ?, ?)'''.format(table_sql_name)
 
 select_query = '''SELECT * FROM {}'''.format(table_sql_name)
@@ -96,12 +96,8 @@ def test_sql_read_as_binary(table_cache_read):
         # to compare it with the initial data
         for key, value in cursor:
             assert key in {x[0] for x in insert_data}
-            assert (
-                       value.TEST_BOOL,
-                       value.TEST_STR,
-                       value.TEST_INT,
-                       value.TEST_DECIMAL
-                   ) in {tuple(x[1:]) for x in insert_data}
+            assert (value.TEST_BOOL, value.TEST_STR, value.TEST_INT, value.TEST_DECIMAL) \
+                   in {tuple(x[1:]) for x in insert_data}
 
 
 @pytest.mark.asyncio
@@ -111,12 +107,8 @@ async def test_sql_read_as_binary_async(table_cache_read_async):
         # to compare it with the initial data
         async for key, value in cursor:
             assert key in {x[0] for x in insert_data}
-            assert (
-                       value.TEST_BOOL,
-                       value.TEST_STR,
-                       value.TEST_INT,
-                       value.TEST_DECIMAL
-                   ) in {tuple(x[1:]) for x in insert_data}
+            assert (value.TEST_BOOL, value.TEST_STR, value.TEST_INT, value.TEST_DECIMAL) \
+                   in {tuple(x[1:]) for x in insert_data}
 
 
 class AllDataType(
@@ -297,6 +289,7 @@ def __check_nested_binary_objects(cache):
     def inner():
         cache.put(1, prepare_obj())
         check_obj(cache.get(1))
+
     return inner_async() if isinstance(cache, AioCache) else inner()
 
 
@@ -415,12 +408,11 @@ class Internal(
         ('str', String)
     ])
 ):
-
     pass
 
 
-class TestObject(
-    metaclass=GenericObjectMeta, type_name='TestObject',
+class NestedObject(
+    metaclass=GenericObjectMeta, type_name='NestedObject',
     schema=OrderedDict([
         ('id', IntObject),
         ('str', String),
@@ -434,7 +426,7 @@ class TestObject(
 def complex_objects():
     fixtures = []
 
-    obj_ascii = TestObject()
+    obj_ascii = NestedObject()
     obj_ascii.id = 1
     obj_ascii.str = 'test_string'
 
@@ -444,7 +436,7 @@ def complex_objects():
 
     fixtures.append((obj_ascii, -1314567146))
 
-    obj_utf8 = TestObject()
+    obj_utf8 = NestedObject()
     obj_utf8.id = 1
     obj_utf8.str = 'юникод'
 

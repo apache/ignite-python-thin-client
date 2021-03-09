@@ -64,6 +64,7 @@ def __test_connect_ssl(is_async=False, **kwargs):
 
     return inner_async() if is_async else inner()
 
+
 invalid_params = [
     {'use_ssl': False},
     {'use_ssl': True},
@@ -76,6 +77,7 @@ def test_connection_error_with_incorrect_config(invalid_ssl_params):
     with pytest.raises(ReconnectError):
         with get_client(**invalid_ssl_params) as client:
             client.connect([("127.0.0.1", 10801)])
+
 
 @pytest.mark.parametrize('invalid_ssl_params', invalid_params)
 @pytest.mark.asyncio

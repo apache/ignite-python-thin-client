@@ -27,8 +27,8 @@ try:
     _cutils_hashcode = _cutils.hashcode
     _cutils_schema_id = _cutils.schema_id
 except ImportError:
-    _cutils_hashcode = lambda x: None
-    _cutils_schema_id = lambda x: None
+    _cutils_hashcode = lambda x: None  # noqa: E731
+    _cutils_schema_id = lambda x: None  # noqa: E731
     pass
 
 

@@ -258,7 +258,7 @@ class CollectionObject(Nullable):
     @classmethod
     def build_header(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
@@ -452,13 +452,13 @@ class Map(Nullable):
         result = map_cls()
         for i in range(0, ctype_object.length << 1, 2):
             k = AnyDataObject.to_python(
-                    getattr(ctype_object, 'element_{}'.format(i)),
-                    *args, **kwargs
-                )
+                getattr(ctype_object, 'element_{}'.format(i)),
+                *args, **kwargs
+            )
             v = AnyDataObject.to_python(
-                    getattr(ctype_object, 'element_{}'.format(i + 1)),
-                    *args, **kwargs
-                )
+                getattr(ctype_object, 'element_{}'.format(i + 1)),
+                *args, **kwargs
+            )
             result[k] = v
         return result
 
@@ -533,7 +533,7 @@ class MapObject(Map):
     @classmethod
     def build_header(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,

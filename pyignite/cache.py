@@ -16,35 +16,24 @@
 import time
 from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
-from .constants import *
-from .binary import GenericObjectMeta, unwrap_binary
+from .constants import AFFINITY_RETRIES, AFFINITY_DELAY
+from .binary import GenericObjectMeta
 from .datatypes import prop_codes
 from .datatypes.internal import AnyDataObject
-from .exceptions import (
-    CacheCreationError, CacheError, ParameterError, SQLError,
-    connection_errors,
-)
-from .utils import (
-    cache_id, get_field_by_id, is_wrapped,
-    status_to_exception, unsigned
-)
+from .exceptions import CacheCreationError, CacheError, ParameterError, SQLError, connection_errors
+from .utils import cache_id, get_field_by_id, status_to_exception, unsigned
 from .api.cache_config import (
-    cache_create, cache_create_with_config,
-    cache_get_or_create, cache_get_or_create_with_config,
-    cache_destroy, cache_get_configuration,
+    cache_create, cache_create_with_config, cache_get_or_create, cache_get_or_create_with_config, cache_destroy,
+    cache_get_configuration
 )
 from .api.key_value import (
-    cache_get, cache_put, cache_get_all, cache_put_all, cache_replace,
-    cache_clear, cache_clear_key, cache_clear_keys,
-    cache_contains_key, cache_contains_keys,
-    cache_get_and_put, cache_get_and_put_if_absent, cache_put_if_absent,
-    cache_get_and_remove, cache_get_and_replace,
-    cache_remove_key, cache_remove_keys, cache_remove_all,
-    cache_remove_if_equals, cache_replace_if_equals, cache_get_size,
+    cache_get, cache_put, cache_get_all, cache_put_all, cache_replace, cache_clear, cache_clear_key, cache_clear_keys,
+    cache_contains_key, cache_contains_keys, cache_get_and_put, cache_get_and_put_if_absent, cache_put_if_absent,
+    cache_get_and_remove, cache_get_and_replace, cache_remove_key, cache_remove_keys, cache_remove_all,
+    cache_remove_if_equals, cache_replace_if_equals, cache_get_size
 )
 from .cursors import ScanCursor, SqlCursor
 from .api.affinity import cache_get_node_partitions
-
 
 PROP_CODES = set([
     getattr(prop_codes, x)
@@ -81,7 +70,7 @@ class Cache:
 
     @staticmethod
     def _validate_settings(
-        settings: Union[str, dict] = None, get_only: bool = False,
+            settings: Union[str, dict] = None, get_only: bool = False,
     ):
         if any([
             not settings,
@@ -100,8 +89,8 @@ class Cache:
             raise ParameterError('Only cache name allowed as a parameter')
 
     def __init__(
-        self, client: 'Client', settings: Union[str, dict] = None,
-        with_get: bool = False, get_only: bool = False,
+            self, client: 'Client', settings: Union[str, dict] = None,
+            with_get: bool = False, get_only: bool = False,
     ):
         """
         Initialize cache object.
@@ -197,18 +186,6 @@ class Cache:
         """
         return self._cache_id
 
-    def _process_binary(self, value: Any) -> Any:
-        """
-        Detects and recursively unwraps Binary Object.
-
-        :param value: anything that could be a Binary Object,
-        :return: the result of the Binary Object unwrapping with all other data
-         left intact.
-        """
-        if is_wrapped(value):
-            return unwrap_binary(self._client, value)
-        return value
-
     @status_to_exception(CacheError)
     def destroy(self):
         """
@@ -235,7 +212,7 @@ class Cache:
         return result
 
     def get_best_node(
-        self, key: Any = None, key_hint: 'IgniteDataType' = None,
+            self, key: Any = None, key_hint: 'IgniteDataType' = None,
     ) -> 'Connection':
         """
         Returns the node from the list of the nodes, opened by client, that
@@ -260,7 +237,7 @@ class Cache:
                 # update partition mapping
                 while True:
                     try:
-                        self.affinity = self._get_affinity(conn)
+                        full_affinity = self._get_affinity(conn)
                         break
                     except connection_errors:
                         # retry if connection failed
@@ -270,36 +247,26 @@ class Cache:
                         # server did not create mapping in time
                         return conn
 
-                # flatten it a bit
-                try:
-                    self.affinity.update(self.affinity['partition_mapping'][0])
-                except IndexError:
+                self.affinity['version'] = full_affinity['version']
+
+                full_mapping = full_affinity.get('partition_mapping')
+                if full_mapping and self.cache_id in full_mapping:
+                    self.affinity.update(full_mapping[self.cache_id])
+                else:
                     return conn
-                del self.affinity['partition_mapping']
-
-                # calculate the number of partitions
-                parts = 0
-                if 'node_mapping' in self.affinity:
-                    for p in self.affinity['node_mapping'].values():
-                        parts += len(p)
-
-                self.affinity['number_of_partitions'] = parts
 
                 for conn in self.client._nodes:
                     if not conn.alive:
                         conn.reconnect()
-            else:
-                # get number of partitions
-                parts = self.affinity.get('number_of_partitions')
+
+            parts = self.affinity.get('number_of_partitions')
 
             if not parts:
                 return conn
 
             if self.affinity['is_applicable']:
-                affinity_key_id = self.affinity['cache_config'].get(
-                    key_hint.type_id,
-                    None
-                )
+                affinity_key_id = self.affinity['cache_config'].get(key_hint.type_id)
+
                 if affinity_key_id and isinstance(key, GenericObjectMeta):
                     key, key_hint = get_field_by_id(key, affinity_key_id)
 
@@ -354,12 +321,12 @@ class Cache:
             key,
             key_hint=key_hint
         )
-        result.value = self._process_binary(result.value)
+        result.value = self.client.unwrap_binary(result.value)
         return result
 
     @status_to_exception(CacheError)
     def put(
-        self, key, value, key_hint: object = None, value_hint: object = None
+            self, key, value, key_hint: object = None, value_hint: object = None
     ):
         """
         Puts a value with a given key to cache (overwriting existing value
@@ -392,7 +359,7 @@ class Cache:
         result = cache_get_all(self.get_best_node(), self._cache_id, keys)
         if result.value:
             for key, value in result.value.items():
-                result.value[key] = self._process_binary(value)
+                result.value[key] = self.client.unwrap_binary(value)
         return result
 
     @status_to_exception(CacheError)
@@ -409,7 +376,7 @@ class Cache:
 
     @status_to_exception(CacheError)
     def replace(
-        self, key, value, key_hint: object = None, value_hint: object = None
+            self, key, value, key_hint: object = None, value_hint: object = None
     ):
         """
         Puts a value with a given key to cache only if the key already exist.
@@ -429,7 +396,7 @@ class Cache:
             self._cache_id, key, value,
             key_hint=key_hint, value_hint=value_hint
         )
-        result.value = self._process_binary(result.value)
+        result.value = self.client.unwrap_binary(result.value)
         return result
 
     @status_to_exception(CacheError)
@@ -528,12 +495,12 @@ class Cache:
             key, value,
             key_hint, value_hint
         )
-        result.value = self._process_binary(result.value)
+        result.value = self.client.unwrap_binary(result.value)
         return result
 
     @status_to_exception(CacheError)
     def get_and_put_if_absent(
-        self, key, value, key_hint=None, value_hint=None
+            self, key, value, key_hint=None, value_hint=None
     ):
         """
         Puts a value with a given key to cache only if the key does not
@@ -556,7 +523,7 @@ class Cache:
             key, value,
             key_hint, value_hint
         )
-        result.value = self._process_binary(result.value)
+        result.value = self.client.unwrap_binary(result.value)
         return result
 
     @status_to_exception(CacheError)
@@ -601,12 +568,12 @@ class Cache:
             key,
             key_hint
         )
-        result.value = self._process_binary(result.value)
+        result.value = self.client.unwrap_binary(result.value)
         return result
 
     @status_to_exception(CacheError)
     def get_and_replace(
-        self, key, value, key_hint=None, value_hint=None
+            self, key, value, key_hint=None, value_hint=None
     ) -> Any:
         """
         Puts a value with a given key to cache, returning previous value
@@ -630,7 +597,7 @@ class Cache:
             key, value,
             key_hint, value_hint
         )
-        result.value = self._process_binary(result.value)
+        result.value = self.client.unwrap_binary(result.value)
         return result
 
     @status_to_exception(CacheError)
@@ -693,8 +660,8 @@ class Cache:
 
     @status_to_exception(CacheError)
     def replace_if_equals(
-        self, key, sample, value,
-        key_hint=None, sample_hint=None, value_hint=None
+            self, key, sample, value,
+            key_hint=None, sample_hint=None, value_hint=None
     ) -> Any:
         """
         Puts a value with a given key to cache only if the key already exists
@@ -720,7 +687,7 @@ class Cache:
             key, sample, value,
             key_hint, sample_hint, value_hint
         )
-        result.value = self._process_binary(result.value)
+        result.value = self.client.unwrap_binary(result.value)
         return result
 
     @status_to_exception(CacheError)
@@ -753,9 +720,9 @@ class Cache:
         return ScanCursor(self.client, self._cache_id, page_size, partitions, local)
 
     def select_row(
-        self, query_str: str, page_size: int = 1,
-        query_args: Optional[list] = None, distributed_joins: bool = False,
-        replicated_only: bool = False, local: bool = False, timeout: int = 0
+            self, query_str: str, page_size: int = 1,
+            query_args: Optional[list] = None, distributed_joins: bool = False,
+            replicated_only: bool = False, local: bool = False, timeout: int = 0
     ):
         """
         Executes a simplified SQL SELECT query over data stored in the cache.
@@ -781,5 +748,5 @@ class Cache:
         if not type_name:
             raise SQLError('Value type is unknown')
 
-        return SqlCursor(self.client, self._cache_id, type_name,query_str, page_size, query_args,
+        return SqlCursor(self.client, self._cache_id, type_name, query_str, page_size, query_args,
                          distributed_joins, replicated_only, local, timeout)

@@ -19,7 +19,10 @@ from pyignite.connection import AioConnection, Connection
 from pyignite.datatypes import AnyDataArray, AnyDataObject, Bool, Byte, Int, Long, Map, Null, String, StructArray
 from pyignite.datatypes.sql import StatementType
 from pyignite.queries import Query, query_perform
-from pyignite.queries.op_codes import *
+from pyignite.queries.op_codes import (
+    OP_QUERY_SCAN, OP_QUERY_SCAN_CURSOR_GET_PAGE, OP_QUERY_SQL, OP_QUERY_SQL_CURSOR_GET_PAGE, OP_QUERY_SQL_FIELDS,
+    OP_QUERY_SQL_FIELDS_CURSOR_GET_PAGE, OP_RESOURCE_CLOSE
+)
 from pyignite.utils import cache_id, deprecated
 from .result import APIResult
 from ..queries.response import SQLResponse
@@ -57,7 +60,7 @@ def scan(conn: 'Connection', cache: Union[str, int], page_size: int, partitions:
 
 
 async def scan_async(conn: 'AioConnection', cache: Union[str, int], page_size: int, partitions: int = -1,
-                     local: bool = False, binary: bool = False,query_id: int = None) -> APIResult:
+                     local: bool = False, binary: bool = False, query_id: int = None) -> APIResult:
     """
     Async version of scan.
     """

@@ -29,7 +29,7 @@
 # limitations under the License.
 
 import asyncio
-from asyncio import Lock, AbstractEventLoop
+from asyncio import Lock
 from collections import OrderedDict
 from io import BytesIO
 from typing import Union
@@ -40,29 +40,14 @@ from .connection import CLIENT_STATUS_AUTH_FAILURE
 
 from .handshake import HandshakeRequest, HandshakeResponse
 from .ssl import create_ssl_context, check_ssl_params
-from ..stream import BinaryStream, AioBinaryStream
+from ..stream import AioBinaryStream
 
 
 class AioConnection:
     """
     """
 
-    _reader = None
-    _writer = None
-    _failed = None
-    _loop = None
-    _mux = None
-
-    client = None
-    host = None
-    port = None
-    username = None
-    password = None
-    ssl_params = {}
-    uuid = None
-
-    def __init__(self, client: 'Client', username: str = None, password: str = None,
-                 loop: AbstractEventLoop = None, **ssl_params):
+    def __init__(self, client: 'AioClient', username: str = None, password: str = None, **ssl_params):
         """
         Initialize connection.
 
@@ -106,6 +91,9 @@ class AioConnection:
         self.client = client
         self.username = username
         self.password = password
+        self.host = None
+        self.port = None
+        self.uuid = None
         check_ssl_params(ssl_params)
 
         if self.username and self.password and 'use_ssl' not in ssl_params:
@@ -113,14 +101,12 @@ class AioConnection:
 
         self.ssl_params = ssl_params
 
-        if loop:
-            self._loop = loop
-        else:
-            self._loop = asyncio.get_event_loop()
-
         self.ssl_params = ssl_params
         self._mux = Lock()
         self._failed = False
+
+        self._reader = None
+        self._writer = None
 
     @property
     def closed(self) -> bool:
@@ -205,7 +191,7 @@ class AioConnection:
         port = port or IGNITE_DEFAULT_PORT
 
         ssl_context = create_ssl_context(self.ssl_params)
-        self._reader, self._writer = await asyncio.open_connection(host, port, ssl=ssl_context, loop=self._loop)
+        self._reader, self._writer = await asyncio.open_connection(host, port, ssl=ssl_context)
 
         protocol_version = self.client.protocol_version
 
@@ -242,13 +228,11 @@ class AioConnection:
             return hs_response
 
     async def reconnect(self):
-        with self._mux:
-            return await self._reconnect()
+        async with self._mux:
+            await self._reconnect()
 
     async def _reconnect(self):
-        # do not reconnect if connection is already working
-        # or was closed on purpose
-        if not self.failed:
+        if self.alive:
             return
 
         self._close()

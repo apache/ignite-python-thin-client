@@ -23,6 +23,8 @@ When the binary client protocol changes, these functions also change. For
 stable end user API see :mod:`pyignite.client` module.
 """
 
+# flake8: noqa
+
 from .affinity import (
     cache_get_node_partitions, cache_get_node_partitions_async,
 )

@@ -51,7 +51,7 @@ def check_ssl_params(params):
 def create_ssl_context(ssl_params):
     if not ssl_params.get('use_ssl'):
         return None
-    
+
     keyfile = ssl_params.get('ssl_keyfile', None)
     certfile = ssl_params.get('ssl_certfile', None)
 

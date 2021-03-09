@@ -17,7 +17,7 @@ from collections import defaultdict, OrderedDict
 import random
 import re
 from itertools import chain
-from typing import Iterable, Optional, Tuple, Type, Union
+from typing import Iterable, Optional, Tuple, Type, Union, Any
 
 from .api.binary import get_binary_type_async, put_binary_type_async
 from .api.cache_config import cache_get_names_async
@@ -28,7 +28,9 @@ from .constants import IGNITE_DEFAULT_HOST, PROTOCOL_BYTE_ORDER, IGNITE_DEFAULT_
 from .datatypes import BinaryObject
 from .datatypes.internal import tc_map
 from .exceptions import BinaryTypeError, CacheError, ReconnectError, connection_errors
-from .utils import cache_id, capitalize, entity_id, schema_id, process_delimiter, status_to_exception, is_iterable
+from .stream import AioBinaryStream, READ_BACKWARD
+from .utils import cache_id, capitalize, entity_id, schema_id, process_delimiter, status_to_exception, is_iterable, \
+    is_wrapped
 from .binary import GenericObjectMeta
 
 
@@ -106,11 +108,7 @@ class AioClient:
         elif len(args) == 1 and is_iterable(args[0]):
             # iterable of host-port pairs is given
             nodes = args[0]
-        elif (
-            len(args) == 2
-            and isinstance(args[0], str)
-            and isinstance(args[1], int)
-        ):
+        elif len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], int):
             # host and port are given
             nodes = [args]
         else:
@@ -133,9 +131,6 @@ class AioClient:
 
                 except connection_errors:
                     conn.failed = True
-                    if self.partition_aware:
-                        # schedule the reconnection
-                        await conn.reconnect()
 
             self._nodes.append(conn)
 
@@ -408,6 +403,21 @@ class AioClient:
             except KeyError:
                 return None
         return self._registry[type_id]
+
+    async def unwrap_binary(self, value: Any) -> Any:
+        """
+        Detects and recursively unwraps Binary Object.
+
+        :param value: anything that could be a Binary Object,
+        :return: the result of the Binary Object unwrapping with all other data
+         left intact.
+        """
+        if is_wrapped(value):
+            blob, offset = value
+            with AioBinaryStream(self, blob) as stream:
+                data_class = await BinaryObject.parse_async(stream)
+                return await BinaryObject.to_python_async(stream.read_ctype(data_class, direction=READ_BACKWARD), self)
+        return value
 
     async def create_cache(self, settings: Union[str, dict]) -> 'AioCache':
         """

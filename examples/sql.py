@@ -280,7 +280,7 @@ field_names = next(result)
 field_data = list(*result)
 
 print('City info:')
-for field_name, field_value in zip(field_names*len(field_data), field_data):
+for field_name, field_value in zip(field_names * len(field_data), field_data):
     print('{}: {}'.format(field_name, field_value))
 # City info:
 # ID: 3802

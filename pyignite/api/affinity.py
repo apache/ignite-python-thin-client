@@ -99,28 +99,40 @@ def __post_process_partitions(result):
                 result.value['version_major'],
                 result.value['version_minor']
             ),
-            'partition_mapping': [],
+            'partition_mapping': {},
         }
-        for i, partition_map in enumerate(result.value['partition_mapping']):
-            cache_id = partition_map['cache_mapping'][0]['cache_id']
-            value['partition_mapping'].insert(
-                i,
-                {
-                    'cache_id': cache_id,
-                    'is_applicable': partition_map['is_applicable'],
-                }
-            )
-            if partition_map['is_applicable']:
-                value['partition_mapping'][i]['cache_config'] = {
-                    a['key_type_id']: a['affinity_key_field_id']
-                    for a in partition_map['cache_mapping'][0]['cache_config']
-                }
-                value['partition_mapping'][i]['node_mapping'] = {
+        for partition_map in result.value['partition_mapping']:
+            is_applicable = partition_map['is_applicable']
+
+            node_mapping = None
+            if is_applicable:
+                node_mapping = {
                     p['node_uuid']: [
                         x['partition_id'] for x in p['node_partitions']
                     ]
                     for p in partition_map['node_mapping']
                 }
+
+            for cache_info in partition_map['cache_mapping']:
+                cache_id = cache_info['cache_id']
+
+                cache_partition_mapping = {
+                    'is_applicable': is_applicable,
+                }
+
+                parts = 0
+                if is_applicable:
+                    cache_partition_mapping['cache_config'] = {
+                        a['key_type_id']: a['affinity_key_field_id']
+                        for a in cache_info['cache_config']
+                    }
+                    cache_partition_mapping['node_mapping'] = node_mapping
+
+                    parts = sum(len(p) for p in cache_partition_mapping['node_mapping'].values())
+
+                cache_partition_mapping['number_of_partitions'] = parts
+
+                value['partition_mapping'][cache_id] = cache_partition_mapping
         result.value = value
     return result
 

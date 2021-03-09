@@ -232,13 +232,13 @@ async def test_clear_async(async_cache):
 
 
 def test_clear_key(cache):
-    cache.put( 'my_test', 42)
-    cache.put( 'another_test', 24)
+    cache.put('my_test', 42)
+    cache.put('another_test', 24)
 
-    cache.clear_key( 'my_test')
+    cache.clear_key('my_test')
 
-    assert cache.get( 'my_test') is None
-    assert cache.get( 'another_test') == 24
+    assert cache.get('my_test') is None
+    assert cache.get('another_test') == 24
 
 
 @pytest.mark.asyncio
@@ -275,15 +275,15 @@ async def test_clear_keys_async(async_cache):
 
 def test_remove_key(cache):
     cache.put('my_test_key', 42)
-    assert cache.remove_key( 'my_test_key') is True
-    assert cache.remove_key( 'non_existent_key') is False
+    assert cache.remove_key('my_test_key') is True
+    assert cache.remove_key('non_existent_key') is False
 
 
 @pytest.mark.asyncio
 async def test_remove_key_async(async_cache):
     await async_cache.put('my_test_key', 42)
-    assert await async_cache.remove_key( 'my_test_key') is True
-    assert await async_cache.remove_key( 'non_existent_key') is False
+    assert await async_cache.remove_key('my_test_key') is True
+    assert await async_cache.remove_key('non_existent_key') is False
 
 
 def test_remove_if_equals(cache):
@@ -324,7 +324,7 @@ async def test_remove_keys_async(async_cache):
 
 def test_remove_all(cache):
     cache.put('my_test', 42)
-    cache.put( 'another_test', 24)
+    cache.put('another_test', 24)
     cache.remove_all()
 
     assert cache.get('my_test') is None
@@ -406,19 +406,13 @@ collection_params = [
 ]
 
 
-@pytest.mark.parametrize(
-    ['key', 'hinted_value', 'value'],
-    collection_params
-)
+@pytest.mark.parametrize(['key', 'hinted_value', 'value'], collection_params)
 def test_put_get_collection(cache, key, hinted_value, value):
     cache.put(key, hinted_value)
     assert cache.get(key) == value
 
 
-@pytest.mark.parametrize(
-    ['key', 'hinted_value', 'value'],
-    collection_params
-)
+@pytest.mark.parametrize(['key', 'hinted_value', 'value'], collection_params)
 @pytest.mark.asyncio
 async def test_put_get_collection_async(async_cache, key, hinted_value, value):
     await async_cache.put(key, hinted_value)

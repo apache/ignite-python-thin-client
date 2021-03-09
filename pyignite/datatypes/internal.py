@@ -376,10 +376,7 @@ class AnyDataObject:
 
         # if an iterable contains items of more than one non-nullable type,
         # return None
-        if all([
-            isinstance(x, type_first)
-            or ((x is None) and allow_none) for x in iterator
-        ]):
+        if all(isinstance(x, type_first) or ((x is None) and allow_none) for x in iterator):
             return type_first
 
     @classmethod
@@ -565,7 +562,7 @@ class AnyDataArray(AnyDataObject):
 
     def build_header(self):
         return type(
-            self.__class__.__name__+'Header',
+            self.__class__.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,

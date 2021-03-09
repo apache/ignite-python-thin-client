@@ -12,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import asyncio
 
 import pytest
 
@@ -38,28 +37,36 @@ def server3():
 @pytest.fixture(scope='module')
 def client():
     client = Client()
-    client.connect('127.0.0.1', 10801)
-    yield client
-    client.close()
+    try:
+        client.connect('127.0.0.1', 10801)
+        yield client
+    finally:
+        client.close()
 
 
 @pytest.fixture(scope='module')
 async def async_client(event_loop):
     client = AioClient()
-    await client.connect('127.0.0.1', 10801)
-    yield client
-    await client.close()
+    try:
+        await client.connect('127.0.0.1', 10801)
+        yield client
+    finally:
+        await client.close()
 
 
 @pytest.fixture
-async def async_cache(async_client):
+async def async_cache(async_client: 'AioClient'):
     cache = await async_client.create_cache('my_bucket')
-    yield cache
-    await cache.destroy()
+    try:
+        yield cache
+    finally:
+        await cache.destroy()
 
 
 @pytest.fixture
 def cache(client):
     cache = client.create_cache('my_bucket')
-    yield cache
-    cache.destroy()
+    try:
+        yield cache
+    finally:
+        cache.destroy()

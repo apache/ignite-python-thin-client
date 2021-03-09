@@ -23,44 +23,44 @@ client = Client()
 client.connect('127.0.0.1', 10800)
 
 student_cache = client.create_cache({
-        PROP_NAME: 'SQL_PUBLIC_STUDENT',
-        PROP_SQL_SCHEMA: 'PUBLIC',
-        PROP_QUERY_ENTITIES: [
-            {
-                'table_name': 'Student'.upper(),
-                'key_field_name': 'SID',
-                'key_type_name': 'java.lang.Integer',
-                'field_name_aliases': [],
-                'query_fields': [
-                    {
-                        'name': 'SID',
-                        'type_name': 'java.lang.Integer',
-                        'is_key_field': True,
-                        'is_notnull_constraint_field': True,
-                    },
-                    {
-                        'name': 'NAME',
-                        'type_name': 'java.lang.String',
-                    },
-                    {
-                        'name': 'LOGIN',
-                        'type_name': 'java.lang.String',
-                    },
-                    {
-                        'name': 'AGE',
-                        'type_name': 'java.lang.Integer',
-                    },
-                    {
-                        'name': 'GPA',
-                        'type_name': 'java.math.Double',
-                    },
-                ],
-                'query_indexes': [],
-                'value_type_name': 'SQL_PUBLIC_STUDENT_TYPE',
-                'value_field_name': None,
-            },
-        ],
-    })
+    PROP_NAME: 'SQL_PUBLIC_STUDENT',
+    PROP_SQL_SCHEMA: 'PUBLIC',
+    PROP_QUERY_ENTITIES: [
+        {
+            'table_name': 'Student'.upper(),
+            'key_field_name': 'SID',
+            'key_type_name': 'java.lang.Integer',
+            'field_name_aliases': [],
+            'query_fields': [
+                {
+                    'name': 'SID',
+                    'type_name': 'java.lang.Integer',
+                    'is_key_field': True,
+                    'is_notnull_constraint_field': True,
+                },
+                {
+                    'name': 'NAME',
+                    'type_name': 'java.lang.String',
+                },
+                {
+                    'name': 'LOGIN',
+                    'type_name': 'java.lang.String',
+                },
+                {
+                    'name': 'AGE',
+                    'type_name': 'java.lang.Integer',
+                },
+                {
+                    'name': 'GPA',
+                    'type_name': 'java.math.Double',
+                },
+            ],
+            'query_indexes': [],
+            'value_type_name': 'SQL_PUBLIC_STUDENT_TYPE',
+            'value_field_name': None,
+        },
+    ],
+})
 
 
 class Student(

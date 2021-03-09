@@ -29,7 +29,7 @@ def run_examples(request):
 def skip_if_no_cext(request):
     skip = False
     try:
-        from pyignite import _cutils
+        from pyignite import _cutils  # noqa: F401
     except ImportError:
         if request.config.getoption('--force-cext'):
             pytest.fail("C extension failed to build, fail test because of --force-cext is set.")

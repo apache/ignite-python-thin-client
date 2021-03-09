@@ -48,8 +48,7 @@ class Primitive(IgniteDataType):
 
     @classmethod
     def parse(cls, stream):
-        init_pos, offset = stream.tell(), ctypes.sizeof(cls.c_type)
-        stream.seek(offset, SEEK_CUR)
+        stream.seek(ctypes.sizeof(cls.c_type), SEEK_CUR)
         return cls.c_type
 
     @classmethod

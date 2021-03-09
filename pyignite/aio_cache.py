@@ -17,11 +17,12 @@ from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
 from .constants import AFFINITY_RETRIES, AFFINITY_DELAY
 from .connection import AioConnection
-from .binary import GenericObjectMeta, unwrap_binary_async
+from .binary import GenericObjectMeta
 from .datatypes import prop_codes
+from .datatypes.base import IgniteDataType
 from .datatypes.internal import AnyDataObject
 from .exceptions import CacheCreationError, CacheError, ParameterError, connection_errors
-from .utils import cache_id, get_field_by_id, is_wrapped, status_to_exception, unsigned
+from .utils import cache_id, get_field_by_id, status_to_exception, unsigned
 from .api.cache_config import (
     cache_create_async, cache_get_or_create_async, cache_destroy_async, cache_get_configuration_async,
     cache_create_with_config_async, cache_get_or_create_with_config_async
@@ -33,7 +34,7 @@ from .api.key_value import (
     cache_get_and_replace_async, cache_remove_key_async, cache_remove_keys_async, cache_remove_all_async,
     cache_remove_if_equals_async, cache_replace_if_equals_async, cache_get_size_async,
 )
-from .cursors import AioScanCursor, AioSqlFieldsCursor
+from .cursors import AioScanCursor
 from .api.affinity import cache_get_node_partitions_async
 
 PROP_CODES = set([
@@ -114,9 +115,8 @@ class AioCache:
         self._name = name
         self._cache_id = cache_id(self._name)
         self._settings = None
-        self.affinity = {
-            'version': (0, 0),
-        }
+        self._affinity_mux = asyncio.Lock()
+        self.affinity = {'version': (0, 0)}
 
     def get_protocol_version(self) -> Optional[Tuple]:
         """
@@ -180,18 +180,6 @@ class AioCache:
         """
         return self._cache_id
 
-    async def _process_binary(self, value: Any) -> Any:
-        """
-        Detects and recursively unwraps Binary Object.
-
-        :param value: anything that could be a Binary Object,
-        :return: the result of the Binary Object unwrapping with all other data
-         left intact.
-        """
-        if is_wrapped(value):
-            return await unwrap_binary_async(self._client, value)
-        return value
-
     @status_to_exception(CacheError)
     async def destroy(self):
         """
@@ -238,42 +226,37 @@ class AioCache:
             if key_hint is None:
                 key_hint = AnyDataObject.map_python_type(key)
 
-            if self.affinity['version'] < self._client.affinity_version:
-                # update partition mapping
-                while True:
-                    try:
-                        self.affinity = await self._get_affinity(conn)
-                        break
-                    except connection_errors:
-                        # retry if connection failed
-                        conn = await self._client.random_node()
-                        pass
-                    except CacheError:
-                        # server did not create mapping in time
+            async with self._affinity_mux:
+                if self.affinity['version'] < self._client.affinity_version:
+                    # update partition mapping
+                    while True:
+                        try:
+                            full_affinity = await self._get_affinity(conn)
+                            break
+                        except connection_errors:
+                            # retry if connection failed
+                            conn = await self._client.random_node()
+                            pass
+                        except CacheError:
+                            # server did not create mapping in time
+                            return conn
+
+                    self.affinity['version'] = full_affinity['version']
+
+                    full_mapping = full_affinity.get('partition_mapping')
+                    if full_mapping and self.cache_id in full_mapping:
+                        self.affinity.update(full_mapping[self.cache_id])
+                    else:
                         return conn
 
-                # flatten it a bit
-                try:
-                    self.affinity.update(self.affinity['partition_mapping'][0])
-                except IndexError:
-                    return conn
-                del self.affinity['partition_mapping']
+                    asyncio.ensure_future(
+                        asyncio.gather(
+                            *[conn.reconnect() for conn in self.client._nodes if not conn.alive],
+                            return_exceptions=True
+                        )
+                    )
 
-                # calculate the number of partitions
-                parts = 0
-                if 'node_mapping' in self.affinity:
-                    for p in self.affinity['node_mapping'].values():
-                        parts += len(p)
-
-                self.affinity['number_of_partitions'] = parts
-
-                await asyncio.gather(
-                    *[conn.reconnect() for conn in self.client._nodes if not conn.alive],
-                    return_exceptions=True
-                )
-            else:
-                # get number of partitions
-                parts = self.affinity.get('number_of_partitions')
+            parts = self.affinity.get('number_of_partitions')
 
             if not parts:
                 return conn
@@ -333,7 +316,7 @@ class AioCache:
 
         conn = await self.get_best_node(key, key_hint)
         result = await cache_get_async(conn, self._cache_id, key, key_hint=key_hint)
-        result.value = await self._process_binary(result.value)
+        result.value = await self.client.unwrap_binary(result.value)
         return result
 
     @status_to_exception(CacheError)
@@ -367,7 +350,7 @@ class AioCache:
         result = await cache_get_all_async(conn, self._cache_id, keys)
         if result.value:
             keys = list(result.value.keys())
-            values = await asyncio.gather(*[self._process_binary(value) for value in result.value.values()])
+            values = await asyncio.gather(*[self.client.unwrap_binary(value) for value in result.value.values()])
 
             for i, key in enumerate(keys):
                 result.value[key] = values[i]
@@ -403,7 +386,7 @@ class AioCache:
 
         conn = await self.get_best_node(key, key_hint)
         result = await cache_replace_async(conn, self._cache_id, key, value, key_hint=key_hint, value_hint=value_hint)
-        result.value = await self._process_binary(result.value)
+        result.value = await self.client.unwrap_binary(result.value)
         return result
 
     @status_to_exception(CacheError)
@@ -492,7 +475,7 @@ class AioCache:
         conn = await self.get_best_node(key, key_hint)
         result = await cache_get_and_put_async(conn, self._cache_id, key, value, key_hint, value_hint)
 
-        result.value = await self._process_binary(result.value)
+        result.value = await self.client.unwrap_binary(result.value)
         return result
 
     @status_to_exception(CacheError)
@@ -513,8 +496,8 @@ class AioCache:
             key_hint = AnyDataObject.map_python_type(key)
 
         conn = await self.get_best_node(key, key_hint)
-        result = await cache_get_and_put_if_absent_async(conn, self._cache_id,key, value, key_hint, value_hint)
-        result.value = await self._process_binary(result.value)
+        result = await cache_get_and_put_if_absent_async(conn, self._cache_id, key, value, key_hint, value_hint)
+        result.value = await self.client.unwrap_binary(result.value)
         return result
 
     @status_to_exception(CacheError)
@@ -551,7 +534,7 @@ class AioCache:
 
         conn = await self.get_best_node(key, key_hint)
         result = await cache_get_and_remove_async(conn, self._cache_id, key, key_hint)
-        result.value = await self._process_binary(result.value)
+        result.value = await self.client.unwrap_binary(result.value)
         return result
 
     @status_to_exception(CacheError)
@@ -574,7 +557,7 @@ class AioCache:
 
         conn = await self.get_best_node(key, key_hint)
         result = await cache_get_and_replace_async(conn, self._cache_id, key, value, key_hint, value_hint)
-        result.value = await self._process_binary(result.value)
+        result.value = await self.client.unwrap_binary(result.value)
         return result
 
     @status_to_exception(CacheError)
@@ -653,7 +636,7 @@ class AioCache:
         conn = await self.get_best_node(key, key_hint)
         result = await cache_replace_if_equals_async(conn, self._cache_id, key, sample, value, key_hint, sample_hint,
                                                      value_hint)
-        result.value = await self._process_binary(result.value)
+        result.value = await self.client.unwrap_binary(result.value)
         return result
 
     @status_to_exception(CacheError)

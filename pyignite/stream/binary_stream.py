@@ -89,7 +89,7 @@ class BinaryStream(BinaryStreamBaseMixin):
     """
     Synchronous binary stream.
     """
-    def __init__(self, client:'pyignite.Client', buf: Optional[Union[bytes, bytearray, memoryview]] = None):
+    def __init__(self, client: 'pyignite.Client', buf: Optional[Union[bytes, bytearray, memoryview]] = None):
         """
         :param client: Client instance, required.
         :param buf: Buffer, optional parameter. If not passed, creates empty BytesIO.

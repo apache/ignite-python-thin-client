@@ -229,4 +229,3 @@ class BoolObject(DataObject):
         if value is None:
             return None
         return value != 0
-

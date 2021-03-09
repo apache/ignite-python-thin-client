@@ -53,8 +53,7 @@ class Null(IgniteDataType):
 
     @classmethod
     def parse(cls, stream):
-        init_pos, offset = stream.tell(), ctypes.sizeof(ctypes.c_byte)
-        stream.seek(offset, SEEK_CUR)
+        stream.seek(ctypes.sizeof(ctypes.c_byte), SEEK_CUR)
         return cls.build_c_type()
 
     @classmethod

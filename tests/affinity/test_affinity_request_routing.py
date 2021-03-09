@@ -13,20 +13,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 from collections import OrderedDict, deque
+import random
+
 import pytest
 
-from pyignite import *
-from pyignite.connection import Connection
+from pyignite import GenericObjectMeta, AioClient, Client
+from pyignite.aio_cache import AioCache
+from pyignite.connection import Connection, AioConnection
 from pyignite.constants import PROTOCOL_BYTE_ORDER
-from pyignite.datatypes import *
+from pyignite.datatypes import String, LongObject
 from pyignite.datatypes.cache_config import CacheMode
-from pyignite.datatypes.prop_codes import *
-from tests.util import *
-
+from pyignite.datatypes.prop_codes import PROP_NAME, PROP_BACKUPS_NUMBER, PROP_CACHE_KEY_CONFIGURATION, PROP_CACHE_MODE
+from tests.util import wait_for_condition, wait_for_condition_async, start_ignite, kill_process_tree
 
 requests = deque()
 old_send = Connection.send
+old_send_async = AioConnection.send
+async_requests_mux = asyncio.Lock()
 
 
 def patched_send(self, *args, **kwargs):
@@ -40,13 +45,27 @@ def patched_send(self, *args, **kwargs):
     return old_send(self, *args, **kwargs)
 
 
+async def patched_send_async(self, *args, **kwargs):
+    """Patched send function that push to queue idx of server to which request is routed."""
+    async with async_requests_mux:
+        buf = args[0]
+        if buf and len(buf) >= 6:
+            op_code = int.from_bytes(buf[4:6], byteorder=PROTOCOL_BYTE_ORDER)
+            # Filter only caches operation.
+            if 1000 <= op_code < 1100:
+                requests.append(self.port % 100)
+    return await old_send_async(self, *args, **kwargs)
+
+
 def setup_function():
     requests.clear()
     Connection.send = patched_send
+    AioConnection.send = patched_send_async
 
 
 def teardown_function():
     Connection.send = old_send
+    AioConnection.send = old_send_async
 
 
 def wait_for_affinity_distribution(cache, key, node_idx, timeout=30):
@@ -68,6 +87,26 @@ def wait_for_affinity_distribution(cache, key, node_idx, timeout=30):
                            f"got {real_node_idx} instead")
 
 
+async def wait_for_affinity_distribution_async(cache, key, node_idx, timeout=30):
+    real_node_idx = 0
+
+    async def check_grid_idx():
+        nonlocal real_node_idx
+        try:
+            await cache.get(key)
+            async with async_requests_mux:
+                real_node_idx = requests.pop()
+        except (OSError, IOError):
+            return False
+        return real_node_idx == node_idx
+
+    res = await wait_for_condition_async(check_grid_idx, timeout=timeout)
+
+    if not res:
+        raise TimeoutError(f"failed to wait for affinity distribution, expected node_idx {node_idx},"
+                           f"got {real_node_idx} instead")
+
+
 @pytest.mark.parametrize("key,grid_idx", [(1, 1), (2, 2), (3, 3), (4, 1), (5, 1), (6, 2), (11, 1), (13, 1), (19, 1)])
 @pytest.mark.parametrize("backups", [0, 1, 2, 3])
 def test_cache_operation_on_primitive_key_routes_request_to_primary_node(request, key, grid_idx, backups, client):
@@ -75,52 +114,57 @@ def test_cache_operation_on_primitive_key_routes_request_to_primary_node(request
         PROP_NAME: request.node.name + str(backups),
         PROP_BACKUPS_NUMBER: backups,
     })
+    try:
+        __perform_operations_on_primitive_key(client, cache, key, grid_idx)
+    finally:
+        cache.destroy()
 
-    cache.put(key, key)
-    wait_for_affinity_distribution(cache, key, grid_idx)
 
-    # Test
-    cache.get(key)
-    assert requests.pop() == grid_idx
+@pytest.mark.parametrize("key,grid_idx", [(1, 1), (2, 2), (3, 3), (4, 1), (5, 1), (6, 2), (11, 1), (13, 1), (19, 1)])
+@pytest.mark.parametrize("backups", [0, 1, 2, 3])
+@pytest.mark.asyncio
+async def test_cache_operation_on_primitive_key_routes_request_to_primary_node_async(
+        request, key, grid_idx, backups, async_client):
+    cache = await async_client.get_or_create_cache({
+        PROP_NAME: request.node.name + str(backups),
+        PROP_BACKUPS_NUMBER: backups,
+    })
+    try:
+        await __perform_operations_on_primitive_key(async_client, cache, key, grid_idx)
+    finally:
+        await cache.destroy()
 
-    cache.put(key, key)
-    assert requests.pop() == grid_idx
 
-    cache.replace(key, key + 1)
-    assert requests.pop() == grid_idx
+def __perform_operations_on_primitive_key(client, cache, key, grid_idx):
+    operations = [
+        ('get', 1), ('put', 2), ('replace', 2), ('clear_key', 1), ('contains_key', 1), ('get_and_put', 2),
+        ('get_and_put_if_absent', 2), ('put_if_absent', 2), ('get_and_remove', 1), ('get_and_replace', 2),
+        ('remove_key', 1), ('remove_if_equals', 2), ('replace', 2), ('replace_if_equals', 3)
+    ]
 
-    cache.clear_key(key)
-    assert requests.pop() == grid_idx
+    def inner():
+        cache.put(key, key)
+        wait_for_affinity_distribution(cache, key, grid_idx)
 
-    cache.contains_key(key)
-    assert requests.pop() == grid_idx
+        for op_name, param_nums in operations:
+            op = getattr(cache, op_name)
+            args = [random.randint(-100, 100) for _ in range(0, param_nums - 1)]
+            op(key, *args)
+            assert requests.pop() == grid_idx
 
-    cache.get_and_put(key, 3)
-    assert requests.pop() == grid_idx
+    async def inner_async():
+        await cache.put(key, key)
+        await wait_for_affinity_distribution_async(cache, key, grid_idx)
 
-    cache.get_and_put_if_absent(key, 4)
-    assert requests.pop() == grid_idx
+        for op_name, param_nums in operations:
+            op = getattr(cache, op_name)
+            args = [random.randint(-100, 100) for _ in range(0, param_nums - 1)]
+            await op(key, *args)
 
-    cache.put_if_absent(key, 5)
-    assert requests.pop() == grid_idx
+            async with async_requests_mux:
+                assert requests.pop() == grid_idx
 
-    cache.get_and_remove(key)
-    assert requests.pop() == grid_idx
-
-    cache.get_and_replace(key, 6)
-    assert requests.pop() == grid_idx
-
-    cache.remove_key(key)
-    assert requests.pop() == grid_idx
-
-    cache.remove_if_equals(key, -1)
-    assert requests.pop() == grid_idx
-
-    cache.replace(key, -1)
-    assert requests.pop() == grid_idx
-
-    cache.replace_if_equals(key, 10, -10)
-    assert requests.pop() == grid_idx
+    return inner_async() if isinstance(client, AioClient) else inner()
 
 
 @pytest.mark.skip(reason="Custom key objects are not supported yet")
@@ -164,50 +208,147 @@ def test_cache_operation_on_custom_affinity_key_routes_request_to_primary_node(r
     assert requests.pop() == grid_idx
 
 
-def test_cache_operation_routed_to_new_cluster_node(request, client_not_connected):
-    client_not_connected.connect(
-        [("127.0.0.1", 10801), ("127.0.0.1", 10802), ("127.0.0.1", 10803), ("127.0.0.1", 10804)]
-    )
-    cache = client_not_connected.get_or_create_cache(request.node.name)
-    key = 12
-    wait_for_affinity_distribution(cache, key, 3)
-    cache.put(key, key)
-    cache.put(key, key)
-    assert requests.pop() == 3
+client_routed_connection_string = [('127.0.0.1', 10800 + idx) for idx in range(1, 5)]
 
-    srv = start_ignite(idx=4)
+
+@pytest.fixture
+def client_routed_cache(request):
+    client = Client(partition_aware=True)
     try:
-        # Wait for rebalance and partition map exchange
-        wait_for_affinity_distribution(cache, key, 4)
-
-        # Response is correct and comes from the new node
-        res = cache.get_and_remove(key)
-        assert res == key
-        assert requests.pop() == 4
+        client.connect(client_routed_connection_string)
+        yield client.get_or_create_cache(request.node.name)
     finally:
-        kill_process_tree(srv.pid)
+        client.close()
 
 
-def test_replicated_cache_operation_routed_to_random_node(request, client):
+@pytest.fixture
+async def async_client_routed_cache(request):
+    client = AioClient(partition_aware=True)
+    try:
+        await client.connect(client_routed_connection_string)
+        yield await client.get_or_create_cache(request.node.name)
+    finally:
+        await client.close()
+
+
+def test_cache_operation_routed_to_new_cluster_node(client_routed_cache):
+    __perform_cache_operation_routed_to_new_node(client_routed_cache)
+
+
+@pytest.mark.asyncio
+async def test_cache_operation_routed_to_new_cluster_node_async(async_client_routed_cache):
+    await __perform_cache_operation_routed_to_new_node(async_client_routed_cache)
+
+
+def __perform_cache_operation_routed_to_new_node(cache):
+    key = 12
+
+    def inner():
+        wait_for_affinity_distribution(cache, key, 3)
+        cache.put(key, key)
+        cache.put(key, key)
+        assert requests.pop() == 3
+
+        srv = start_ignite(idx=4)
+        try:
+            # Wait for rebalance and partition map exchange
+            wait_for_affinity_distribution(cache, key, 4)
+
+            # Response is correct and comes from the new node
+            res = cache.get_and_remove(key)
+            assert res == key
+            assert requests.pop() == 4
+        finally:
+            kill_process_tree(srv.pid)
+
+    async def inner_async():
+        await wait_for_affinity_distribution_async(cache, key, 3)
+        await cache.put(key, key)
+        await cache.put(key, key)
+        async with async_requests_mux:
+            assert requests.pop() == 3
+
+        srv = start_ignite(idx=4)
+        try:
+            # Wait for rebalance and partition map exchange
+            await wait_for_affinity_distribution_async(cache, key, 4)
+
+            # Response is correct and comes from the new node
+            res = await cache.get_and_remove(key)
+            assert res == key
+            async with async_requests_mux:
+                assert requests.pop() == 4
+        finally:
+            kill_process_tree(srv.pid)
+
+    return inner_async() if isinstance(cache, AioCache) else inner()
+
+
+@pytest.fixture
+def replicated_cache(request, client):
     cache = client.get_or_create_cache({
         PROP_NAME: request.node.name,
         PROP_CACHE_MODE: CacheMode.REPLICATED,
     })
+    try:
+        yield cache
+    finally:
+        cache.destroy()
 
-    verify_random_node(cache)
+
+@pytest.fixture
+async def async_replicated_cache(request, async_client):
+    cache = await async_client.get_or_create_cache({
+        PROP_NAME: request.node.name,
+        PROP_CACHE_MODE: CacheMode.REPLICATED,
+    })
+    try:
+        yield cache
+    finally:
+        await cache.destroy()
+
+
+def test_replicated_cache_operation_routed_to_random_node(replicated_cache):
+    verify_random_node(replicated_cache)
+
+
+@pytest.mark.asyncio
+async def test_replicated_cache_operation_routed_to_random_node_async(async_replicated_cache):
+    await verify_random_node(async_replicated_cache)
 
 
 def verify_random_node(cache):
     key = 1
-    cache.put(key, key)
 
-    idx1 = requests.pop()
-    idx2 = idx1
-
-    # Try 10 times - random node may end up being the same
-    for _ in range(1, 10):
+    def inner():
         cache.put(key, key)
-        idx2 = requests.pop()
-        if idx2 != idx1:
-            break
-    assert idx1 != idx2
+
+        idx1 = requests.pop()
+        idx2 = idx1
+
+        # Try 10 times - random node may end up being the same
+        for _ in range(1, 10):
+            cache.put(key, key)
+            idx2 = requests.pop()
+            if idx2 != idx1:
+                break
+        assert idx1 != idx2
+
+    async def inner_async():
+        await cache.put(key, key)
+
+        async with async_requests_mux:
+            idx1 = requests.pop()
+
+        idx2 = idx1
+
+        # Try 10 times - random node may end up being the same
+        for _ in range(1, 10):
+            await cache.put(key, key)
+            async with async_requests_mux:
+                idx2 = requests.pop()
+            if idx2 != idx1:
+                break
+        assert idx1 != idx2
+
+    return inner_async() if isinstance(cache, AioCache) else inner()

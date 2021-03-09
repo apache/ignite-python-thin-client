@@ -44,18 +44,21 @@ from collections import defaultdict, OrderedDict
 import random
 import re
 from itertools import chain
-from typing import Dict, Iterable, List, Optional, Tuple, Type, Union
+from typing import Dict, Iterable, List, Optional, Tuple, Type, Union, Any
 
 from .api.binary import get_binary_type, put_binary_type
 from .api.cache_config import cache_get_names
 from .cursors import SqlFieldsCursor
 from .cache import Cache
 from .connection import Connection
-from .constants import *
+from .constants import IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT, PROTOCOL_BYTE_ORDER
 from .datatypes import BinaryObject
 from .datatypes.internal import tc_map
 from .exceptions import BinaryTypeError, CacheError, ReconnectError, connection_errors
-from .utils import cache_id, capitalize, entity_id, schema_id, process_delimiter, status_to_exception, is_iterable
+from .stream import BinaryStream, READ_BACKWARD
+from .utils import (
+    cache_id, capitalize, entity_id, schema_id, process_delimiter, status_to_exception, is_iterable, is_wrapped
+)
 from .binary import GenericObjectMeta
 
 
@@ -148,11 +151,7 @@ class Client:
         elif len(args) == 1 and is_iterable(args[0]):
             # iterable of host-port pairs is given
             nodes = args[0]
-        elif (
-            len(args) == 2
-            and isinstance(args[0], str)
-            and isinstance(args[1], int)
-        ):
+        elif len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], int):
             # host and port are given
             nodes = [args]
         else:
@@ -457,6 +456,21 @@ class Client:
             return self.query_binary_type(type_id, s_id, sync=False)
 
         return result
+
+    def unwrap_binary(self, value: Any) -> Any:
+        """
+        Detects and recursively unwraps Binary Object.
+
+        :param value: anything that could be a Binary Object,
+        :return: the result of the Binary Object unwrapping with all other data
+         left intact.
+        """
+        if is_wrapped(value):
+            blob, offset = value
+            with BinaryStream(self, blob) as stream:
+                data_class = BinaryObject.parse(stream)
+                return BinaryObject.to_python(stream.read_ctype(data_class, direction=READ_BACKWARD), self)
+        return value
 
     def create_cache(self, settings: Union[str, dict]) -> 'Cache':
         """

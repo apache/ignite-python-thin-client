@@ -42,7 +42,6 @@ from .datatypes import (
 )
 from .datatypes.base import IgniteDataTypeProps
 from .exceptions import ParseError
-from .stream import AioBinaryStream, BinaryStream, READ_BACKWARD
 from .utils import entity_id, schema_id
 
 
@@ -107,7 +106,7 @@ class GenericObjectMeta(GenericObjectPropsMeta):
         """ Sort out class creation arguments. """
 
         result = super().__new__(
-            mcs, name, (GenericObjectProps, )+base_classes, namespace
+            mcs, name, (GenericObjectProps, ) + base_classes, namespace
         )
 
         def _from_python(self, stream, save_to_buf=False):
@@ -246,31 +245,3 @@ class GenericObjectMeta(GenericObjectPropsMeta):
         cls._validate_schema(schema)
         cls._schema = schema
         super().__init__(name, base_classes, namespace)
-
-
-def unwrap_binary(client: 'Client', wrapped: tuple) -> object:
-    """
-    Unwrap wrapped BinaryObject and convert it to Python data.
-
-    :param client: connection to Ignite cluster,
-    :param wrapped: `WrappedDataObject` value,
-    :return: dict representing wrapped BinaryObject.
-    """
-    blob, offset = wrapped
-    with BinaryStream(client, blob) as stream:
-        data_class = BinaryObject.parse(stream)
-        result = BinaryObject.to_python(stream.read_ctype(data_class, direction=READ_BACKWARD), client)
-
-    return result
-
-
-async def unwrap_binary_async(client: 'AioClient', wrapped: tuple) -> object:
-    """
-    Async version of unwrap_binary.
-    """
-    blob, offset = wrapped
-    with AioBinaryStream(client, blob) as stream:
-        data_class = await BinaryObject.parse_async(stream)
-        result = await BinaryObject.to_python_async(stream.read_ctype(data_class, direction=READ_BACKWARD), client)
-
-    return result

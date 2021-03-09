@@ -23,7 +23,6 @@ from .cache_config import (
 from .primitive import *
 from .standard import *
 
-
 __all__ = [
     'PropName', 'PropCacheMode', 'PropCacheAtomicityMode', 'PropBackupsNumber',
     'PropWriteSynchronizationMode', 'PropCopyOnRead', 'PropReadFromBackup',
@@ -81,7 +80,7 @@ class PropBase:
     @classmethod
     def build_header(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,

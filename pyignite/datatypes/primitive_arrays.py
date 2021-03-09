@@ -15,7 +15,6 @@
 
 import ctypes
 from io import SEEK_CUR
-from typing import Any
 
 from pyignite.constants import *
 from .null_object import Nullable
@@ -45,7 +44,7 @@ class PrimitiveArray(Nullable):
     @classmethod
     def build_header_class(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
@@ -185,7 +184,7 @@ class PrimitiveArrayObject(PrimitiveArray):
     @classmethod
     def build_header_class(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,

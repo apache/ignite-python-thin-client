@@ -20,28 +20,13 @@ This module contains sync and async cursors for different types of queries.
 import asyncio
 
 from pyignite.api import (
-    scan, scan_cursor_get_page, resource_close, scan_async, scan_cursor_get_page_async,
-    resource_close_async, sql, sql_cursor_get_page, sql_fields, sql_fields_cursor_get_page,
-    sql_fields_cursor_get_page_async, sql_fields_async
+    scan, scan_cursor_get_page, resource_close, scan_async, scan_cursor_get_page_async, resource_close_async, sql,
+    sql_cursor_get_page, sql_fields, sql_fields_cursor_get_page, sql_fields_cursor_get_page_async, sql_fields_async
 )
-from pyignite.binary import unwrap_binary, unwrap_binary_async
 from pyignite.exceptions import CacheError, SQLError
-from pyignite.utils import is_wrapped
 
 
 __all__ = ['ScanCursor', 'SqlCursor', 'SqlFieldsCursor', 'AioScanCursor', 'AioSqlFieldsCursor']
-
-
-def _process_binary(client, value):
-    if is_wrapped(value):
-        return unwrap_binary(client, value)
-    return value
-
-
-async def _process_binary_async(client, value):
-    if is_wrapped(value):
-        return await unwrap_binary_async(client, value)
-    return value
 
 
 class BaseCursorMixin:
@@ -167,7 +152,7 @@ class ScanCursor(AbstractScanCursor, CursorMixin):
             else:
                 raise StopIteration
 
-        return _process_binary(self.client, k), _process_binary(self.client, v)
+        return self.client.unwrap_binary(k), self.client.unwrap_binary(v)
 
 
 class AioScanCursor(AbstractScanCursor, AioCursorMixin):
@@ -201,7 +186,7 @@ class AioScanCursor(AbstractScanCursor, AioCursorMixin):
                 raise StopAsyncIteration
 
         return await asyncio.gather(
-            *[_process_binary_async(self.client, k), _process_binary_async(self.client, v)]
+            *[self.client.unwrap_binary(k), self.client.unwrap_binary(v)]
         )
 
 
@@ -234,7 +219,7 @@ class SqlCursor(CursorMixin):
             else:
                 raise StopIteration
 
-        return _process_binary(self.client, k), _process_binary(self.client, v)
+        return self.client.unwrap_binary(k), self.client.unwrap_binary(v)
 
 
 class AbstractSqlFieldsCursor:
@@ -284,7 +269,7 @@ class SqlFieldsCursor(AbstractSqlFieldsCursor, CursorMixin):
             else:
                 raise StopIteration
 
-        return row
+        return [self.client.unwrap_binary(v) for v in row]
 
 
 class AioSqlFieldsCursor(AbstractSqlFieldsCursor, AioCursorMixin):
@@ -324,7 +309,7 @@ class AioSqlFieldsCursor(AbstractSqlFieldsCursor, AioCursorMixin):
             else:
                 raise StopAsyncIteration
 
-        return row
+        return await asyncio.gather(*[self.client.unwrap_binary(v) for v in row])
 
     async def _initialize(self, *args, **kwargs):
         if self.connection and self.cursor_id:

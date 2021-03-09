@@ -52,7 +52,9 @@ create_query = '''CREATE TABLE StudentTable (
 
 insert_query = '''INSERT INTO StudentTable (id, dept, name) VALUES (?, ?, ?)'''
 
-select_query = 'SELECT _KEY, id, dept, name FROM StudentTable'
+select_query = 'SELECT id, dept, name FROM StudentTable'
+
+select_kv_query = 'SELECT _key, _val FROM StudentTable'
 
 drop_query = 'DROP TABLE StudentTable IF EXISTS'
 
@@ -115,6 +117,18 @@ def __perform_test(client, insert=InsertMode.SQL):
         assert sql_row['DEPT'] == key.DEPT
         assert sql_row['NAME'] == val.NAME
 
+    def validate_kv_query_result(key, val, query_result):
+        """
+        Compare query result with expected key and value.
+        """
+        assert len(query_result) == 2
+        sql_row = dict(zip(query_result[0], query_result[1]))
+
+        sql_key, sql_val = sql_row['_KEY'], sql_row['_VAL']
+        assert sql_key.ID == key.ID
+        assert sql_key.DEPT == key.DEPT
+        assert sql_val.NAME == val.NAME
+
     def inner():
         if insert == InsertMode.SQL:
             result = client.sql(insert_query, query_args=[student_key.ID, student_key.DEPT, student_val.NAME])
@@ -128,6 +142,9 @@ def __perform_test(client, insert=InsertMode.SQL):
 
         query_result = list(client.sql(select_query, include_field_names=True))
         validate_query_result(student_key, student_val, query_result)
+
+        query_result = list(client.sql(select_kv_query, include_field_names=True))
+        validate_kv_query_result(student_key, student_val, query_result)
 
     async def inner_async():
         if insert == InsertMode.SQL:
@@ -143,5 +160,9 @@ def __perform_test(client, insert=InsertMode.SQL):
         async with client.sql(select_query, include_field_names=True) as cursor:
             query_result = [r async for r in cursor]
             validate_query_result(student_key, student_val, query_result)
+
+        async with client.sql(select_kv_query, include_field_names=True) as cursor:
+            query_result = [r async for r in cursor]
+            validate_kv_query_result(student_key, student_val, query_result)
 
     return inner_async() if isinstance(client, AioClient) else inner()

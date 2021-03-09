@@ -23,16 +23,16 @@ from pyignite.datatypes import IntObject, String
 from pyignite.exceptions import CacheError
 
 
-class TestObject(
+class SimpleObject(
     metaclass=GenericObjectMeta,
-    type_name='TestObject',
+    type_name='SimpleObject',
     schema=OrderedDict([
         ('id', IntObject),
         ('str', String),
     ])
 ):
     def __eq__(self, o: object) -> bool:
-        if isinstance(o, TestObject):
+        if isinstance(o, SimpleObject):
             return self.id == o.id and self.str == o.str
         return False
 
@@ -44,7 +44,7 @@ page_size = 10
 def test_objects_data():
     data = {}
     for i in range(page_size * 2):
-        v = TestObject()
+        v = SimpleObject()
         v.id = i
         v.str = f'str_{i}'
 

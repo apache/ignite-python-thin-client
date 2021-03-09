@@ -66,23 +66,14 @@ def is_hinted(value):
     """
     Check if a value is a tuple of data item and its type hint.
     """
-    return (
-        isinstance(value, tuple)
-        and len(value) == 2
-        and issubclass(value[1], IgniteDataType)
-    )
+    return isinstance(value, tuple) and len(value) == 2 and issubclass(value[1], IgniteDataType)
 
 
 def is_wrapped(value: Any) -> bool:
     """
     Check if a value is of WrappedDataObject type.
     """
-    return (
-        type(value) is tuple
-        and len(value) == 2
-        and type(value[0]) is bytes
-        and type(value[1]) is int
-    )
+    return type(value) is tuple and len(value) == 2 and type(value[0]) is bytes and type(value[1]) is int
 
 
 def int_overflow(value: int) -> int:
@@ -108,7 +99,7 @@ def hashcode(data: Union[str, bytes, bytearray, memoryview]) -> int:
 def __hashcode_fallback(data: Union[str, bytes, bytearray, memoryview]) -> int:
     if data is None:
         return 0
-    
+
     if isinstance(data, str):
         """
         For strings we iterate over code point which are of the int type
@@ -207,8 +198,7 @@ def decimal_hashcode(value: decimal.Decimal) -> int:
         # this is the case when Java BigDecimal digits are stored
         # compactly, in the internal 64-bit integer field
         int_hash = (
-            (unsigned(value, ctypes.c_ulonglong) >> 32) * 31
-            + (value & LONG_MASK)
+            (unsigned(value, ctypes.c_ulonglong) >> 32) * 31 + (value & LONG_MASK)
         ) & LONG_MASK
     else:
         # digits are not fit in the 64-bit long, so they get split internally
