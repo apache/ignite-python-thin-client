@@ -167,11 +167,7 @@ class AioClient:
         """
         if self.partition_aware:
             # if partition awareness is used just pick a random connected node
-            try:
-                return random.choice([n for n in self._nodes if n.alive])
-            except IndexError:
-                # cannot choose from an empty sequence
-                raise ReconnectError('Can not reconnect: out of nodes.') from None
+            return await self._get_random_node()
         else:
             # if partition awareness is not used then just return the current
             # node if it's alive or the next usable node if connection with the
@@ -200,6 +196,17 @@ class AioClient:
 
             # no nodes left
             raise ReconnectError('Can not reconnect: out of nodes.')
+
+    async def _get_random_node(self, reconnect=True):
+        alive_nodes = [n for n in self._nodes if n.alive]
+        if alive_nodes:
+            return random.choice(alive_nodes)
+        elif reconnect:
+            await asyncio.gather(*[n.reconnect() for n in self._nodes], return_exceptions=True)
+            return await self._get_random_node(reconnect=False)
+        else:
+            # cannot choose from an empty sequence
+            raise ReconnectError('Can not reconnect: out of nodes.') from None
 
     @status_to_exception(BinaryTypeError)
     async def get_binary_type(self, binary_type: Union[str, int]) -> dict:

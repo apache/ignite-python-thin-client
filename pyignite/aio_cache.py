@@ -17,12 +17,11 @@ from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
 from .constants import AFFINITY_RETRIES, AFFINITY_DELAY
 from .connection import AioConnection
-from .binary import GenericObjectMeta
 from .datatypes import prop_codes
 from .datatypes.base import IgniteDataType
 from .datatypes.internal import AnyDataObject
 from .exceptions import CacheCreationError, CacheError, ParameterError, connection_errors
-from .utils import cache_id, get_field_by_id, status_to_exception, unsigned
+from .utils import cache_id, status_to_exception
 from .api.cache_config import (
     cache_create_async, cache_get_or_create_async, cache_destroy_async, cache_get_configuration_async,
     cache_create_with_config_async, cache_get_or_create_with_config_async
@@ -36,7 +35,7 @@ from .api.key_value import (
 )
 from .cursors import AioScanCursor
 from .api.affinity import cache_get_node_partitions_async
-from .cache import __parse_settings
+from .cache import __parse_settings, BaseCacheMixin
 
 
 async def get_cache(client: 'AioClient', settings: Union[str, dict]) -> 'AioCache':
@@ -77,7 +76,7 @@ async def get_or_create_cache(client: 'AioClient', settings: Union[str, dict]) -
     return AioCache(client, name)
 
 
-class AioCache:
+class AioCache(BaseCacheMixin):
     """
     Ignite cache abstraction. Users should never use this class directly,
     but construct its instances with
@@ -205,81 +204,47 @@ class AioCache:
         conn = await self._client.random_node()
 
         if self.client.partition_aware and key is not None:
-            if key_hint is None:
-                key_hint = AnyDataObject.map_python_type(key)
-
             async with self._affinity_mux:
-                if self.affinity['version'] < self._client.affinity_version:
-                    # update partition mapping
-                    while True:
-                        try:
-                            full_affinity = await self._get_affinity(conn)
-                            break
-                        except connection_errors:
-                            # retry if connection failed
-                            conn = await self._client.random_node()
-                            pass
-                        except CacheError:
-                            # server did not create mapping in time
-                            return conn
+                should_update_mapping = self.affinity['version'] < self._client.affinity_version
 
-                    self.affinity['version'] = full_affinity['version']
-
-                    full_mapping = full_affinity.get('partition_mapping')
-                    if full_mapping and self.cache_id in full_mapping:
-                        self.affinity.update(full_mapping[self.cache_id])
-                    else:
+            if should_update_mapping:
+                while True:
+                    try:
+                        full_affinity = await self._get_affinity(conn)
+                        break
+                    except connection_errors:
+                        # retry if connection failed
+                        conn = await self._client.random_node()
+                        pass
+                    except CacheError:
+                        # server did not create mapping in time
                         return conn
 
-                    asyncio.ensure_future(
-                        asyncio.gather(
-                            *[conn.reconnect() for conn in self.client._nodes if not conn.alive],
-                            return_exceptions=True
-                        )
+                async with self._affinity_mux:
+                    if self.affinity['version'] < self._client.affinity_version:
+                        self._update_affinity(full_affinity)
+
+                asyncio.ensure_future(
+                    asyncio.gather(
+                        *[conn.reconnect() for conn in self.client._nodes if not conn.alive],
+                        return_exceptions=True
                     )
-
-            parts = self.affinity.get('number_of_partitions')
-
-            if not parts:
-                return conn
-
-            if self.affinity['is_applicable']:
-                affinity_key_id = self.affinity['cache_config'].get(
-                    key_hint.type_id,
-                    None
                 )
-                if affinity_key_id and isinstance(key, GenericObjectMeta):
-                    key, key_hint = get_field_by_id(key, affinity_key_id)
 
-            # calculate partition for key or affinity key
-            # (algorithm is taken from `RendezvousAffinityFunction.java`)
-            base_value = await key_hint.hashcode_async(key, self._client)
-            mask = parts - 1
+            async with self._affinity_mux:
+                parts = self.affinity.get('number_of_partitions')
 
-            if parts & mask == 0:
-                part = (base_value ^ (unsigned(base_value) >> 16)) & mask
-            else:
-                part = abs(base_value // parts)
+                if not parts:
+                    return conn
 
-            assert 0 <= part < parts, 'Partition calculation has failed'
+                key, key_hint = self._get_affinity_key(key, key_hint)
 
-            # search for connection
-            try:
-                node_uuid, best_conn = None, None
-                for u, p in self.affinity['node_mapping'].items():
-                    if part in p:
-                        node_uuid = u
-                        break
+            hashcode = await key_hint.hashcode_async(key, self._client)
 
-                if node_uuid:
-                    for n in conn.client._nodes:
-                        if n.uuid == node_uuid:
-                            best_conn = n
-                            break
-                    if best_conn and best_conn.alive:
-                        conn = best_conn
-            except KeyError:
-                pass
+            async with self._affinity_mux:
+                best_node = self._get_node_by_hashcode(hashcode, parts)
+                if best_node:
+                    return best_node
 
         return conn
 

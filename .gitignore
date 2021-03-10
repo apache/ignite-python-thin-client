@@ -7,6 +7,7 @@
 *.so
 build
 distr
+docs/generated
 tests/config/*.xml
 junit*.xml
 pyignite.egg-info

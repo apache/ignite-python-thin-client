@@ -96,7 +96,65 @@ def __parse_settings(settings: Union[str, dict]) -> Tuple[Optional[str], Optiona
         raise ParameterError('You should supply at least cache name')
 
 
-class Cache:
+class BaseCacheMixin:
+    def _get_affinity_key(self, key, key_hint=None):
+        if key_hint is None:
+            key_hint = AnyDataObject.map_python_type(key)
+
+        if self.affinity.get('is_applicable'):
+            config = self.affinity.get('cache_config')
+            if config:
+                affinity_key_id = config.get(key_hint.type_id)
+
+                if affinity_key_id and isinstance(key, GenericObjectMeta):
+                    return get_field_by_id(key, affinity_key_id)
+
+        return key, key_hint
+
+    def _update_affinity(self, full_affinity):
+        self.affinity['version'] = full_affinity['version']
+
+        full_mapping = full_affinity.get('partition_mapping')
+        if full_mapping and self.cache_id in full_mapping:
+            self.affinity.update(full_mapping[self.cache_id])
+
+    def _get_node_by_hashcode(self, hashcode, parts):
+        """
+        Get node by key hashcode. Calculate partition and return node on that it is primary.
+        (algorithm is taken from `RendezvousAffinityFunction.java`)
+        """
+
+        # calculate partition for key or affinity key
+        # (algorithm is taken from `RendezvousAffinityFunction.java`)
+        mask = parts - 1
+
+        if parts & mask == 0:
+            part = (hashcode ^ (unsigned(hashcode) >> 16)) & mask
+        else:
+            part = abs(hashcode // parts)
+
+        assert 0 <= part < parts, 'Partition calculation has failed'
+
+        node_mapping = self.affinity.get('node_mapping')
+        if not node_mapping:
+            return None
+
+        node_uuid, best_conn = None, None
+        for u, p in node_mapping.items():
+            if part in p:
+                node_uuid = u
+                break
+
+        if node_uuid:
+            for n in self.client._nodes:
+                if n.uuid == node_uuid:
+                    best_conn = n
+                    break
+            if best_conn and best_conn.alive:
+                return best_conn
+
+
+class Cache(BaseCacheMixin):
     """
     Ignite cache abstraction. Users should never use this class directly,
     but construct its instances with
@@ -208,9 +266,7 @@ class Cache:
 
         return result
 
-    def get_best_node(
-            self, key: Any = None, key_hint: 'IgniteDataType' = None,
-    ) -> 'Connection':
+    def get_best_node(self, key: Any = None, key_hint: 'IgniteDataType' = None) -> 'Connection':
         """
         Returns the node from the list of the nodes, opened by client, that
         most probably contains the needed key-value pair. See IEP-23.
@@ -227,9 +283,6 @@ class Cache:
         conn = self._client.random_node
 
         if self.client.partition_aware and key is not None:
-            if key_hint is None:
-                key_hint = AnyDataObject.map_python_type(key)
-
             if self.affinity['version'] < self._client.affinity_version:
                 # update partition mapping
                 while True:
@@ -244,13 +297,7 @@ class Cache:
                         # server did not create mapping in time
                         return conn
 
-                self.affinity['version'] = full_affinity['version']
-
-                full_mapping = full_affinity.get('partition_mapping')
-                if full_mapping and self.cache_id in full_mapping:
-                    self.affinity.update(full_mapping[self.cache_id])
-                else:
-                    return conn
+                self._update_affinity(full_affinity)
 
                 for conn in self.client._nodes:
                     if not conn.alive:
@@ -261,41 +308,12 @@ class Cache:
             if not parts:
                 return conn
 
-            if self.affinity['is_applicable']:
-                affinity_key_id = self.affinity['cache_config'].get(key_hint.type_id)
+            key, key_hint = self._get_affinity_key(key, key_hint)
+            hashcode = key_hint.hashcode(key, self._client)
 
-                if affinity_key_id and isinstance(key, GenericObjectMeta):
-                    key, key_hint = get_field_by_id(key, affinity_key_id)
-
-            # calculate partition for key or affinity key
-            # (algorithm is taken from `RendezvousAffinityFunction.java`)
-            base_value = key_hint.hashcode(key, self._client)
-            mask = parts - 1
-
-            if parts & mask == 0:
-                part = (base_value ^ (unsigned(base_value) >> 16)) & mask
-            else:
-                part = abs(base_value // parts)
-
-            assert 0 <= part < parts, 'Partition calculation has failed'
-
-            # search for connection
-            try:
-                node_uuid, best_conn = None, None
-                for u, p in self.affinity['node_mapping'].items():
-                    if part in p:
-                        node_uuid = u
-                        break
-
-                if node_uuid:
-                    for n in conn.client._nodes:
-                        if n.uuid == node_uuid:
-                            best_conn = n
-                            break
-                    if best_conn and best_conn.alive:
-                        conn = best_conn
-            except KeyError:
-                pass
+            best_node = self._get_node_by_hashcode(hashcode, parts)
+            if best_node:
+                return best_node
 
         return conn
 
