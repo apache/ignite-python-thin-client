@@ -36,12 +36,7 @@ from .api.key_value import (
 )
 from .cursors import AioScanCursor
 from .api.affinity import cache_get_node_partitions_async
-
-PROP_CODES = set([
-    getattr(prop_codes, x)
-    for x in dir(prop_codes)
-    if x.startswith('PROP_')
-])
+from .cache import __parse_settings
 
 
 async def get_cache(client: 'AioClient', settings: Union[str, dict]) -> 'AioCache':
@@ -82,22 +77,6 @@ async def get_or_create_cache(client: 'AioClient', settings: Union[str, dict]) -
     return AioCache(client, name)
 
 
-def __parse_settings(settings: Union[str, dict]) -> Tuple[Optional[str], Optional[dict]]:
-    if isinstance(settings, str):
-        return settings, None
-    elif isinstance(settings, dict) and prop_codes.PROP_NAME in settings:
-        name = settings[prop_codes.PROP_NAME]
-        if len(settings) == 1:
-            return name, None
-
-        if not set(settings).issubset(PROP_CODES):
-            raise ParameterError('One or more settings was not recognized')
-
-        return name, settings
-    else:
-        raise ParameterError('You should supply at least cache name')
-
-
 class AioCache:
     """
     Ignite cache abstraction. Users should never use this class directly,
@@ -110,6 +89,9 @@ class AioCache:
     def __init__(self, client: 'AioClient', name: str):
         """
         Initialize async cache object. For internal use.
+
+        :param client: Async Ignite client,
+        :param name: Cache name.
         """
         self._client = client
         self._name = name

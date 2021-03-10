@@ -49,7 +49,7 @@ from typing import Dict, Iterable, List, Optional, Tuple, Type, Union, Any
 from .api.binary import get_binary_type, put_binary_type
 from .api.cache_config import cache_get_names
 from .cursors import SqlFieldsCursor
-from .cache import Cache
+from .cache import Cache, create_cache, get_cache, get_or_create_cache
 from .connection import Connection
 from .constants import IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT, PROTOCOL_BYTE_ORDER
 from .datatypes import BinaryObject
@@ -483,7 +483,7 @@ class Client:
          :ref:`cache creation example <sql_cache_create>`,
         :return: :class:`~pyignite.cache.Cache` object.
         """
-        return Cache(self, settings)
+        return create_cache(self, settings)
 
     def get_or_create_cache(self, settings: Union[str, dict]) -> 'Cache':
         """
@@ -495,7 +495,7 @@ class Client:
          :ref:`cache creation example <sql_cache_create>`,
         :return: :class:`~pyignite.cache.Cache` object.
         """
-        return Cache(self, settings, with_get=True)
+        return get_or_create_cache(self, settings)
 
     def get_cache(self, settings: Union[str, dict]) -> 'Cache':
         """
@@ -507,7 +507,7 @@ class Client:
          property is allowed),
         :return: :class:`~pyignite.cache.Cache` object.
         """
-        return Cache(self, settings, get_only=True)
+        return get_cache(self, settings)
 
     @status_to_exception(CacheError)
     def get_cache_names(self) -> list:

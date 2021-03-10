@@ -40,16 +40,60 @@ PROP_CODES = set([
     for x in dir(prop_codes)
     if x.startswith('PROP_')
 ])
-CACHE_CREATE_FUNCS = {
-    True: {
-        True: cache_get_or_create_with_config,
-        False: cache_create_with_config,
-    },
-    False: {
-        True: cache_get_or_create,
-        False: cache_create,
-    },
-}
+
+
+def get_cache(client: 'Client', settings: Union[str, dict]) -> 'Cache':
+    name, settings = __parse_settings(settings)
+    if settings:
+        raise ParameterError('Only cache name allowed as a parameter')
+
+    return Cache(client, name)
+
+
+def create_cache(client: 'Client', settings: Union[str, dict]) -> 'Cache':
+    name, settings = __parse_settings(settings)
+
+    conn = client.random_node
+    if settings:
+        result = cache_create_with_config(conn, settings)
+    else:
+        result = cache_create(conn, name)
+
+    if result.status != 0:
+        raise CacheCreationError(result.message)
+
+    return Cache(client, name)
+
+
+def get_or_create_cache(client: 'Client', settings: Union[str, dict]) -> 'Cache':
+    name, settings = __parse_settings(settings)
+
+    conn = client.random_node
+    if settings:
+        result = cache_get_or_create_with_config(conn, settings)
+    else:
+        result = cache_get_or_create(conn, name)
+
+    if result.status != 0:
+        raise CacheCreationError(result.message)
+
+    return Cache(client, name)
+
+
+def __parse_settings(settings: Union[str, dict]) -> Tuple[Optional[str], Optional[dict]]:
+    if isinstance(settings, str):
+        return settings, None
+    elif isinstance(settings, dict) and prop_codes.PROP_NAME in settings:
+        name = settings[prop_codes.PROP_NAME]
+        if len(settings) == 1:
+            return name, None
+
+        if not set(settings).issubset(PROP_CODES):
+            raise ParameterError('One or more settings was not recognized')
+
+        return name, settings
+    else:
+        raise ParameterError('You should supply at least cache name')
 
 
 class Cache:
@@ -62,65 +106,18 @@ class Cache:
     :ref:`this example <create_cache>` on how to do it.
     """
 
-    affinity = None
-    _cache_id = None
-    _name = None
-    _client = None
-    _settings = None
-
-    @staticmethod
-    def _validate_settings(
-            settings: Union[str, dict] = None, get_only: bool = False,
-    ):
-        if any([
-            not settings,
-            type(settings) not in (str, dict),
-            type(settings) is dict and prop_codes.PROP_NAME not in settings,
-        ]):
-            raise ParameterError('You should supply at least cache name')
-
-        if all([
-            type(settings) is dict,
-            not set(settings).issubset(PROP_CODES),
-        ]):
-            raise ParameterError('One or more settings was not recognized')
-
-        if get_only and type(settings) is dict and len(settings) != 1:
-            raise ParameterError('Only cache name allowed as a parameter')
-
-    def __init__(
-            self, client: 'Client', settings: Union[str, dict] = None,
-            with_get: bool = False, get_only: bool = False,
-    ):
+    def __init__(self, client: 'Client', name: str):
         """
-        Initialize cache object.
+        Initialize cache object. For internal use.
 
         :param client: Ignite client,
-        :param settings: cache settings. Can be a string (cache name) or a dict
-         of cache properties and their values. In this case PROP_NAME is
-         mandatory,
-        :param with_get: (optional) do not raise exception, if the cache
-         is already exists. Defaults to False,
-        :param get_only: (optional) do not communicate with Ignite server
-         at all, only create Cache instance. Defaults to False.
+        :param name: Cache name.
         """
         self._client = client
-        self._validate_settings(settings)
-        if type(settings) == str:
-            self._name = settings
-        else:
-            self._name = settings[prop_codes.PROP_NAME]
-
-        if not get_only:
-            func = CACHE_CREATE_FUNCS[type(settings) is dict][with_get]
-            result = func(client.random_node, settings)
-            if result.status != 0:
-                raise CacheCreationError(result.message)
-
+        self._name = name
+        self._settings = None
         self._cache_id = cache_id(self._name)
-        self.affinity = {
-            'version': (0, 0),
-        }
+        self.affinity = {'version': (0, 0)}
 
     def get_protocol_version(self) -> Optional[Tuple]:
         """
