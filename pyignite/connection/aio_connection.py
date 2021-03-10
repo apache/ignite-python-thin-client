@@ -35,16 +35,20 @@ from io import BytesIO
 from typing import Union
 
 from pyignite.constants import PROTOCOLS, IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT, PROTOCOL_BYTE_ORDER
-from pyignite.exceptions import HandshakeError, SocketError, connection_errors, AuthenticationError
-from .connection import CLIENT_STATUS_AUTH_FAILURE
+from pyignite.exceptions import HandshakeError, SocketError, connection_errors
+from .connection import BaseConnection
 
 from .handshake import HandshakeRequest, HandshakeResponse
-from .ssl import create_ssl_context, check_ssl_params
+from .ssl import create_ssl_context
 from ..stream import AioBinaryStream
 
 
-class AioConnection:
+class AioConnection(BaseConnection):
     """
+    Asyncio connection to Ignite node. It serves multiple purposes:
+
+    * wrapper of asyncio streams. See also https://docs.python.org/3/library/asyncio-stream.html
+    * encapsulates handshake and reconnection.
     """
 
     def __init__(self, client: 'AioClient', username: str = None, password: str = None, **ssl_params):
@@ -55,10 +59,6 @@ class AioConnection:
         https://docs.python.org/3/library/ssl.html#ssl-certificates.
 
         :param client: Ignite client object,
-        :param timeout: (optional) sets timeout (in seconds) for each socket
-         operation including `connect`. 0 means non-blocking mode, which is
-         virtually guaranteed to fail. Can accept integer or float value.
-         Default is None (blocking mode),
         :param use_ssl: (optional) set to True if Ignite server uses SSL
          on its binary connector. Defaults to use SSL when username
          and password has been supplied, not to use SSL otherwise,
@@ -88,23 +88,8 @@ class AioConnection:
          cluster,
         :param password: (optional) password to authenticate to Ignite cluster.
         """
-        self.client = client
-        self.username = username
-        self.password = password
-        self.host = None
-        self.port = None
-        self.uuid = None
-        check_ssl_params(ssl_params)
-
-        if self.username and self.password and 'use_ssl' not in ssl_params:
-            ssl_params['use_ssl'] = True
-
-        self.ssl_params = ssl_params
-
-        self.ssl_params = ssl_params
+        super().__init__(client, username, password, **ssl_params)
         self._mux = Lock()
-        self._failed = False
-
         self._reader = None
         self._writer = None
 
@@ -112,31 +97,6 @@ class AioConnection:
     def closed(self) -> bool:
         """ Tells if socket is closed. """
         return self._writer is None
-
-    @property
-    def failed(self) -> bool:
-        """ Tells if connection is failed. """
-        return self._failed
-
-    @failed.setter
-    def failed(self, value):
-        self._failed = value
-
-    @property
-    def alive(self) -> bool:
-        """ Tells if connection is up and no failure detected. """
-        return not self.failed and not self.closed
-
-    def __repr__(self) -> str:
-        return '{}:{}'.format(self.host or '?', self.port or '?')
-
-    def get_protocol_version(self):
-        """
-        Returns the tuple of major, minor, and revision numbers of the used
-        thin protocol version, or None, if no connection to the Ignite cluster
-        was yet established.
-        """
-        return self.client.protocol_version
 
     async def connect(self, host: str = None, port: int = None) -> Union[dict, OrderedDict]:
         """
@@ -210,20 +170,8 @@ class AioConnection:
 
             if hs_response.op_code == 0:
                 self._close()
+                self._process_handshake_error(hs_response)
 
-                error_text = f'Handshake error: {hs_response.message}'
-                # if handshake fails for any reason other than protocol mismatch
-                # (i.e. authentication error), server version is 0.0.0
-                server_version = (hs_response.version_major, hs_response.version_minor, hs_response.version_patch)
-
-                if any(server_version):
-                    error_text += f' Server expects binary protocol version ' \
-                                  f'{server_version[0]}.{server_version[1]}.{server_version[2]}. ' \
-                                  f'Client provides ' \
-                                  f'{protocol_version[0]}.{protocol_version[1]}.{protocol_version[2]}.'
-                elif hs_response.client_status == CLIENT_STATUS_AUTH_FAILURE:
-                    raise AuthenticationError(error_text)
-                raise HandshakeError(server_version, error_text)
             self.host, self.port = host, port
             return hs_response
 

@@ -20,14 +20,14 @@ from pyignite.constants import SSL_DEFAULT_CIPHERS, SSL_DEFAULT_VERSION
 from pyignite.exceptions import ParameterError
 
 
-def wrap(conn: 'Connection', _socket):
+def wrap(socket, ssl_params):
     """ Wrap socket in SSL wrapper. """
-    if not conn.ssl_params.get('use_ssl'):
-        return _socket
+    if not ssl_params.get('use_ssl'):
+        return socket
 
-    context = create_ssl_context(conn.ssl_params)
+    context = create_ssl_context(ssl_params)
 
-    return context.wrap_socket(sock=_socket)
+    return context.wrap_socket(sock=socket)
 
 
 def check_ssl_params(params):
