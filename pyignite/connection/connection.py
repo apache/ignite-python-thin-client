@@ -43,11 +43,14 @@ CLIENT_STATUS_AUTH_FAILURE = 2000
 
 
 class BaseConnection:
-    def __init__(self, client, username: str = None, password: str = None, **ssl_params):
+    def __init__(self, client, host: str = None, port: int = None, username: str = None, password: str = None,
+                 **ssl_params):
         self.client = client
+        self.host = host if host else IGNITE_DEFAULT_HOST
+        self.port = port if port else IGNITE_DEFAULT_PORT
         self.username = username
         self.password = password
-        self.host, self.port, self.uuid = None, None, None
+        self.uuid = None
 
         check_ssl_params(ssl_params)
 
@@ -115,8 +118,8 @@ class Connection(BaseConnection):
      * binary protocol connector. Encapsulates handshake and failover reconnection.
     """
 
-    def __init__(self, client: 'Client', timeout: float = 2.0, username: str = None, password: str = None,
-                 **ssl_params):
+    def __init__(self, client: 'Client', host: str, port: int, timeout: float = 2.0,
+                 username: str = None, password: str = None, **ssl_params):
         """
         Initialize connection.
 
@@ -124,6 +127,8 @@ class Connection(BaseConnection):
         https://docs.python.org/3/library/ssl.html#ssl-certificates.
 
         :param client: Ignite client object,
+        :param host: Ignite server node's host name or IP,
+        :param port: Ignite server node's port number,
         :param timeout: (optional) sets timeout (in seconds) for each socket
          operation including `connect`. 0 means non-blocking mode, which is
          virtually guaranteed to fail. Can accept integer or float value.
@@ -157,7 +162,7 @@ class Connection(BaseConnection):
          cluster,
         :param password: (optional) password to authenticate to Ignite cluster.
         """
-        super().__init__(client, username, password, **ssl_params)
+        super().__init__(client, host, port, username, password, **ssl_params)
         self.timeout = timeout
         self._socket = None
 
@@ -165,7 +170,7 @@ class Connection(BaseConnection):
     def closed(self) -> bool:
         return self._socket is None
 
-    def connect(self, host: str = None, port: int = None) -> Union[dict, OrderedDict]:
+    def connect(self) -> Union[dict, OrderedDict]:
         """
         Connect to the given server node with protocol version fallback.
 
@@ -180,11 +185,11 @@ class Connection(BaseConnection):
             self.client.protocol_version = max(PROTOCOLS)
 
         try:
-            result = self._connect_version(host, port)
+            result = self._connect_version()
         except HandshakeError as e:
             if e.expected_version in PROTOCOLS:
                 self.client.protocol_version = e.expected_version
-                result = self._connect_version(host, port)
+                result = self._connect_version()
             else:
                 raise e
         except connection_errors:
@@ -198,24 +203,16 @@ class Connection(BaseConnection):
         self.failed = False
         return result
 
-    def _connect_version(
-        self, host: str = None, port: int = None,
-    ) -> Union[dict, OrderedDict]:
+    def _connect_version(self) -> Union[dict, OrderedDict]:
         """
         Connect to the given server node using protocol version
         defined on client.
-
-        :param host: Ignite server node's host name or IP,
-        :param port: Ignite server node's port number.
         """
-
-        host = host or IGNITE_DEFAULT_HOST
-        port = port or IGNITE_DEFAULT_PORT
 
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.settimeout(self.timeout)
         self._socket = wrap(self._socket, self.ssl_params)
-        self._socket.connect((host, port))
+        self._socket.connect((self.host, self.port))
 
         protocol_version = self.client.protocol_version
 
@@ -236,7 +233,6 @@ class Connection(BaseConnection):
                 self.close()
                 self._process_handshake_error(hs_response)
 
-            self.host, self.port = host, port
             return hs_response
 
     def reconnect(self):
@@ -247,7 +243,7 @@ class Connection(BaseConnection):
 
         # connect and silence the connection errors
         try:
-            self.connect(self.host, self.port)
+            self.connect()
         except connection_errors:
             pass
 

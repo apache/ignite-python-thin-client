@@ -34,7 +34,7 @@ from collections import OrderedDict
 from io import BytesIO
 from typing import Union
 
-from pyignite.constants import PROTOCOLS, IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT, PROTOCOL_BYTE_ORDER
+from pyignite.constants import PROTOCOLS, PROTOCOL_BYTE_ORDER
 from pyignite.exceptions import HandshakeError, SocketError, connection_errors
 from .connection import BaseConnection
 
@@ -51,7 +51,8 @@ class AioConnection(BaseConnection):
     * encapsulates handshake and reconnection.
     """
 
-    def __init__(self, client: 'AioClient', username: str = None, password: str = None, **ssl_params):
+    def __init__(self, client: 'AioClient', host: str, port: int, username: str = None, password: str = None,
+                 **ssl_params):
         """
         Initialize connection.
 
@@ -59,6 +60,8 @@ class AioConnection(BaseConnection):
         https://docs.python.org/3/library/ssl.html#ssl-certificates.
 
         :param client: Ignite client object,
+        :param host: Ignite server node's host name or IP,
+        :param port: Ignite server node's port number,
         :param use_ssl: (optional) set to True if Ignite server uses SSL
          on its binary connector. Defaults to use SSL when username
          and password has been supplied, not to use SSL otherwise,
@@ -88,7 +91,7 @@ class AioConnection(BaseConnection):
          cluster,
         :param password: (optional) password to authenticate to Ignite cluster.
         """
-        super().__init__(client, username, password, **ssl_params)
+        super().__init__(client, host, port, username, password, **ssl_params)
         self._mux = Lock()
         self._reader = None
         self._writer = None
@@ -98,17 +101,14 @@ class AioConnection(BaseConnection):
         """ Tells if socket is closed. """
         return self._writer is None
 
-    async def connect(self, host: str = None, port: int = None) -> Union[dict, OrderedDict]:
+    async def connect(self) -> Union[dict, OrderedDict]:
         """
         Connect to the given server node with protocol version fallback.
-
-        :param host: Ignite server node's host name or IP,
-        :param port: Ignite server node's port number.
         """
         async with self._mux:
-            return await self._connect(host, port)
+            return await self._connect()
 
-    async def _connect(self, host: str = None, port: int = None) -> Union[dict, OrderedDict]:
+    async def _connect(self) -> Union[dict, OrderedDict]:
         detecting_protocol = False
 
         # choose highest version first
@@ -117,11 +117,11 @@ class AioConnection(BaseConnection):
             self.client.protocol_version = max(PROTOCOLS)
 
         try:
-            result = await self._connect_version(host, port)
+            result = await self._connect_version()
         except HandshakeError as e:
             if e.expected_version in PROTOCOLS:
                 self.client.protocol_version = e.expected_version
-                result = await self._connect_version(host, port)
+                result = await self._connect_version()
             else:
                 raise e
         except connection_errors:
@@ -136,22 +136,14 @@ class AioConnection(BaseConnection):
         self.failed = False
         return result
 
-    async def _connect_version(
-        self, host: str = None, port: int = None,
-    ) -> Union[dict, OrderedDict]:
+    async def _connect_version(self) -> Union[dict, OrderedDict]:
         """
         Connect to the given server node using protocol version
         defined on client.
-
-        :param host: Ignite server node's host name or IP,
-        :param port: Ignite server node's port number.
         """
 
-        host = host or IGNITE_DEFAULT_HOST
-        port = port or IGNITE_DEFAULT_PORT
-
         ssl_context = create_ssl_context(self.ssl_params)
-        self._reader, self._writer = await asyncio.open_connection(host, port, ssl=ssl_context)
+        self._reader, self._writer = await asyncio.open_connection(self.host, self.port, ssl=ssl_context)
 
         protocol_version = self.client.protocol_version
 
@@ -172,7 +164,6 @@ class AioConnection(BaseConnection):
                 self._close()
                 self._process_handshake_error(hs_response)
 
-            self.host, self.port = host, port
             return hs_response
 
     async def reconnect(self):
@@ -187,7 +178,7 @@ class AioConnection(BaseConnection):
 
         # connect and silence the connection errors
         try:
-            await self._connect(self.host, self.port)
+            await self._connect()
         except connection_errors:
             pass
 

@@ -131,6 +131,20 @@ class BaseClient:
         else:
             self._compact_footer = value
 
+    @staticmethod
+    def _process_connect_args(*args):
+        if len(args) == 0:
+            # no parameters − use default Ignite host and port
+            return [(IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT)]
+        if len(args) == 1 and is_iterable(args[0]):
+            # iterable of host-port pairs is given
+            return args[0]
+        if len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], int):
+            # host and port are given
+            return [args]
+
+        raise ConnectionError('Connection parameters are not valid.')
+
     def _process_get_binary_type_result(self, result):
         if result.status != 0 or not result.value['type_exists']:
             return result
@@ -265,17 +279,7 @@ class Client(BaseClient):
 
         :param args: (optional) host(s) and port(s) to connect to.
         """
-        if len(args) == 0:
-            # no parameters − use default Ignite host and port
-            nodes = [(IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT)]
-        elif len(args) == 1 and is_iterable(args[0]):
-            # iterable of host-port pairs is given
-            nodes = args[0]
-        elif len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], int):
-            # host and port are given
-            nodes = [args]
-        else:
-            raise ConnectionError('Connection parameters are not valid.')
+        nodes = self._process_connect_args(*args)
 
         # the following code is quite twisted, because the protocol version
         # is initially unknown
@@ -283,14 +287,12 @@ class Client(BaseClient):
         # TODO: open first node in foreground, others − in background
         for i, node in enumerate(nodes):
             host, port = node
-            conn = Connection(self, **self._connection_args)
-            conn.host = host
-            conn.port = port
+            conn = Connection(self, host, port, **self._connection_args)
 
             try:
                 if self.protocol_version is None or self.partition_aware:
                     # open connection before adding to the pool
-                    conn.connect(host, port)
+                    conn.connect()
 
                     # now we have the protocol version
                     if not self.partition_aware:
@@ -346,7 +348,7 @@ class Client(BaseClient):
             for i in chain(range(self._current_node, num_nodes), range(self._current_node)):
                 node = self._nodes[i]
                 try:
-                    node.connect(node.host, node.port)
+                    node.connect()
                 except connection_errors:
                     pass
                 else:

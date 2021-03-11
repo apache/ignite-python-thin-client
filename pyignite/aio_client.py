@@ -63,29 +63,17 @@ class AioClient(BaseClient):
 
         :param args: (optional) host(s) and port(s) to connect to.
         """
-        if len(args) == 0:
-            # no parameters − use default Ignite host and port
-            nodes = [(IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT)]
-        elif len(args) == 1 and is_iterable(args[0]):
-            # iterable of host-port pairs is given
-            nodes = args[0]
-        elif len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], int):
-            # host and port are given
-            nodes = [args]
-        else:
-            raise ConnectionError('Connection parameters are not valid.')
+        nodes = self._process_connect_args(*args)
 
         for i, node in enumerate(nodes):
             host, port = node
-            conn = AioConnection(self, **self._connection_args)
-            conn.host = host
-            conn.port = port
+            conn = AioConnection(self, host, port, **self._connection_args)
 
             if not self.partition_aware:
                 try:
                     if self.protocol_version is None:
                         # open connection before adding to the pool
-                        await conn.connect(host, port)
+                        await conn.connect()
 
                         # do not try to open more nodes
                         self._current_node = i
@@ -97,7 +85,7 @@ class AioClient(BaseClient):
 
         if self.partition_aware:
             connect_results = await asyncio.gather(
-                *[conn.connect(conn.host, conn.port) for conn in self._nodes],
+                *[conn.connect() for conn in self._nodes],
                 return_exceptions=True
             )
 
@@ -149,7 +137,7 @@ class AioClient(BaseClient):
             for i in chain(range(self._current_node, len(self._nodes)), range(self._current_node)):
                 node = self._nodes[i]
                 try:
-                    await node.connect(node.host, node.port)
+                    await node.connect()
                 except connection_errors:
                     pass
                 else:
