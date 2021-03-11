@@ -43,6 +43,9 @@ jobs:
     - python: '3.8'
       arch: amd64
       env: TOXENV=py38
+    - python: '3.8'
+      arch: amd64
+      env: TOXENV=codestyle
     - python: '3.9'
       arch: amd64
       env: TOXENV=py39

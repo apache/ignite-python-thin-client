@@ -166,7 +166,7 @@ class AioConnection(BaseConnection):
             await self._send(stream.getbuffer(), reconnect=False)
 
         with AioBinaryStream(self.client, await self._recv(reconnect=False)) as stream:
-            hs_response = await HandshakeResponse.parse_async(stream, self.get_protocol_version())
+            hs_response = await HandshakeResponse.parse_async(stream, self.protocol_version)
 
             if hs_response.op_code == 0:
                 self._close()

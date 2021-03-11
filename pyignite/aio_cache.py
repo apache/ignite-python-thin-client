@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import asyncio
-from typing import Any, Dict, Iterable, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, Optional, Union
 
 from .constants import AFFINITY_RETRIES, AFFINITY_DELAY
 from .connection import AioConnection
@@ -98,18 +98,6 @@ class AioCache(BaseCacheMixin):
         self._settings = None
         self._affinity_mux = asyncio.Lock()
         self.affinity = {'version': (0, 0)}
-
-    def get_protocol_version(self) -> Optional[Tuple]:
-        """
-        Returns the tuple of major, minor, and revision numbers of the used
-        thin protocol version, or None, if no connection to the Ignite cluster
-        was not yet established.
-
-        This method is not a part of the public API. Unless you wish to
-        extend the `pyignite` capabilities (with additional testing, logging,
-        examining connections, et c.) you probably should not use it.
-        """
-        return self.client.protocol_version
 
     async def settings(self) -> Optional[dict]:
         """

@@ -44,7 +44,7 @@ from collections import defaultdict, OrderedDict
 import random
 import re
 from itertools import chain
-from typing import Dict, Iterable, List, Optional, Tuple, Type, Union, Any
+from typing import Iterable, Type, Union, Any
 
 from .api.binary import get_binary_type, put_binary_type
 from .api.cache_config import cache_get_names

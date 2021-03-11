@@ -13,11 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import asyncio
-from collections import defaultdict, OrderedDict
 import random
-import re
 from itertools import chain
-from typing import Iterable, Optional, Tuple, Type, Union, Any
+from typing import Iterable, Type, Union, Any
 
 from .api.binary import get_binary_type_async, put_binary_type_async
 from .api.cache_config import cache_get_names_async
@@ -29,9 +27,7 @@ from .constants import IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT
 from .datatypes import BinaryObject
 from .exceptions import BinaryTypeError, CacheError, ReconnectError, connection_errors
 from .stream import AioBinaryStream, READ_BACKWARD
-from .utils import cache_id, capitalize, entity_id, schema_id, process_delimiter, status_to_exception, is_iterable, \
-    is_wrapped
-from .binary import GenericObjectMeta
+from .utils import cache_id, entity_id, status_to_exception, is_iterable, is_wrapped
 
 
 __all__ = ['AioClient']
@@ -216,7 +212,6 @@ class AioClient(BaseClient):
         """
         conn = await self.random_node()
         return await put_binary_type_async(conn, type_name, affinity_key_field, is_enum, schema)
-
 
     async def register_binary_type(self, data_class: Type, affinity_key_field: str = None):
         """

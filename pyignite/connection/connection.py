@@ -79,7 +79,8 @@ class BaseConnection:
     def __repr__(self) -> str:
         return '{}:{}'.format(self.host or '?', self.port or '?')
 
-    def get_protocol_version(self):
+    @property
+    def protocol_version(self):
         """
         Returns the tuple of major, minor, and revision numbers of the used
         thin protocol version, or None, if no connection to the Ignite cluster
@@ -229,7 +230,7 @@ class Connection(BaseConnection):
             self.send(stream.getbuffer(), reconnect=False)
 
         with BinaryStream(self.client, self.recv(reconnect=False)) as stream:
-            hs_response = HandshakeResponse.parse(stream, self.get_protocol_version())
+            hs_response = HandshakeResponse.parse(stream, self.protocol_version)
 
             if hs_response.op_code == 0:
                 self.close()
