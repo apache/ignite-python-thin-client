@@ -98,10 +98,7 @@ class BinaryStream(BinaryStreamBaseMixin):
         self.stream = BytesIO(buf) if buf else BytesIO()
 
     def get_dataclass(self, header):
-        result = self.client.query_binary_type(
-            header.type_id,
-            header.schema_id
-        )
+        result = self.client.query_binary_type(header.type_id, header.schema_id)
         if not result:
             raise RuntimeError('Binary type is not registered')
         return result

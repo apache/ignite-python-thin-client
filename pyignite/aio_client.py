@@ -21,12 +21,12 @@ from typing import Iterable, Optional, Tuple, Type, Union, Any
 
 from .api.binary import get_binary_type_async, put_binary_type_async
 from .api.cache_config import cache_get_names_async
+from .client import BaseClient
 from .cursors import AioSqlFieldsCursor
 from .aio_cache import AioCache, get_cache, create_cache, get_or_create_cache
 from .connection import AioConnection
-from .constants import IGNITE_DEFAULT_HOST, PROTOCOL_BYTE_ORDER, IGNITE_DEFAULT_PORT
+from .constants import IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT
 from .datatypes import BinaryObject
-from .datatypes.internal import tc_map
 from .exceptions import BinaryTypeError, CacheError, ReconnectError, connection_errors
 from .stream import AioBinaryStream, READ_BACKWARD
 from .utils import cache_id, capitalize, entity_id, schema_id, process_delimiter, status_to_exception, is_iterable, \
@@ -37,14 +37,10 @@ from .binary import GenericObjectMeta
 __all__ = ['AioClient']
 
 
-class AioClient:
+class AioClient(BaseClient):
     """
     Asynchronous Client implementation.
     """
-
-    # used for Complex object data class names sanitizing
-    _identifier = re.compile(r'[^0-9a-zA-Z_.+$]', re.UNICODE)
-    _ident_start = re.compile(r'^[^a-zA-Z_]+', re.UNICODE)
 
     def __init__(self, compact_footer: bool = None, partition_aware: bool = False, **kwargs):
         """
@@ -62,39 +58,8 @@ class AioClient:
          The feature is in experimental status, so the parameter is `False`
          by default. This will be changed later.
         """
-        self._compact_footer = compact_footer
-        self._connection_args = kwargs
-
-        self._compact_footer = compact_footer
-        self._registry = defaultdict(dict)
+        super().__init__(compact_footer, partition_aware, **kwargs)
         self._registry_mux = asyncio.Lock()
-        self._partition_aware = partition_aware
-
-        self._nodes = []
-        self._current_node = 0
-
-        self.protocol_version = None
-        self.affinity_version = (0, 0)
-
-    def get_protocol_version(self) -> Optional[Tuple]:
-        """
-        Returns the tuple of major, minor, and revision numbers of the used
-        thin protocol version, or None, if no connection to the Ignite cluster
-        was not yet established.
-
-        This method is not a part of the public API. Unless you wish to
-        extend the `pyignite` capabilities (with additional testing, logging,
-        examining connections, et c.) you probably should not use it.
-        """
-        return self.protocol_version
-
-    @property
-    def partition_aware(self):
-        return self._partition_aware and self.partition_awareness_supported_by_protocol
-
-    @property
-    def partition_awareness_supported_by_protocol(self):
-        return self.protocol_version is not None and self.protocol_version >= (1, 4, 0)
 
     async def connect(self, *args):
         """
@@ -228,68 +193,9 @@ class AioClient:
          - `schemas`: a list, containing the Complex object schemas in format:
            OrderedDict[field name: field type hint]. A schema can be empty.
         """
-        def convert_type(tc_type: int):
-            try:
-                return tc_map(tc_type.to_bytes(1, PROTOCOL_BYTE_ORDER))
-            except (KeyError, OverflowError):
-                # if conversion to char or type lookup failed,
-                # we probably have a binary object type ID
-                return BinaryObject
-
-        def convert_schema(
-            field_ids: list, binary_fields: list
-        ) -> OrderedDict:
-            converted_schema = OrderedDict()
-            for field_id in field_ids:
-                binary_field = [
-                    x
-                    for x in binary_fields
-                    if x['field_id'] == field_id
-                ][0]
-                converted_schema[binary_field['field_name']] = convert_type(
-                    binary_field['type_id']
-                )
-            return converted_schema
-
         conn = await self.random_node()
-
         result = await get_binary_type_async(conn, binary_type)
-        if result.status != 0 or not result.value['type_exists']:
-            return result
-
-        binary_fields = result.value.pop('binary_fields')
-        old_format_schemas = result.value.pop('schema')
-        result.value['schemas'] = []
-        for s_id, field_ids in old_format_schemas.items():
-            result.value['schemas'].append(
-                convert_schema(field_ids, binary_fields)
-            )
-        return result
-
-    @property
-    def compact_footer(self) -> bool:
-        """
-        This property remembers Complex object schema encoding approach when
-        decoding any Complex object, to use the same approach on Complex
-        object encoding.
-
-        :return: True if compact schema was used by server or no Complex
-         object decoding has yet taken place, False if full schema was used.
-        """
-        # this is an ordinary object property, but its backing storage
-        # is a class attribute
-
-        # use compact schema by default, but leave initial (falsy) backing
-        # value unchanged
-        return self._compact_footer or self._compact_footer is None
-
-    @compact_footer.setter
-    def compact_footer(self, value: bool):
-        # normally schema approach should not change
-        if self._compact_footer not in (value, None):
-            raise Warning('Can not change client schema approach.')
-        else:
-            self._compact_footer = value
+        return self._process_get_binary_type_result(result)
 
     @status_to_exception(BinaryTypeError)
     async def put_binary_type(self, type_name: str, affinity_key_field: str = None, is_enum=False, schema: dict = None):
@@ -311,63 +217,6 @@ class AioClient:
         conn = await self.random_node()
         return await put_binary_type_async(conn, type_name, affinity_key_field, is_enum, schema)
 
-    @staticmethod
-    def _create_dataclass(type_name: str, schema: OrderedDict = None) -> Type:
-        """
-        Creates default (generic) class for Ignite Complex object.
-
-        :param type_name: Complex object type name,
-        :param schema: Complex object schema,
-        :return: the resulting class.
-        """
-        schema = schema or {}
-        return GenericObjectMeta(type_name, (), {}, schema=schema)
-
-    async def _sync_binary_registry(self, type_id: int):
-        """
-        Reads Complex object description from Ignite server. Creates default
-        Complex object classes and puts in registry, if not already there.
-
-        :param type_id: Complex object type ID.
-        """
-        type_info = await self.get_binary_type(type_id)
-        if type_info['type_exists']:
-            for schema in type_info['schemas']:
-                if not self._registry[type_id].get(schema_id(schema), None):
-                    data_class = self._create_dataclass(
-                        self._create_type_name(type_info['type_name']),
-                        schema
-                    )
-                    self._registry[type_id][schema_id(schema)] = data_class
-
-    @classmethod
-    def _create_type_name(cls, type_name: str) -> str:
-        """
-        Creates Python data class name from Ignite binary type name.
-
-        Handles all the special cases found in
-        `java.org.apache.ignite.binary.BinaryBasicNameMapper.simpleName()`.
-        Tries to adhere to PEP8 along the way.
-        """
-
-        # general sanitizing
-        type_name = cls._identifier.sub('', type_name)
-
-        # - name ending with '$' (Scala)
-        # - name + '$' + some digits (anonymous class)
-        # - '$$Lambda$' in the middle
-        type_name = process_delimiter(type_name, '$')
-
-        # .NET outer/inner class delimiter
-        type_name = process_delimiter(type_name, '+')
-
-        # Java fully qualified class name
-        type_name = process_delimiter(type_name, '.')
-
-        # start chars sanitizing
-        type_name = capitalize(cls._ident_start.sub('', type_name))
-
-        return type_name
 
     async def register_binary_type(self, data_class: Type, affinity_key_field: str = None):
         """
@@ -395,21 +244,16 @@ class AioClient:
         type_id = entity_id(binary_type)
 
         async with self._registry_mux:
-            result = self.__get_from_registry(type_id, schema)
+            result = self._get_from_registry(type_id, schema)
 
-            if not result:
-                await self._sync_binary_registry(type_id)
-                result = self.__get_from_registry(type_id, schema)
+        if not result:
+            type_info = await self.get_binary_type(type_id)
 
-            return result
+            async with self._registry_mux:
+                self._sync_binary_registry(type_id, type_info)
+                return self._get_from_registry(type_id, schema)
 
-    def __get_from_registry(self, type_id, schema):
-        if schema:
-            try:
-                return self._registry[type_id][schema_id(schema)]
-            except KeyError:
-                return None
-        return self._registry[type_id]
+        return result
 
     async def unwrap_binary(self, value: Any) -> Any:
         """
