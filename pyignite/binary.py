@@ -76,12 +76,14 @@ class GenericObjectProps(IgniteDataTypeProps):
     def __new__(cls, *args, **kwargs) -> Any:
         # allow all items in Binary Object schema to be populated as optional
         # arguments to `__init__()` with sensible defaults.
-        attributes = {}
-        for k, v in cls.schema.items():
-            attributes[k] = attr.ib(type=getattr(v, 'pythonic', type(None)), default=getattr(v, 'default', None))
+        if not attr.has(cls):
+            attributes = {
+                k: attr.ib(type=getattr(v, 'pythonic', type(None)), default=getattr(v, 'default', None))
+                for k, v in cls.schema.items()
+            }
 
-        attributes.update({'version': attr.ib(type=int, default=1)})
-        cls = attr.s(cls, these=attributes)
+            attributes.update({'version': attr.ib(type=int, default=1)})
+            cls = attr.s(cls, these=attributes)
         # skip parameters
         return super().__new__(cls)
 

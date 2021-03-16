@@ -31,10 +31,7 @@ class SimpleObject(
         ('str', String),
     ])
 ):
-    def __eq__(self, o: object) -> bool:
-        if isinstance(o, SimpleObject):
-            return self.id == o.id and self.str == o.str
-        return False
+    pass
 
 
 page_size = 10
@@ -42,15 +39,7 @@ page_size = 10
 
 @pytest.fixture
 def test_objects_data():
-    data = {}
-    for i in range(page_size * 2):
-        v = SimpleObject()
-        v.id = i
-        v.str = f'str_{i}'
-
-        data[i] = v
-
-    yield data
+    yield {i: SimpleObject(id=i, str=f'str_{i}') for i in range(page_size * 2)}
 
 
 @pytest.mark.asyncio
