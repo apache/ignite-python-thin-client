@@ -247,6 +247,16 @@ class Connection(BaseConnection):
         except connection_errors:
             pass
 
+    def request(self, data: Union[bytes, bytearray, memoryview], flags=None) -> bytearray:
+        """
+        Perform request.
+
+        :param data: bytes to send,
+        :param flags: (optional) OS-specific flags.
+        """
+        self.send(data, flags=flags)
+        return self.recv()
+
     def send(self, data: Union[bytes, bytearray, memoryview], flags=None, reconnect=True):
         """
         Send data down the socket.

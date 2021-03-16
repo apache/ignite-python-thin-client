@@ -226,15 +226,16 @@ class AioClient(BaseClient):
         """
         type_id = entity_id(binary_type)
 
-        async with self._registry_mux:
-            result = self._get_from_registry(type_id, schema)
+        result = self._get_from_registry(type_id, schema)
 
         if not result:
-            type_info = await self.get_binary_type(type_id)
-
             async with self._registry_mux:
-                self._sync_binary_registry(type_id, type_info)
-                return self._get_from_registry(type_id, schema)
+                result = self._get_from_registry(type_id, schema)
+
+                if not result:
+                    type_info = await self.get_binary_type(type_id)
+                    self._sync_binary_registry(type_id, type_info)
+                    return self._get_from_registry(type_id, schema)
 
         return result
 

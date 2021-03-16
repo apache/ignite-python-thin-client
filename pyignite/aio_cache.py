@@ -96,7 +96,7 @@ class AioCache(BaseCacheMixin):
         self._name = name
         self._cache_id = cache_id(self._name)
         self._settings = None
-        self._affinity_mux = asyncio.Lock()
+        self._affinity_query_mux = asyncio.Lock()
         self.affinity = {'version': (0, 0)}
 
     async def settings(self) -> Optional[dict]:
@@ -192,49 +192,46 @@ class AioCache(BaseCacheMixin):
         conn = await self._client.random_node()
 
         if self.client.partition_aware and key is not None:
-            async with self._affinity_mux:
-                should_update_mapping = self.affinity['version'] < self._client.affinity_version
+            if self.__should_update_mapping():
+                async with self._affinity_query_mux:
+                    while self.__should_update_mapping():
+                        try:
+                            full_affinity = await self._get_affinity(conn)
+                            self._update_affinity(full_affinity)
 
-            if should_update_mapping:
-                while True:
-                    try:
-                        full_affinity = await self._get_affinity(conn)
-                        break
-                    except connection_errors:
-                        # retry if connection failed
-                        conn = await self._client.random_node()
-                        pass
-                    except CacheError:
-                        # server did not create mapping in time
-                        return conn
+                            asyncio.ensure_future(
+                                asyncio.gather(
+                                    *[conn.reconnect() for conn in self.client._nodes if not conn.alive],
+                                    return_exceptions=True
+                                )
+                            )
 
-                async with self._affinity_mux:
-                    if self.affinity['version'] < self._client.affinity_version:
-                        self._update_affinity(full_affinity)
+                            break
+                        except connection_errors:
+                            # retry if connection failed
+                            conn = await self._client.random_node()
+                            pass
+                        except CacheError:
+                            # server did not create mapping in time
+                            return conn
 
-                asyncio.ensure_future(
-                    asyncio.gather(
-                        *[conn.reconnect() for conn in self.client._nodes if not conn.alive],
-                        return_exceptions=True
-                    )
-                )
+            parts = self.affinity.get('number_of_partitions')
 
-            async with self._affinity_mux:
-                parts = self.affinity.get('number_of_partitions')
+            if not parts:
+                return conn
 
-                if not parts:
-                    return conn
-
-                key, key_hint = self._get_affinity_key(key, key_hint)
+            key, key_hint = self._get_affinity_key(key, key_hint)
 
             hashcode = await key_hint.hashcode_async(key, self._client)
 
-            async with self._affinity_mux:
-                best_node = self._get_node_by_hashcode(hashcode, parts)
-                if best_node:
-                    return best_node
+            best_node = self._get_node_by_hashcode(hashcode, parts)
+            if best_node:
+                return best_node
 
         return conn
+
+    def __should_update_mapping(self):
+        return self.affinity['version'] < self._client.affinity_version
 
     @status_to_exception(CacheError)
     async def get(self, key, key_hint: object = None) -> Any:

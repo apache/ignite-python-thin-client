@@ -30,8 +30,7 @@ from tests.util import wait_for_condition, wait_for_condition_async, start_ignit
 
 requests = deque()
 old_send = Connection.send
-old_send_async = AioConnection.send
-async_requests_mux = asyncio.Lock()
+old_send_async = AioConnection._send
 
 
 def patched_send(self, *args, **kwargs):
@@ -47,20 +46,19 @@ def patched_send(self, *args, **kwargs):
 
 async def patched_send_async(self, *args, **kwargs):
     """Patched send function that push to queue idx of server to which request is routed."""
-    async with async_requests_mux:
-        buf = args[0]
-        if buf and len(buf) >= 6:
-            op_code = int.from_bytes(buf[4:6], byteorder=PROTOCOL_BYTE_ORDER)
-            # Filter only caches operation.
-            if 1000 <= op_code < 1100:
-                requests.append(self.port % 100)
+    buf = args[0]
+    if buf and len(buf) >= 6:
+        op_code = int.from_bytes(buf[4:6], byteorder=PROTOCOL_BYTE_ORDER)
+        # Filter only caches operation.
+        if 1000 <= op_code < 1100:
+            requests.append(self.port % 100)
     return await old_send_async(self, *args, **kwargs)
 
 
 def setup_function():
     requests.clear()
     Connection.send = patched_send
-    AioConnection.send = patched_send_async
+    AioConnection._send = patched_send_async
 
 
 def teardown_function():
@@ -94,8 +92,7 @@ async def wait_for_affinity_distribution_async(cache, key, node_idx, timeout=30)
         nonlocal real_node_idx
         try:
             await cache.get(key)
-            async with async_requests_mux:
-                real_node_idx = requests.pop()
+            real_node_idx = requests.pop()
         except (OSError, IOError):
             return False
         return real_node_idx == node_idx
@@ -161,8 +158,7 @@ def __perform_operations_on_primitive_key(client, cache, key, grid_idx):
             args = [random.randint(-100, 100) for _ in range(0, param_nums - 1)]
             await op(key, *args)
 
-            async with async_requests_mux:
-                assert requests.pop() == grid_idx
+            assert requests.pop() == grid_idx
 
     return inner_async() if isinstance(client, AioClient) else inner()
 
@@ -265,8 +261,7 @@ def __perform_cache_operation_routed_to_new_node(cache):
         await wait_for_affinity_distribution_async(cache, key, 3)
         await cache.put(key, key)
         await cache.put(key, key)
-        async with async_requests_mux:
-            assert requests.pop() == 3
+        assert requests.pop() == 3
 
         srv = start_ignite(idx=4)
         try:
@@ -276,8 +271,7 @@ def __perform_cache_operation_routed_to_new_node(cache):
             # Response is correct and comes from the new node
             res = await cache.get_and_remove(key)
             assert res == key
-            async with async_requests_mux:
-                assert requests.pop() == 4
+            assert requests.pop() == 4
         finally:
             kill_process_tree(srv.pid)
 
@@ -337,16 +331,15 @@ def verify_random_node(cache):
     async def inner_async():
         await cache.put(key, key)
 
-        async with async_requests_mux:
-            idx1 = requests.pop()
+        idx1 = requests.pop()
 
         idx2 = idx1
 
         # Try 10 times - random node may end up being the same
         for _ in range(1, 10):
             await cache.put(key, key)
-            async with async_requests_mux:
-                idx2 = requests.pop()
+            idx2 = requests.pop()
+
             if idx2 != idx1:
                 break
         assert idx1 != idx2

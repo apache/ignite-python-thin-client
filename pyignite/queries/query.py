@@ -122,12 +122,12 @@ class Query:
         """
         with BinaryStream(conn.client) as stream:
             self.from_python(stream, query_params)
-            conn.send(stream.getbuffer())
+            response_data = conn.request(stream.getbuffer())
 
         response_struct = self.response_type(protocol_version=conn.protocol_version,
                                              following=response_config, **kwargs)
 
-        with BinaryStream(conn.client, conn.recv()) as stream:
+        with BinaryStream(conn.client, response_data) as stream:
             response_ctype = response_struct.parse(stream)
             response = stream.read_ctype(response_ctype, direction=READ_BACKWARD)
 
@@ -154,12 +154,12 @@ class Query:
         """
         with AioBinaryStream(conn.client) as stream:
             await self.from_python_async(stream, query_params)
-            await conn.send(stream.getbuffer())
+            data = await conn.request(stream.getbuffer())
 
         response_struct = self.response_type(protocol_version=conn.protocol_version,
                                              following=response_config, **kwargs)
 
-        with AioBinaryStream(conn.client, await conn.recv()) as stream:
+        with AioBinaryStream(conn.client, data) as stream:
             response_ctype = await response_struct.parse_async(stream)
             response = stream.read_ctype(response_ctype, direction=READ_BACKWARD)
 

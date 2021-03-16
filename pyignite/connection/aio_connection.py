@@ -182,9 +182,15 @@ class AioConnection(BaseConnection):
         except connection_errors:
             pass
 
-    async def send(self, data: Union[bytes, bytearray, memoryview]):
+    async def request(self, data: Union[bytes, bytearray, memoryview]) -> bytearray:
+        """
+        Perform request.
+
+        :param data: bytes to send.
+        """
         async with self._mux:
-            return await self._send(data)
+            await self._send(data)
+            return await self._recv()
 
     async def _send(self, data: Union[bytes, bytearray, memoryview], reconnect=True):
         if self.closed:
@@ -198,10 +204,6 @@ class AioConnection(BaseConnection):
             if reconnect:
                 await self._reconnect()
             raise
-
-    async def recv(self) -> bytearray:
-        async with self._mux:
-            return await self._recv()
 
     async def _recv(self, reconnect=True) -> bytearray:
         if self.closed:
