@@ -107,9 +107,7 @@ def __post_process_partitions(result):
             node_mapping = None
             if is_applicable:
                 node_mapping = {
-                    p['node_uuid']: [
-                        x['partition_id'] for x in p['node_partitions']
-                    ]
+                    p['node_uuid']: set(x['partition_id'] for x in p['node_partitions'])
                     for p in partition_map['node_mapping']
                 }
 
