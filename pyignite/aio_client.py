@@ -212,8 +212,7 @@ class AioClient(BaseClient):
         if not await self.query_binary_type(data_class.type_id, data_class.schema_id):
             await self.put_binary_type(data_class.type_name, affinity_key_field, schema=data_class.schema)
 
-        async with self._registry_mux:
-            self._registry[data_class.type_id][data_class.schema_id] = data_class
+        self._registry[data_class.type_id][data_class.schema_id] = data_class
 
     async def query_binary_type(self, binary_type: Union[int, str], schema: Union[int, dict] = None):
         """
