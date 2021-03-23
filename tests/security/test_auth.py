@@ -15,7 +15,7 @@
 import pytest
 
 from pyignite.exceptions import AuthenticationError
-from tests.util import start_ignite_gen, clear_ignite_work_dir, get_client
+from tests.util import start_ignite_gen, clear_ignite_work_dir, get_client, get_client_async
 
 DEFAULT_IGNITE_USERNAME = 'ignite'
 DEFAULT_IGNITE_PASSWORD = 'ignite'
@@ -47,13 +47,27 @@ def test_auth_success(with_ssl, ssl_params):
         assert all(node.alive for node in client._nodes)
 
 
+@pytest.mark.asyncio
+async def test_auth_success_async(with_ssl, ssl_params):
+    ssl_params['use_ssl'] = with_ssl
+
+    async with get_client_async(username=DEFAULT_IGNITE_USERNAME, password=DEFAULT_IGNITE_PASSWORD,
+                                **ssl_params) as client:
+        await client.connect("127.0.0.1", 10801)
+
+        assert all(node.alive for node in client._nodes)
+
+
+auth_failed_params = [
+    [DEFAULT_IGNITE_USERNAME, None],
+    ['invalid_user', 'invalid_password'],
+    [None, None]
+]
+
+
 @pytest.mark.parametrize(
     'username, password',
-    [
-        [DEFAULT_IGNITE_USERNAME, None],
-        ['invalid_user', 'invalid_password'],
-        [None, None]
-    ]
+    auth_failed_params
 )
 def test_auth_failed(username, password, with_ssl, ssl_params):
     ssl_params['use_ssl'] = with_ssl
@@ -61,3 +75,16 @@ def test_auth_failed(username, password, with_ssl, ssl_params):
     with pytest.raises(AuthenticationError):
         with get_client(username=username, password=password, **ssl_params) as client:
             client.connect("127.0.0.1", 10801)
+
+
+@pytest.mark.parametrize(
+    'username, password',
+    auth_failed_params
+)
+@pytest.mark.asyncio
+async def test_auth_failed_async(username, password, with_ssl, ssl_params):
+    ssl_params['use_ssl'] = with_ssl
+
+    with pytest.raises(AuthenticationError):
+        async with get_client_async(username=username, password=password, **ssl_params) as client:
+            await client.connect("127.0.0.1", 10801)

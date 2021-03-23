@@ -15,9 +15,9 @@
 
 import pytest
 
-from pyignite.exceptions import ReconnectError
+from pyignite.exceptions import ReconnectError, connection_errors
 from tests.affinity.conftest import CLIENT_SOCKET_TIMEOUT
-from tests.util import start_ignite, kill_process_tree, get_client
+from tests.util import start_ignite, kill_process_tree, get_client, get_client_async
 
 
 @pytest.fixture(params=['with-partition-awareness', 'without-partition-awareness'])
@@ -26,10 +26,16 @@ def with_partition_awareness(request):
 
 
 def test_client_with_multiple_bad_servers(with_partition_awareness):
-    with pytest.raises(ReconnectError) as e_info:
+    with pytest.raises(ReconnectError, match="Can not connect."):
         with get_client(partition_aware=with_partition_awareness) as client:
             client.connect([("127.0.0.1", 10900), ("127.0.0.1", 10901)])
-    assert str(e_info.value) == "Can not connect."
+
+
+@pytest.mark.asyncio
+async def test_client_with_multiple_bad_servers_async(with_partition_awareness):
+    with pytest.raises(ReconnectError, match="Can not connect."):
+        async with get_client_async(partition_aware=with_partition_awareness) as client:
+            await client.connect([("127.0.0.1", 10900), ("127.0.0.1", 10901)])
 
 
 def test_client_with_failed_server(request, with_partition_awareness):
@@ -52,6 +58,27 @@ def test_client_with_failed_server(request, with_partition_awareness):
         kill_process_tree(srv.pid)
 
 
+@pytest.mark.asyncio
+async def test_client_with_failed_server_async(request, with_partition_awareness):
+    srv = start_ignite(idx=4)
+    try:
+        async with get_client_async(partition_aware=with_partition_awareness) as client:
+            await client.connect([("127.0.0.1", 10804)])
+            cache = await client.get_or_create_cache(request.node.name)
+            await cache.put(1, 1)
+            kill_process_tree(srv.pid)
+
+            if with_partition_awareness:
+                ex_class = (ReconnectError, ConnectionResetError)
+            else:
+                ex_class = ConnectionResetError
+
+            with pytest.raises(ex_class):
+                await cache.get(1)
+    finally:
+        kill_process_tree(srv.pid)
+
+
 def test_client_with_recovered_server(request, with_partition_awareness):
     srv = start_ignite(idx=4)
     try:
@@ -67,11 +94,37 @@ def test_client_with_recovered_server(request, with_partition_awareness):
             # First request may fail.
             try:
                 cache.put(1, 2)
-            except:
+            except connection_errors:
                 pass
 
             # Retry succeeds
             cache.put(1, 2)
             assert cache.get(1) == 2
+    finally:
+        kill_process_tree(srv.pid)
+
+
+@pytest.mark.asyncio
+async def test_client_with_recovered_server_async(request, with_partition_awareness):
+    srv = start_ignite(idx=4)
+    try:
+        async with get_client_async(partition_aware=with_partition_awareness) as client:
+            await client.connect([("127.0.0.1", 10804)])
+            cache = await client.get_or_create_cache(request.node.name)
+            await cache.put(1, 1)
+
+            # Kill and restart server
+            kill_process_tree(srv.pid)
+            srv = start_ignite(idx=4)
+
+            # First request may fail.
+            try:
+                await cache.put(1, 2)
+            except connection_errors:
+                pass
+
+            # Retry succeeds
+            await cache.put(1, 2)
+            assert await cache.get(1) == 2
     finally:
         kill_process_tree(srv.pid)

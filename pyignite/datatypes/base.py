@@ -47,4 +47,34 @@ class IgniteDataType(metaclass=IgniteDataTypeMeta):
     This is a base class for all Ignite data types, a.k.a. parser/constructor
     classes, both object and payload varieties.
     """
-    pass
+    @classmethod
+    async def hashcode_async(cls, value, *args, **kwargs):
+        return cls.hashcode(value, *args, **kwargs)
+
+    @classmethod
+    def hashcode(cls, value, *args, **kwargs):
+        return 0
+
+    @classmethod
+    def parse(cls, stream):
+        raise NotImplementedError
+
+    @classmethod
+    async def parse_async(cls, stream):
+        return cls.parse(stream)
+
+    @classmethod
+    def from_python(cls, stream, value, **kwargs):
+        raise NotImplementedError
+
+    @classmethod
+    async def from_python_async(cls, stream, value, **kwargs):
+        cls.from_python(stream, value, **kwargs)
+
+    @classmethod
+    def to_python(cls, ctype_object, *args, **kwargs):
+        raise NotImplementedError
+
+    @classmethod
+    async def to_python_async(cls, ctype_object, *args, **kwargs):
+        return cls.to_python(ctype_object, *args, **kwargs)

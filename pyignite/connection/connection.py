@@ -32,64 +32,94 @@ from collections import OrderedDict
 import socket
 from typing import Union
 
-from pyignite.constants import *
-from pyignite.exceptions import (
-    HandshakeError, ParameterError, SocketError, connection_errors, AuthenticationError,
-)
-from pyignite.datatypes import Byte, Int, Short, String, UUIDObject
-from pyignite.datatypes.internal import Struct
+from pyignite.constants import PROTOCOLS, IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT, PROTOCOL_BYTE_ORDER
+from pyignite.exceptions import HandshakeError, SocketError, connection_errors, AuthenticationError
 
-from .handshake import HandshakeRequest
-from .ssl import wrap
-from ..stream import BinaryStream, READ_BACKWARD
+from .handshake import HandshakeRequest, HandshakeResponse
+from .ssl import wrap, check_ssl_params
+from ..stream import BinaryStream
 
 CLIENT_STATUS_AUTH_FAILURE = 2000
 
 
-class Connection:
+class BaseConnection:
+    def __init__(self, client, host: str = None, port: int = None, username: str = None, password: str = None,
+                 **ssl_params):
+        self.client = client
+        self.host = host if host else IGNITE_DEFAULT_HOST
+        self.port = port if port else IGNITE_DEFAULT_PORT
+        self.username = username
+        self.password = password
+        self.uuid = None
+
+        check_ssl_params(ssl_params)
+
+        if self.username and self.password and 'use_ssl' not in ssl_params:
+            ssl_params['use_ssl'] = True
+
+        self.ssl_params = ssl_params
+        self._failed = False
+
+    @property
+    def closed(self) -> bool:
+        """ Tells if socket is closed. """
+        raise NotImplementedError
+
+    @property
+    def failed(self) -> bool:
+        """ Tells if connection is failed. """
+        return self._failed
+
+    @failed.setter
+    def failed(self, value):
+        self._failed = value
+
+    @property
+    def alive(self) -> bool:
+        """ Tells if connection is up and no failure detected. """
+        return not self.failed and not self.closed
+
+    def __repr__(self) -> str:
+        return '{}:{}'.format(self.host or '?', self.port or '?')
+
+    @property
+    def protocol_version(self):
+        """
+        Returns the tuple of major, minor, and revision numbers of the used
+        thin protocol version, or None, if no connection to the Ignite cluster
+        was yet established.
+        """
+        return self.client.protocol_version
+
+    def _process_handshake_error(self, response):
+        error_text = f'Handshake error: {response.message}'
+        # if handshake fails for any reason other than protocol mismatch
+        # (i.e. authentication error), server version is 0.0.0
+        protocol_version = self.client.protocol_version
+        server_version = (response.version_major, response.version_minor, response.version_patch)
+
+        if any(server_version):
+            error_text += f' Server expects binary protocol version ' \
+                          f'{server_version[0]}.{server_version[1]}.{server_version[2]}. ' \
+                          f'Client provides ' \
+                          f'{protocol_version[0]}.{protocol_version[1]}.{protocol_version[2]}.'
+        elif response.client_status == CLIENT_STATUS_AUTH_FAILURE:
+            raise AuthenticationError(error_text)
+        raise HandshakeError(server_version, error_text)
+
+
+class Connection(BaseConnection):
     """
     This is a `pyignite` class, that represents a connection to Ignite
     node. It serves multiple purposes:
 
      * socket wrapper. Detects fragmentation and network errors. See also
        https://docs.python.org/3/howto/sockets.html,
-     * binary protocol connector. Incapsulates handshake and failover reconnection.
+     * binary protocol connector. Encapsulates handshake and failover reconnection.
     """
 
-    _socket = None
-    _failed = None
-
-    client = None
-    host = None
-    port = None
-    timeout = None
-    username = None
-    password = None
-    ssl_params = {}
-    uuid = None
-
-    @staticmethod
-    def _check_ssl_params(params):
-        expected_args = [
-            'use_ssl',
-            'ssl_version',
-            'ssl_ciphers',
-            'ssl_cert_reqs',
-            'ssl_keyfile',
-            'ssl_keyfile_password',
-            'ssl_certfile',
-            'ssl_ca_certfile',
-        ]
-        for param in params:
-            if param not in expected_args:
-                raise ParameterError((
-                    'Unexpected parameter for connection initialization: `{}`'
-                ).format(param))
-
-    def __init__(
-        self, client: 'Client', timeout: float = 2.0,
-        username: str = None, password: str = None, **ssl_params
-    ):
+    def __init__(self, client: 'Client', host: str, port: int, timeout: float = 2.0,
+                 username: str = None, password: str = None, **ssl_params):
         """
         Initialize connection.
 
@@ -97,6 +127,8 @@ class Connection:
         https://docs.python.org/3/library/ssl.html#ssl-certificates.
 
         :param client: Ignite client object,
+        :param host: Ignite server node's host name or IP,
+        :param port: Ignite server node's port number,
         :param timeout: (optional) sets timeout (in seconds) for each socket
          operation including `connect`. 0 means non-blocking mode, which is
          virtually guaranteed to fail. Can accept integer or float value.
@@ -130,84 +162,15 @@ class Connection:
          cluster,
         :param password: (optional) password to authenticate to Ignite cluster.
         """
-        self.client = client
+        super().__init__(client, host, port, username, password, **ssl_params)
         self.timeout = timeout
-        self.username = username
-        self.password = password
-        self._check_ssl_params(ssl_params)
-        if self.username and self.password and 'use_ssl' not in ssl_params:
-            ssl_params['use_ssl'] = True
-        self.ssl_params = ssl_params
-        self._failed = False
+        self._socket = None
 
     @property
     def closed(self) -> bool:
-        """ Tells if socket is closed. """
         return self._socket is None
 
-    @property
-    def failed(self) -> bool:
-        """ Tells if connection is failed. """
-        return self._failed
-
-    @failed.setter
-    def failed(self, value):
-        self._failed = value
-
-    @property
-    def alive(self) -> bool:
-        """ Tells if connection is up and no failure detected. """
-        return not self.failed and not self.closed
-
-    def __repr__(self) -> str:
-        return '{}:{}'.format(self.host or '?', self.port or '?')
-
-    _wrap = wrap
-
-    def get_protocol_version(self):
-        """
-        Returns the tuple of major, minor, and revision numbers of the used
-        thin protocol version, or None, if no connection to the Ignite cluster
-        was yet established.
-        """
-        return self.client.protocol_version
-
-    def read_response(self) -> Union[dict, OrderedDict]:
-        """
-        Processes server's response to the handshake request.
-
-        :return: handshake data.
-        """
-        response_start = Struct([
-            ('length', Int),
-            ('op_code', Byte),
-        ])
-        with BinaryStream(self, self.recv(reconnect=False)) as stream:
-            start_class = response_start.parse(stream)
-            start = stream.read_ctype(start_class, direction=READ_BACKWARD)
-            data = response_start.to_python(start)
-            response_end = None
-            if data['op_code'] == 0:
-                response_end = Struct([
-                    ('version_major', Short),
-                    ('version_minor', Short),
-                    ('version_patch', Short),
-                    ('message', String),
-                    ('client_status', Int)
-                ])
-            elif self.get_protocol_version() >= (1, 4, 0):
-                response_end = Struct([
-                    ('node_uuid', UUIDObject),
-                ])
-            if response_end:
-                end_class = response_end.parse(stream)
-                end = stream.read_ctype(end_class, direction=READ_BACKWARD)
-                data.update(response_end.to_python(end))
-            return data
-
-    def connect(
-        self, host: str = None, port: int = None
-    ) -> Union[dict, OrderedDict]:
+    def connect(self) -> Union[dict, OrderedDict]:
         """
         Connect to the given server node with protocol version fallback.
 
@@ -222,11 +185,11 @@ class Connection:
             self.client.protocol_version = max(PROTOCOLS)
 
         try:
-            result = self._connect_version(host, port)
+            result = self._connect_version()
         except HandshakeError as e:
             if e.expected_version in PROTOCOLS:
                 self.client.protocol_version = e.expected_version
-                result = self._connect_version(host, port)
+                result = self._connect_version()
             else:
                 raise e
         except connection_errors:
@@ -237,28 +200,19 @@ class Connection:
 
         # connection is ready for end user
         self.uuid = result.get('node_uuid', None)  # version-specific (1.4+)
-
         self.failed = False
         return result
 
-    def _connect_version(
-        self, host: str = None, port: int = None,
-    ) -> Union[dict, OrderedDict]:
+    def _connect_version(self) -> Union[dict, OrderedDict]:
         """
         Connect to the given server node using protocol version
         defined on client.
-
-        :param host: Ignite server node's host name or IP,
-        :param port: Ignite server node's port number.
         """
-
-        host = host or IGNITE_DEFAULT_HOST
-        port = port or IGNITE_DEFAULT_PORT
 
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.settimeout(self.timeout)
-        self._socket = self._wrap(self._socket)
-        self._socket.connect((host, port))
+        self._socket = wrap(self._socket, self.ssl_params)
+        self._socket.connect((self.host, self.port))
 
         protocol_version = self.client.protocol_version
 
@@ -268,55 +222,40 @@ class Connection:
             self.password
         )
 
-        with BinaryStream(self) as stream:
+        with BinaryStream(self.client) as stream:
             hs_request.from_python(stream)
             self.send(stream.getbuffer(), reconnect=False)
 
-        hs_response = self.read_response()
-        if hs_response['op_code'] == 0:
-            self.close()
+        with BinaryStream(self.client, self.recv(reconnect=False)) as stream:
+            hs_response = HandshakeResponse.parse(stream, self.protocol_version)
 
-            error_text = 'Handshake error: {}'.format(hs_response['message'])
-            # if handshake fails for any reason other than protocol mismatch
-            # (i.e. authentication error), server version is 0.0.0
-            if any([
-                hs_response['version_major'],
-                hs_response['version_minor'],
-                hs_response['version_patch'],
-            ]):
-                error_text += (
-                    ' Server expects binary protocol version '
-                    '{version_major}.{version_minor}.{version_patch}. Client '
-                    'provides {client_major}.{client_minor}.{client_patch}.'
-                ).format(
-                    client_major=protocol_version[0],
-                    client_minor=protocol_version[1],
-                    client_patch=protocol_version[2],
-                    **hs_response
-                )
-            elif hs_response['client_status'] == CLIENT_STATUS_AUTH_FAILURE:
-                raise AuthenticationError(error_text)
-            raise HandshakeError((
-                hs_response['version_major'],
-                hs_response['version_minor'],
-                hs_response['version_patch'],
-            ), error_text)
-        self.host, self.port = host, port
-        return hs_response
+            if hs_response.op_code == 0:
+                self.close()
+                self._process_handshake_error(hs_response)
+
+            return hs_response
 
     def reconnect(self):
-        # do not reconnect if connection is already working
-        # or was closed on purpose
-        if not self.failed:
+        if self.alive:
             return
 
         self.close()
 
         # connect and silence the connection errors
         try:
-            self.connect(self.host, self.port)
+            self.connect()
         except connection_errors:
             pass
+
+    def request(self, data: Union[bytes, bytearray, memoryview], flags=None) -> bytearray:
+        """
+        Perform request.
+
+        :param data: bytes to send,
+        :param flags: (optional) OS-specific flags.
+        """
+        self.send(data, flags=flags)
+        return self.recv()
 
     def send(self, data: Union[bytes, bytearray, memoryview], flags=None, reconnect=True):
         """
@@ -337,7 +276,8 @@ class Connection:
             self._socket.sendall(data, **kwargs)
         except connection_errors:
             self.failed = True
-            self.reconnect()
+            if reconnect:
+                self.reconnect()
             raise
 
     def recv(self, flags=None, reconnect=True) -> bytearray:

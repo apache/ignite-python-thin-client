@@ -15,6 +15,7 @@
 
 import ctypes
 import decimal
+import inspect
 import warnings
 
 from functools import wraps
@@ -65,23 +66,14 @@ def is_hinted(value):
     """
     Check if a value is a tuple of data item and its type hint.
     """
-    return (
-        isinstance(value, tuple)
-        and len(value) == 2
-        and issubclass(value[1], IgniteDataType)
-    )
+    return isinstance(value, tuple) and len(value) == 2 and issubclass(value[1], IgniteDataType)
 
 
 def is_wrapped(value: Any) -> bool:
     """
     Check if a value is of WrappedDataObject type.
     """
-    return (
-        type(value) is tuple
-        and len(value) == 2
-        and type(value[0]) is bytes
-        and type(value[1]) is int
-    )
+    return type(value) is tuple and len(value) == 2 and type(value[0]) is bytes and type(value[1]) is int
 
 
 def int_overflow(value: int) -> int:
@@ -107,7 +99,7 @@ def hashcode(data: Union[str, bytes, bytearray, memoryview]) -> int:
 def __hashcode_fallback(data: Union[str, bytes, bytearray, memoryview]) -> int:
     if data is None:
         return 0
-    
+
     if isinstance(data, str):
         """
         For strings we iterate over code point which are of the int type
@@ -206,8 +198,7 @@ def decimal_hashcode(value: decimal.Decimal) -> int:
         # this is the case when Java BigDecimal digits are stored
         # compactly, in the internal 64-bit integer field
         int_hash = (
-            (unsigned(value, ctypes.c_ulonglong) >> 32) * 31
-            + (value & LONG_MASK)
+            (unsigned(value, ctypes.c_ulonglong) >> 32) * 31 + (value & LONG_MASK)
         ) & LONG_MASK
     else:
         # digits are not fit in the 64-bit long, so they get split internally
@@ -243,25 +234,31 @@ def datetime_hashcode(value: int) -> int:
 def status_to_exception(exc: Type[Exception]):
     """
     Converts erroneous status code with error message to an exception
-    of the given class.
+    of the given class. Supports coroutines.
 
     :param exc: the class of exception to raise,
-    :return: decorator.
+    :return: decorated function.
     """
+    def process_result(result):
+        if result.status != 0:
+            raise exc(result.message)
+        return result.value
+
     def ste_decorator(fn):
-        @wraps(fn)
-        def ste_wrapper(*args, **kwargs):
-            result = fn(*args, **kwargs)
-            if result.status != 0:
-                raise exc(result.message)
-            return result.value
-        return ste_wrapper
+        if inspect.iscoroutinefunction(fn):
+            @wraps(fn)
+            async def ste_wrapper_async(*args, **kwargs):
+                return process_result(await fn(*args, **kwargs))
+            return ste_wrapper_async
+        else:
+            @wraps(fn)
+            def ste_wrapper(*args, **kwargs):
+                return process_result(fn(*args, **kwargs))
+            return ste_wrapper
     return ste_decorator
 
 
-def get_field_by_id(
-    obj: 'GenericObjectMeta', field_id: int
-) -> Tuple[Any, IgniteDataType]:
+def get_field_by_id(obj: 'GenericObjectMeta', field_id: int) -> Tuple[Any, IgniteDataType]:
     """
     Returns a complex object's field value, given the field's entity ID.
 

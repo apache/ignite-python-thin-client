@@ -15,426 +15,405 @@
 
 from datetime import datetime
 
-from pyignite.api import *
-from pyignite.datatypes import (
-    CollectionObject, IntObject, MapObject, TimestampObject,
-)
+import pytest
+
+from pyignite.datatypes import CollectionObject, IntObject, MapObject, TimestampObject
 
 
-def test_put_get(client, cache):
+def test_put_get(cache):
+    cache.put('my_key', 5)
 
-    conn = client.random_node
-
-    result = cache_put(conn, cache, 'my_key', 5)
-    assert result.status == 0
-
-    result = cache_get(conn, cache, 'my_key')
-    assert result.status == 0
-    assert result.value == 5
+    assert cache.get('my_key') == 5
 
 
-def test_get_all(client, cache):
+@pytest.mark.asyncio
+async def test_put_get_async(async_cache):
+    await async_cache.put('my_key', 5)
 
-    conn = client.random_node
-
-    result = cache_get_all(conn, cache, ['key_1', 2, (3, IntObject)])
-    assert result.status == 0
-    assert result.value == {}
-
-    cache_put(conn, cache, 'key_1', 4)
-    cache_put(conn, cache, 3, 18, key_hint=IntObject)
-
-    result = cache_get_all(conn, cache, ['key_1', 2, (3, IntObject)])
-    assert result.status == 0
-    assert result.value == {'key_1': 4, 3: 18}
+    assert await async_cache.get('my_key') == 5
 
 
-def test_put_all(client, cache):
+def test_get_all(cache):
+    assert cache.get_all(['key_1', 2, (3, IntObject)]) == {}
 
-    conn = client.random_node
+    cache.put('key_1', 4)
+    cache.put(3, 18, key_hint=IntObject)
 
+    assert cache.get_all(['key_1', 2, (3, IntObject)]) == {'key_1': 4, 3: 18}
+
+
+@pytest.mark.asyncio
+async def test_get_all_async(async_cache):
+    assert await async_cache.get_all(['key_1', 2, (3, IntObject)]) == {}
+
+    await async_cache.put('key_1', 4)
+    await async_cache.put(3, 18, key_hint=IntObject)
+
+    assert await async_cache.get_all(['key_1', 2, (3, IntObject)]) == {'key_1': 4, 3: 18}
+
+
+def test_put_all(cache):
     test_dict = {
         1: 2,
         'key_1': 4,
         (3, IntObject): 18,
     }
-    test_keys = ['key_1', 1, 3]
+    cache.put_all(test_dict)
 
-    result = cache_put_all(conn, cache, test_dict)
-    assert result.status == 0
+    result = cache.get_all(list(test_dict.keys()))
 
-    result = cache_get_all(conn, cache, test_keys)
-    assert result.status == 0
-    assert len(test_dict) == 3
+    assert len(result) == len(test_dict)
+    for k, v in test_dict.items():
+        k = k[0] if isinstance(k, tuple) else k
+        assert result[k] == v
 
-    for key in result.value:
-        assert key in test_keys
 
+@pytest.mark.asyncio
+async def test_put_all_async(async_cache):
+    test_dict = {
+        1: 2,
+        'key_1': 4,
+        (3, IntObject): 18,
+    }
+    await async_cache.put_all(test_dict)
 
-def test_contains_key(client, cache):
+    result = await async_cache.get_all(list(test_dict.keys()))
 
-    conn = client.random_node
+    assert len(result) == len(test_dict)
+    for k, v in test_dict.items():
+        k = k[0] if isinstance(k, tuple) else k
+        assert result[k] == v
 
-    cache_put(conn, cache, 'test_key', 42)
 
-    result = cache_contains_key(conn, cache, 'test_key')
-    assert result.value is True
+def test_contains_key(cache):
+    cache.put('test_key', 42)
 
-    result = cache_contains_key(conn, cache, 'non-existant-key')
-    assert result.value is False
+    assert cache.contains_key('test_key')
+    assert not cache.contains_key('non-existent-key')
 
 
-def test_contains_keys(client, cache):
+@pytest.mark.asyncio
+async def test_contains_key_async(async_cache):
+    await async_cache.put('test_key', 42)
 
-    conn = client.random_node
+    assert await async_cache.contains_key('test_key')
+    assert not await async_cache.contains_key('non-existent-key')
 
-    cache_put(conn, cache, 5, 6)
-    cache_put(conn, cache, 'test_key', 42)
 
-    result = cache_contains_keys(conn, cache, [5, 'test_key'])
-    assert result.value is True
+def test_contains_keys(cache):
+    cache.put(5, 6)
+    cache.put('test_key', 42)
 
-    result = cache_contains_keys(conn, cache, [5, 'non-existent-key'])
-    assert result.value is False
+    assert cache.contains_keys([5, 'test_key'])
+    assert not cache.contains_keys([5, 'non-existent-key'])
 
 
-def test_get_and_put(client, cache):
+@pytest.mark.asyncio
+async def test_contains_keys_async(async_cache):
+    await async_cache.put(5, 6)
+    await async_cache.put('test_key', 42)
 
-    conn = client.random_node
+    assert await async_cache.contains_keys([5, 'test_key'])
+    assert not await async_cache.contains_keys([5, 'non-existent-key'])
 
-    result = cache_get_and_put(conn, cache, 'test_key', 42)
-    assert result.status == 0
-    assert result.value is None
 
-    result = cache_get(conn, cache, 'test_key')
-    assert result.status == 0
-    assert result.value is 42
+def test_get_and_put(cache):
+    assert cache.get_and_put('test_key', 42) is None
+    assert cache.get('test_key') == 42
+    assert cache.get_and_put('test_key', 1234) == 42
+    assert cache.get('test_key') == 1234
 
-    result = cache_get_and_put(conn, cache, 'test_key', 1234)
-    assert result.status == 0
-    assert result.value == 42
 
+@pytest.mark.asyncio
+async def test_get_and_put_async(async_cache):
+    assert await async_cache.get_and_put('test_key', 42) is None
+    assert await async_cache.get('test_key') == 42
+    assert await async_cache.get_and_put('test_key', 1234) == 42
+    assert await async_cache.get('test_key') == 1234
 
-def test_get_and_replace(client, cache):
 
-    conn = client.random_node
+def test_get_and_replace(cache):
+    assert cache.get_and_replace('test_key', 42) is None
+    assert cache.get('test_key') is None
+    cache.put('test_key', 42)
+    assert cache.get_and_replace('test_key', 1234) == 42
 
-    result = cache_get_and_replace(conn, cache, 'test_key', 42)
-    assert result.status == 0
-    assert result.value is None
 
-    result = cache_get(conn, cache, 'test_key')
-    assert result.status == 0
-    assert result.value is None
+@pytest.mark.asyncio
+async def test_get_and_replace_async(async_cache):
+    assert await async_cache.get_and_replace('test_key', 42) is None
+    assert await async_cache.get('test_key') is None
+    await async_cache.put('test_key', 42)
+    assert await async_cache.get_and_replace('test_key', 1234) == 42
 
-    cache_put(conn, cache, 'test_key', 42)
 
-    result = cache_get_and_replace(conn, cache, 'test_key', 1234)
-    assert result.status == 0
-    assert result.value == 42
+def test_get_and_remove(cache):
+    assert cache.get_and_remove('test_key') is None
+    cache.put('test_key', 42)
+    assert cache.get_and_remove('test_key') == 42
+    assert cache.get_and_remove('test_key') is None
 
 
-def test_get_and_remove(client, cache):
+@pytest.mark.asyncio
+async def test_get_and_remove_async(async_cache):
+    assert await async_cache.get_and_remove('test_key') is None
+    await async_cache.put('test_key', 42)
+    assert await async_cache.get_and_remove('test_key') == 42
+    assert await async_cache.get_and_remove('test_key') is None
 
-    conn = client.random_node
 
-    result = cache_get_and_remove(conn, cache, 'test_key')
-    assert result.status == 0
-    assert result.value is None
+def test_put_if_absent(cache):
+    assert cache.put_if_absent('test_key', 42)
+    assert not cache.put_if_absent('test_key', 1234)
 
-    cache_put(conn, cache, 'test_key', 42)
 
-    result = cache_get_and_remove(conn, cache, 'test_key')
-    assert result.status == 0
-    assert result.value == 42
+@pytest.mark.asyncio
+async def test_put_if_absent_async(async_cache):
+    assert await async_cache.put_if_absent('test_key', 42)
+    assert not await async_cache.put_if_absent('test_key', 1234)
 
 
-def test_put_if_absent(client, cache):
+def test_get_and_put_if_absent(cache):
+    assert cache.get_and_put_if_absent('test_key', 42) is None
+    assert cache.get_and_put_if_absent('test_key', 1234) == 42
+    assert cache.get_and_put_if_absent('test_key', 5678) == 42
+    assert cache.get('test_key') == 42
 
-    conn = client.random_node
 
-    result = cache_put_if_absent(conn, cache, 'test_key', 42)
-    assert result.status == 0
-    assert result.value is True
+@pytest.mark.asyncio
+async def test_get_and_put_if_absent_async(async_cache):
+    assert await async_cache.get_and_put_if_absent('test_key', 42) is None
+    assert await async_cache.get_and_put_if_absent('test_key', 1234) == 42
+    assert await async_cache.get_and_put_if_absent('test_key', 5678) == 42
+    assert await async_cache.get('test_key') == 42
 
-    result = cache_put_if_absent(conn, cache, 'test_key', 1234)
-    assert result.status == 0
-    assert result.value is False
 
+def test_replace(cache):
+    assert cache.replace('test_key', 42) is False
+    cache.put('test_key', 1234)
+    assert cache.replace('test_key', 42) is True
+    assert cache.get('test_key') == 42
 
-def test_get_and_put_if_absent(client, cache):
 
-    conn = client.random_node
+@pytest.mark.asyncio
+async def test_replace_async(async_cache):
+    assert await async_cache.replace('test_key', 42) is False
+    await async_cache.put('test_key', 1234)
+    assert await async_cache.replace('test_key', 42) is True
+    assert await async_cache.get('test_key') == 42
 
-    result = cache_get_and_put_if_absent(conn, cache, 'test_key', 42)
-    assert result.status == 0
-    assert result.value is None
 
-    result = cache_get_and_put_if_absent(conn, cache, 'test_key', 1234)
-    assert result.status == 0
-    assert result.value == 42
+def test_replace_if_equals(cache):
+    assert cache.replace_if_equals('my_test', 42, 1234) is False
+    cache.put('my_test', 42)
+    assert cache.replace_if_equals('my_test', 42, 1234) is True
+    assert cache.get('my_test') == 1234
 
-    result = cache_get_and_put_if_absent(conn, cache, 'test_key', 5678)
-    assert result.status == 0
-    assert result.value == 42
 
+@pytest.mark.asyncio
+async def test_replace_if_equals_async(async_cache):
+    assert await async_cache.replace_if_equals('my_test', 42, 1234) is False
+    await async_cache.put('my_test', 42)
+    assert await async_cache.replace_if_equals('my_test', 42, 1234) is True
+    assert await async_cache.get('my_test') == 1234
 
-def test_replace(client, cache):
 
-    conn = client.random_node
+def test_clear(cache):
+    cache.put('my_test', 42)
+    cache.clear()
+    assert cache.get('my_test') is None
 
-    result = cache_replace(conn, cache, 'test_key', 42)
-    assert result.status == 0
-    assert result.value is False
 
-    cache_put(conn, cache, 'test_key', 1234)
+@pytest.mark.asyncio
+async def test_clear_async(async_cache):
+    await async_cache.put('my_test', 42)
+    await async_cache.clear()
+    assert await async_cache.get('my_test') is None
 
-    result = cache_replace(conn, cache, 'test_key', 42)
-    assert result.status == 0
-    assert result.value is True
 
-    result = cache_get(conn, cache, 'test_key')
-    assert result.status == 0
-    assert result.value == 42
+def test_clear_key(cache):
+    cache.put('my_test', 42)
+    cache.put('another_test', 24)
 
+    cache.clear_key('my_test')
 
-def test_replace_if_equals(client, cache):
+    assert cache.get('my_test') is None
+    assert cache.get('another_test') == 24
 
-    conn = client.random_node
 
-    result = cache_replace_if_equals(conn, cache, 'my_test', 42, 1234)
-    assert result.status == 0
-    assert result.value is False
+@pytest.mark.asyncio
+async def test_clear_key_async(async_cache):
+    await async_cache.put('my_test', 42)
+    await async_cache.put('another_test', 24)
 
-    cache_put(conn, cache, 'my_test', 42)
+    await async_cache.clear_key('my_test')
 
-    result = cache_replace_if_equals(conn, cache, 'my_test', 42, 1234)
-    assert result.status == 0
-    assert result.value is True
+    assert await async_cache.get('my_test') is None
+    assert await async_cache.get('another_test') == 24
 
-    result = cache_get(conn, cache, 'my_test')
-    assert result.status == 0
-    assert result.value == 1234
 
+def test_clear_keys(cache):
+    cache.put('my_test_key', 42)
+    cache.put('another_test', 24)
 
-def test_clear(client, cache):
+    cache.clear_keys(['my_test_key', 'nonexistent_key'])
 
-    conn = client.random_node
+    assert cache.get('my_test_key') is None
+    assert cache.get('another_test') == 24
 
-    result = cache_put(conn, cache, 'my_test', 42)
-    assert result.status == 0
 
-    result = cache_clear(conn, cache)
-    assert result.status == 0
+@pytest.mark.asyncio
+async def test_clear_keys_async(async_cache):
+    await async_cache.put('my_test_key', 42)
+    await async_cache.put('another_test', 24)
 
-    result = cache_get(conn, cache, 'my_test')
-    assert result.status == 0
-    assert result.value is None
+    await async_cache.clear_keys(['my_test_key', 'nonexistent_key'])
 
+    assert await async_cache.get('my_test_key') is None
+    assert await async_cache.get('another_test') == 24
 
-def test_clear_key(client, cache):
 
-    conn = client.random_node
+def test_remove_key(cache):
+    cache.put('my_test_key', 42)
+    assert cache.remove_key('my_test_key') is True
+    assert cache.remove_key('non_existent_key') is False
 
-    result = cache_put(conn, cache, 'my_test', 42)
-    assert result.status == 0
 
-    result = cache_put(conn, cache, 'another_test', 24)
-    assert result.status == 0
+@pytest.mark.asyncio
+async def test_remove_key_async(async_cache):
+    await async_cache.put('my_test_key', 42)
+    assert await async_cache.remove_key('my_test_key') is True
+    assert await async_cache.remove_key('non_existent_key') is False
 
-    result = cache_clear_key(conn, cache, 'my_test')
-    assert result.status == 0
 
-    result = cache_get(conn, cache, 'my_test')
-    assert result.status == 0
-    assert result.value is None
+def test_remove_if_equals(cache):
+    cache.put('my_test', 42)
+    assert cache.remove_if_equals('my_test', 1234) is False
+    assert cache.remove_if_equals('my_test', 42) is True
+    assert cache.get('my_test') is None
 
-    result = cache_get(conn, cache, 'another_test')
-    assert result.status == 0
-    assert result.value == 24
 
+@pytest.mark.asyncio
+async def test_remove_if_equals_async(async_cache):
+    await async_cache.put('my_test', 42)
+    assert await async_cache.remove_if_equals('my_test', 1234) is False
+    assert await async_cache.remove_if_equals('my_test', 42) is True
+    assert await async_cache.get('my_test') is None
 
-def test_clear_keys(client, cache):
 
-    conn = client.random_node
+def test_remove_keys(cache):
+    cache.put('my_test', 42)
 
-    result = cache_put(conn, cache, 'my_test_key', 42)
-    assert result.status == 0
+    cache.put('another_test', 24)
+    cache.remove_keys(['my_test', 'non_existent'])
 
-    result = cache_put(conn, cache, 'another_test', 24)
-    assert result.status == 0
+    assert cache.get('my_test') is None
+    assert cache.get('another_test') == 24
 
-    result = cache_clear_keys(conn, cache, [
-        'my_test_key',
-        'nonexistent_key',
-    ])
-    assert result.status == 0
 
-    result = cache_get(conn, cache, 'my_test_key')
-    assert result.status == 0
-    assert result.value is None
+@pytest.mark.asyncio
+async def test_remove_keys_async(async_cache):
+    await async_cache.put('my_test', 42)
 
-    result = cache_get(conn, cache, 'another_test')
-    assert result.status == 0
-    assert result.value == 24
+    await async_cache.put('another_test', 24)
+    await async_cache.remove_keys(['my_test', 'non_existent'])
 
+    assert await async_cache.get('my_test') is None
+    assert await async_cache.get('another_test') == 24
 
-def test_remove_key(client, cache):
 
-    conn = client.random_node
+def test_remove_all(cache):
+    cache.put('my_test', 42)
+    cache.put('another_test', 24)
+    cache.remove_all()
 
-    result = cache_put(conn, cache, 'my_test_key', 42)
-    assert result.status == 0
+    assert cache.get('my_test') is None
+    assert cache.get('another_test') is None
 
-    result = cache_remove_key(conn, cache, 'my_test_key')
-    assert result.status == 0
-    assert result.value is True
 
-    result = cache_remove_key(conn, cache, 'non_existent_key')
-    assert result.status == 0
-    assert result.value is False
+@pytest.mark.asyncio
+async def test_remove_all_async(async_cache):
+    await async_cache.put('my_test', 42)
+    await async_cache.put('another_test', 24)
+    await async_cache.remove_all()
 
+    assert await async_cache.get('my_test') is None
+    assert await async_cache.get('another_test') is None
 
-def test_remove_if_equals(client, cache):
 
-    conn = client.random_node
+def test_cache_get_size(cache):
+    cache.put('my_test', 42)
+    assert cache.get_size() == 1
 
-    result = cache_put(conn, cache, 'my_test', 42)
-    assert result.status == 0
 
-    result = cache_remove_if_equals(conn, cache, 'my_test', 1234)
-    assert result.status == 0
-    assert result.value is False
+@pytest.mark.asyncio
+async def test_cache_get_size_async(async_cache):
+    await async_cache.put('my_test', 42)
+    assert await async_cache.get_size() == 1
 
-    result = cache_remove_if_equals(conn, cache, 'my_test', 42)
-    assert result.status == 0
-    assert result.value is True
 
-    result = cache_get(conn, cache, 'my_test')
-    assert result.status == 0
-    assert result.value is None
-
-
-def test_remove_keys(client, cache):
-
-    conn = client.random_node
-
-    result = cache_put(conn, cache, 'my_test', 42)
-    assert result.status == 0
-
-    result = cache_put(conn, cache, 'another_test', 24)
-    assert result.status == 0
-
-    result = cache_remove_keys(conn, cache, ['my_test', 'non_existent'])
-    assert result.status == 0
-
-    result = cache_get(conn, cache, 'my_test')
-    assert result.status == 0
-    assert result.value is None
-
-    result = cache_get(conn, cache, 'another_test')
-    assert result.status == 0
-    assert result.value == 24
-
-
-def test_remove_all(client, cache):
-
-    conn = client.random_node
-
-    result = cache_put(conn, cache, 'my_test', 42)
-    assert result.status == 0
-
-    result = cache_put(conn, cache, 'another_test', 24)
-    assert result.status == 0
-
-    result = cache_remove_all(conn, cache)
-    assert result.status == 0
-
-    result = cache_get(conn, cache, 'my_test')
-    assert result.status == 0
-    assert result.value is None
-
-    result = cache_get(conn, cache, 'another_test')
-    assert result.status == 0
-    assert result.value is None
-
-
-def test_cache_get_size(client, cache):
-
-    conn = client.random_node
-
-    result = cache_put(conn, cache, 'my_test', 42)
-    assert result.status == 0
-
-    result = cache_get_size(conn, cache)
-    assert result.status == 0
-    assert result.value == 1
-
-
-def test_put_get_collection(client):
-
-    test_datetime = datetime(year=1996, month=3, day=1)
-
-    cache = client.get_or_create_cache('test_coll_cache')
-    cache.put(
+collection_params = [
+    [
         'simple',
-        (
-            1,
-            [
-                (123, IntObject),
-                678,
-                None,
-                55.2,
-                ((test_datetime, 0), TimestampObject),
-            ]
-        ),
-        value_hint=CollectionObject
-    )
-    value = cache.get('simple')
-    assert value == (1, [123, 678, None, 55.2, (test_datetime, 0)])
-
-    cache.put(
+        (1, [(123, IntObject), 678, None, 55.2, ((datetime(year=1996, month=3, day=1), 0), TimestampObject)]),
+        (1, [123, 678, None, 55.2, (datetime(year=1996, month=3, day=1), 0)])
+    ],
+    [
         'nested',
-        (
-            1,
-            [
-                123,
-                ((1, [456, 'inner_test_string', 789]), CollectionObject),
-                'outer_test_string',
-            ]
-        ),
-        value_hint=CollectionObject
-    )
-    value = cache.get('nested')
-    assert value == (
-        1,
-        [
-            123,
-            (1, [456, 'inner_test_string', 789]),
-            'outer_test_string'
-        ]
-    )
-
-
-def test_put_get_map(client):
-
-    cache = client.get_or_create_cache('test_map_cache')
-
-    cache.put(
-        'test_map',
+        (1, [123, ((1, [456, 'inner_test_string', 789]), CollectionObject), 'outer_test_string']),
+        (1, [123, (1, [456, 'inner_test_string', 789]), 'outer_test_string'])
+    ],
+    [
+        'hash_map',
         (
             MapObject.HASH_MAP,
             {
                 (123, IntObject): 'test_data',
                 456: ((1, [456, 'inner_test_string', 789]), CollectionObject),
                 'test_key': 32.4,
+                'simple_strings': ['string_1', 'string_2']
             }
         ),
-        value_hint=MapObject
-    )
-    value = cache.get('test_map')
-    assert value == (MapObject.HASH_MAP, {
-        123: 'test_data',
-        456: (1, [456, 'inner_test_string', 789]),
-        'test_key': 32.4,
-    })
+        (
+            MapObject.HASH_MAP,
+            {
+                123: 'test_data',
+                456: (1, [456, 'inner_test_string', 789]),
+                'test_key': 32.4,
+                'simple_strings': ['string_1', 'string_2']
+            }
+        )
+    ],
+    [
+        'linked_hash_map',
+        (
+            MapObject.LINKED_HASH_MAP,
+            {
+                'test_data': 12345,
+                456: ['string_1', 'string_2'],
+                'test_key': 32.4
+            }
+        ),
+        (
+            MapObject.LINKED_HASH_MAP,
+            {
+                'test_data': 12345,
+                456: ['string_1', 'string_2'],
+                'test_key': 32.4
+            }
+        )
+    ],
+]
+
+
+@pytest.mark.parametrize(['key', 'hinted_value', 'value'], collection_params)
+def test_put_get_collection(cache, key, hinted_value, value):
+    cache.put(key, hinted_value)
+    assert cache.get(key) == value
+
+
+@pytest.mark.parametrize(['key', 'hinted_value', 'value'], collection_params)
+@pytest.mark.asyncio
+async def test_put_get_collection_async(async_cache, key, hinted_value, value):
+    await async_cache.put(key, hinted_value)
+    assert await async_cache.get(key) == value

@@ -16,34 +16,62 @@
 import ssl
 from ssl import SSLContext
 
-from pyignite.constants import *
+from pyignite.constants import SSL_DEFAULT_CIPHERS, SSL_DEFAULT_VERSION
+from pyignite.exceptions import ParameterError
 
 
-def wrap(conn: 'Connection', _socket):
+def wrap(socket, ssl_params):
     """ Wrap socket in SSL wrapper. """
-    if conn.ssl_params.get('use_ssl', None):
-        keyfile = conn.ssl_params.get('ssl_keyfile', None)
-        certfile = conn.ssl_params.get('ssl_certfile', None)
+    if not ssl_params.get('use_ssl'):
+        return socket
 
-        if keyfile and not certfile:
-            raise ValueError("certfile must be specified")
+    context = create_ssl_context(ssl_params)
 
-        password = conn.ssl_params.get('ssl_keyfile_password', None)
-        ssl_version = conn.ssl_params.get('ssl_version', SSL_DEFAULT_VERSION)
-        ciphers = conn.ssl_params.get('ssl_ciphers', SSL_DEFAULT_CIPHERS)
-        cert_reqs = conn.ssl_params.get('ssl_cert_reqs', ssl.CERT_NONE)
-        ca_certs = conn.ssl_params.get('ssl_ca_certfile', None)
+    return context.wrap_socket(sock=socket)
 
-        context = SSLContext(ssl_version)
-        context.verify_mode = cert_reqs
 
-        if ca_certs:
-            context.load_verify_locations(ca_certs)
-        if certfile:
-            context.load_cert_chain(certfile, keyfile, password)
-        if ciphers:
-            context.set_ciphers(ciphers)
+def check_ssl_params(params):
+    expected_args = [
+        'use_ssl',
+        'ssl_version',
+        'ssl_ciphers',
+        'ssl_cert_reqs',
+        'ssl_keyfile',
+        'ssl_keyfile_password',
+        'ssl_certfile',
+        'ssl_ca_certfile',
+    ]
+    for param in params:
+        if param not in expected_args:
+            raise ParameterError((
+                'Unexpected parameter for connection initialization: `{}`'
+            ).format(param))
 
-        _socket = context.wrap_socket(sock=_socket)
 
-    return _socket
+def create_ssl_context(ssl_params):
+    if not ssl_params.get('use_ssl'):
+        return None
+
+    keyfile = ssl_params.get('ssl_keyfile', None)
+    certfile = ssl_params.get('ssl_certfile', None)
+
+    if keyfile and not certfile:
+        raise ValueError("certfile must be specified")
+
+    password = ssl_params.get('ssl_keyfile_password', None)
+    ssl_version = ssl_params.get('ssl_version', SSL_DEFAULT_VERSION)
+    ciphers = ssl_params.get('ssl_ciphers', SSL_DEFAULT_CIPHERS)
+    cert_reqs = ssl_params.get('ssl_cert_reqs', ssl.CERT_NONE)
+    ca_certs = ssl_params.get('ssl_ca_certfile', None)
+
+    context = SSLContext(ssl_version)
+    context.verify_mode = cert_reqs
+
+    if ca_certs:
+        context.load_verify_locations(ca_certs)
+    if certfile:
+        context.load_cert_chain(certfile, keyfile, password)
+    if ciphers:
+        context.set_ciphers(ciphers)
+
+    return context

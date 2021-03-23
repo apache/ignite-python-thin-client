@@ -44,22 +44,20 @@ from collections import defaultdict, OrderedDict
 import random
 import re
 from itertools import chain
-from typing import Dict, Iterable, List, Optional, Tuple, Type, Union
+from typing import Iterable, Type, Union, Any
 
 from .api.binary import get_binary_type, put_binary_type
 from .api.cache_config import cache_get_names
-from .api.sql import sql_fields, sql_fields_cursor_get_page
-from .cache import Cache
+from .cursors import SqlFieldsCursor
+from .cache import Cache, create_cache, get_cache, get_or_create_cache
 from .connection import Connection
-from .constants import *
+from .constants import IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT, PROTOCOL_BYTE_ORDER
 from .datatypes import BinaryObject
 from .datatypes.internal import tc_map
-from .exceptions import (
-    BinaryTypeError, CacheError, ReconnectError, SQLError, connection_errors,
-)
+from .exceptions import BinaryTypeError, CacheError, ReconnectError, connection_errors
+from .stream import BinaryStream, READ_BACKWARD
 from .utils import (
-    cache_id, capitalize, entity_id, schema_id, process_delimiter,
-    status_to_exception, is_iterable,
+    cache_id, capitalize, entity_id, schema_id, process_delimiter, status_to_exception, is_iterable, is_wrapped
 )
 from .binary import GenericObjectMeta
 
@@ -67,7 +65,185 @@ from .binary import GenericObjectMeta
 __all__ = ['Client']
 
 
-class Client:
+class BaseClient:
+    # used for Complex object data class names sanitizing
+    _identifier = re.compile(r'[^0-9a-zA-Z_.+$]', re.UNICODE)
+    _ident_start = re.compile(r'^[^a-zA-Z_]+', re.UNICODE)
+
+    def __init__(self, compact_footer: bool = None, partition_aware: bool = False, **kwargs):
+        self._compact_footer = compact_footer
+        self._partition_aware = partition_aware
+        self._connection_args = kwargs
+        self._registry = defaultdict(dict)
+        self._nodes = []
+        self._current_node = 0
+        self._partition_aware = partition_aware
+        self.affinity_version = (0, 0)
+        self._protocol_version = None
+
+    @property
+    def protocol_version(self):
+        """
+        Returns the tuple of major, minor, and revision numbers of the used
+        thin protocol version, or None, if no connection to the Ignite cluster
+        was not yet established.
+
+        This method is not a part of the public API. Unless you wish to
+        extend the `pyignite` capabilities (with additional testing, logging,
+        examining connections, et c.) you probably should not use it.
+        """
+        return self._protocol_version
+
+    @protocol_version.setter
+    def protocol_version(self, value):
+        self._protocol_version = value
+
+    @property
+    def partition_aware(self):
+        return self._partition_aware and self.partition_awareness_supported_by_protocol
+
+    @property
+    def partition_awareness_supported_by_protocol(self):
+        return self.protocol_version is not None and self.protocol_version >= (1, 4, 0)
+
+    @property
+    def compact_footer(self) -> bool:
+        """
+        This property remembers Complex object schema encoding approach when
+        decoding any Complex object, to use the same approach on Complex
+        object encoding.
+
+        :return: True if compact schema was used by server or no Complex
+         object decoding has yet taken place, False if full schema was used.
+        """
+        # this is an ordinary object property, but its backing storage
+        # is a class attribute
+
+        # use compact schema by default, but leave initial (falsy) backing
+        # value unchanged
+        return self._compact_footer or self._compact_footer is None
+
+    @compact_footer.setter
+    def compact_footer(self, value: bool):
+        # normally schema approach should not change
+        if self._compact_footer not in (value, None):
+            raise Warning('Can not change client schema approach.')
+        else:
+            self._compact_footer = value
+
+    @staticmethod
+    def _process_connect_args(*args):
+        if len(args) == 0:
+            # no parameters − use default Ignite host and port
+            return [(IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT)]
+        if len(args) == 1 and is_iterable(args[0]):
+            # iterable of host-port pairs is given
+            return args[0]
+        if len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], int):
+            # host and port are given
+            return [args]
+
+        raise ConnectionError('Connection parameters are not valid.')
+
+    def _process_get_binary_type_result(self, result):
+        if result.status != 0 or not result.value['type_exists']:
+            return result
+
+        binary_fields = result.value.pop('binary_fields')
+        old_format_schemas = result.value.pop('schema')
+        result.value['schemas'] = []
+        for s_id, field_ids in old_format_schemas.items():
+            result.value['schemas'].append(self._convert_schema(field_ids, binary_fields))
+        return result
+
+    @staticmethod
+    def _convert_type(tc_type: int):
+        try:
+            return tc_map(tc_type.to_bytes(1, PROTOCOL_BYTE_ORDER))
+        except (KeyError, OverflowError):
+            # if conversion to char or type lookup failed,
+            # we probably have a binary object type ID
+            return BinaryObject
+
+    def _convert_schema(self, field_ids: list, binary_fields: list) -> OrderedDict:
+        converted_schema = OrderedDict()
+        for field_id in field_ids:
+            binary_field = next(x for x in binary_fields if x['field_id'] == field_id)
+            converted_schema[binary_field['field_name']] = self._convert_type(binary_field['type_id'])
+        return converted_schema
+
+    @staticmethod
+    def _create_dataclass(type_name: str, schema: OrderedDict = None) -> Type:
+        """
+        Creates default (generic) class for Ignite Complex object.
+
+        :param type_name: Complex object type name,
+        :param schema: Complex object schema,
+        :return: the resulting class.
+        """
+        schema = schema or {}
+        return GenericObjectMeta(type_name, (), {}, schema=schema)
+
+    @classmethod
+    def _create_type_name(cls, type_name: str) -> str:
+        """
+        Creates Python data class name from Ignite binary type name.
+
+        Handles all the special cases found in
+        `java.org.apache.ignite.binary.BinaryBasicNameMapper.simpleName()`.
+        Tries to adhere to PEP8 along the way.
+        """
+
+        # general sanitizing
+        type_name = cls._identifier.sub('', type_name)
+
+        # - name ending with '$' (Scala)
+        # - name + '$' + some digits (anonymous class)
+        # - '$$Lambda$' in the middle
+        type_name = process_delimiter(type_name, '$')
+
+        # .NET outer/inner class delimiter
+        type_name = process_delimiter(type_name, '+')
+
+        # Java fully qualified class name
+        type_name = process_delimiter(type_name, '.')
+
+        # start chars sanitizing
+        type_name = capitalize(cls._ident_start.sub('', type_name))
+
+        return type_name
+
+    def _sync_binary_registry(self, type_id: int, type_info: dict):
+        """
+        Sync binary registry
+        :param type_id: Complex object type ID.
+        :param type_info: Complex object type info.
+        """
+        if type_info['type_exists']:
+            for schema in type_info['schemas']:
+                if not self._registry[type_id].get(schema_id(schema), None):
+                    data_class = self._create_dataclass(
+                        self._create_type_name(type_info['type_name']),
+                        schema,
+                    )
+                    self._registry[type_id][schema_id(schema)] = data_class
+
+    def _get_from_registry(self, type_id, schema):
+        """
+        Get binary type info from registry.
+
+        :param type_id: Complex object type ID.
+        :param schema: Complex object schema.
+        """
+        if schema:
+            try:
+                return self._registry[type_id][schema_id(schema)]
+            except KeyError:
+                return None
+        return self._registry[type_id]
+
+
+class Client(BaseClient):
     """
     This is a main `pyignite` class, that is build upon the
     :class:`~pyignite.connection.Connection`. In addition to the attributes,
@@ -79,23 +255,7 @@ class Client:
      * binary types registration endpoint.
     """
 
-    _registry = defaultdict(dict)
-    _compact_footer: bool = None
-    _connection_args: Dict = None
-    _current_node: int = None
-    _nodes: List[Connection] = None
-
-    # used for Complex object data class names sanitizing
-    _identifier = re.compile(r'[^0-9a-zA-Z_.+$]', re.UNICODE)
-    _ident_start = re.compile(r'^[^a-zA-Z_]+', re.UNICODE)
-
-    affinity_version: Optional[Tuple] = None
-    protocol_version: Optional[Tuple] = None
-
-    def __init__(
-        self, compact_footer: bool = None, partition_aware: bool = False,
-        **kwargs
-    ):
+    def __init__(self, compact_footer: bool = None, partition_aware: bool = False, **kwargs):
         """
         Initialize client.
 
@@ -111,35 +271,7 @@ class Client:
          The feature is in experimental status, so the parameter is `False`
          by default. This will be changed later.
         """
-        self._compact_footer = compact_footer
-        self._connection_args = kwargs
-        self._nodes = []
-        self._current_node = 0
-        self._partition_aware = partition_aware
-        self.affinity_version = (0, 0)
-
-    def get_protocol_version(self) -> Optional[Tuple]:
-        """
-        Returns the tuple of major, minor, and revision numbers of the used
-        thin protocol version, or None, if no connection to the Ignite cluster
-        was not yet established.
-
-        This method is not a part of the public API. Unless you wish to
-        extend the `pyignite` capabilities (with additional testing, logging,
-        examining connections, et c.) you probably should not use it.
-        """
-        return self.protocol_version
-
-    @property
-    def partition_aware(self):
-        return self._partition_aware and self.partition_awareness_supported_by_protocol
-
-    @property
-    def partition_awareness_supported_by_protocol(self):
-        # TODO: Need to re-factor this. I believe, we need separate class or
-        #  set of functions to work with protocol versions without manually
-        #  comparing versions with just some random tuples
-        return self.protocol_version is not None and self.protocol_version >= (1, 4, 0)
+        super().__init__(compact_footer, partition_aware, **kwargs)
 
     def connect(self, *args):
         """
@@ -147,21 +279,7 @@ class Client:
 
         :param args: (optional) host(s) and port(s) to connect to.
         """
-        if len(args) == 0:
-            # no parameters − use default Ignite host and port
-            nodes = [(IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT)]
-        elif len(args) == 1 and is_iterable(args[0]):
-            # iterable of host-port pairs is given
-            nodes = args[0]
-        elif (
-            len(args) == 2
-            and isinstance(args[0], str)
-            and isinstance(args[1], int)
-        ):
-            # host and port are given
-            nodes = [args]
-        else:
-            raise ConnectionError('Connection parameters are not valid.')
+        nodes = self._process_connect_args(*args)
 
         # the following code is quite twisted, because the protocol version
         # is initially unknown
@@ -169,14 +287,12 @@ class Client:
         # TODO: open first node in foreground, others − in background
         for i, node in enumerate(nodes):
             host, port = node
-            conn = Connection(self, **self._connection_args)
-            conn.host = host
-            conn.port = port
+            conn = Connection(self, host, port, **self._connection_args)
 
             try:
                 if self.protocol_version is None or self.partition_aware:
                     # open connection before adding to the pool
-                    conn.connect(host, port)
+                    conn.connect()
 
                     # now we have the protocol version
                     if not self.partition_aware:
@@ -210,13 +326,7 @@ class Client:
         """
         if self.partition_aware:
             # if partition awareness is used just pick a random connected node
-            try:
-                return random.choice(
-                    list(n for n in self._nodes if n.alive)
-                )
-            except IndexError:
-                # cannot choose from an empty sequence
-                raise ReconnectError('Can not reconnect: out of nodes.') from None
+            return self._get_random_node()
         else:
             # if partition awareness is not used then just return the current
             # node if it's alive or the next usable node if connection with the
@@ -238,7 +348,7 @@ class Client:
             for i in chain(range(self._current_node, num_nodes), range(self._current_node)):
                 node = self._nodes[i]
                 try:
-                    node.connect(node.host, node.port)
+                    node.connect()
                 except connection_errors:
                     pass
                 else:
@@ -246,6 +356,19 @@ class Client:
 
             # no nodes left
             raise ReconnectError('Can not reconnect: out of nodes.')
+
+    def _get_random_node(self, reconnect=True):
+        alive_nodes = [n for n in self._nodes if n.alive]
+        if alive_nodes:
+            return random.choice(alive_nodes)
+        elif reconnect:
+            for n in self._nodes:
+                n.reconnect()
+
+            return self._get_random_node(reconnect=False)
+        else:
+            # cannot choose from an empty sequence
+            raise ReconnectError('Can not reconnect: out of nodes.') from None
 
     @status_to_exception(BinaryTypeError)
     def get_binary_type(self, binary_type: Union[str, int]) -> dict:
@@ -267,71 +390,8 @@ class Client:
          - `schemas`: a list, containing the Complex object schemas in format:
            OrderedDict[field name: field type hint]. A schema can be empty.
         """
-        def convert_type(tc_type: int):
-            try:
-                return tc_map(tc_type.to_bytes(1, PROTOCOL_BYTE_ORDER))
-            except (KeyError, OverflowError):
-                # if conversion to char or type lookup failed,
-                # we probably have a binary object type ID
-                return BinaryObject
-
-        def convert_schema(
-            field_ids: list, binary_fields: list
-        ) -> OrderedDict:
-            converted_schema = OrderedDict()
-            for field_id in field_ids:
-                binary_field = [
-                    x
-                    for x in binary_fields
-                    if x['field_id'] == field_id
-                ][0]
-                converted_schema[binary_field['field_name']] = convert_type(
-                    binary_field['type_id']
-                )
-            return converted_schema
-
-        conn = self.random_node
-
-        result = get_binary_type(conn, binary_type)
-        if result.status != 0 or not result.value['type_exists']:
-            return result
-
-        binary_fields = result.value.pop('binary_fields')
-        old_format_schemas = result.value.pop('schema')
-        result.value['schemas'] = []
-        for s_id, field_ids in old_format_schemas.items():
-            result.value['schemas'].append(
-                convert_schema(field_ids, binary_fields)
-            )
-        return result
-
-    @property
-    def compact_footer(self) -> bool:
-        """
-        This property remembers Complex object schema encoding approach when
-        decoding any Complex object, to use the same approach on Complex
-        object encoding.
-
-        :return: True if compact schema was used by server or no Complex
-         object decoding has yet taken place, False if full schema was used.
-        """
-        # this is an ordinary object property, but its backing storage
-        # is a class attribute
-
-        # use compact schema by default, but leave initial (falsy) backing
-        # value unchanged
-        return (
-            self.__class__._compact_footer
-            or self.__class__._compact_footer is None
-        )
-
-    @compact_footer.setter
-    def compact_footer(self, value: bool):
-        # normally schema approach should not change
-        if self.__class__._compact_footer not in (value, None):
-            raise Warning('Can not change client schema approach.')
-        else:
-            self.__class__._compact_footer = value
+        result = get_binary_type(self.random_node, binary_type)
+        return self._process_get_binary_type_result(result)
 
     @status_to_exception(BinaryTypeError)
     def put_binary_type(
@@ -353,71 +413,9 @@ class Client:
          When register binary type, pass a dict of field names: field types.
          Binary type with no fields is OK.
         """
-        return put_binary_type(
-            self.random_node, type_name, affinity_key_field, is_enum, schema
-        )
+        return put_binary_type(self.random_node, type_name, affinity_key_field, is_enum, schema)
 
-    @staticmethod
-    def _create_dataclass(type_name: str, schema: OrderedDict = None) -> Type:
-        """
-        Creates default (generic) class for Ignite Complex object.
-
-        :param type_name: Complex object type name,
-        :param schema: Complex object schema,
-        :return: the resulting class.
-        """
-        schema = schema or {}
-        return GenericObjectMeta(type_name, (), {}, schema=schema)
-
-    def _sync_binary_registry(self, type_id: int):
-        """
-        Reads Complex object description from Ignite server. Creates default
-        Complex object classes and puts in registry, if not already there.
-
-        :param type_id: Complex object type ID.
-        """
-        type_info = self.get_binary_type(type_id)
-        if type_info['type_exists']:
-            for schema in type_info['schemas']:
-                if not self._registry[type_id].get(schema_id(schema), None):
-                    data_class = self._create_dataclass(
-                        self._create_type_name(type_info['type_name']),
-                        schema,
-                    )
-                    self._registry[type_id][schema_id(schema)] = data_class
-
-    @classmethod
-    def _create_type_name(cls, type_name: str) -> str:
-        """
-        Creates Python data class name from Ignite binary type name.
-
-        Handles all the special cases found in
-        `java.org.apache.ignite.binary.BinaryBasicNameMapper.simpleName()`.
-        Tries to adhere to PEP8 along the way.
-        """
-
-        # general sanitizing
-        type_name = cls._identifier.sub('', type_name)
-
-        # - name ending with '$' (Scala)
-        # - name + '$' + some digits (anonymous class)
-        # - '$$Lambda$' in the middle
-        type_name = process_delimiter(type_name, '$')
-
-        # .NET outer/inner class delimiter
-        type_name = process_delimiter(type_name, '+')
-
-        # Java fully qualified class name
-        type_name = process_delimiter(type_name, '.')
-
-        # start chars sanitizing
-        type_name = capitalize(cls._ident_start.sub('', type_name))
-
-        return type_name
-
-    def register_binary_type(
-        self, data_class: Type, affinity_key_field: str = None,
-    ):
+    def register_binary_type(self, data_class: Type, affinity_key_field: str = None):
         """
         Register the given class as a representation of a certain Complex
         object type. Discards autogenerated or previously registered class.
@@ -425,46 +423,43 @@ class Client:
         :param data_class: Complex object class,
         :param affinity_key_field: (optional) affinity parameter.
         """
-        if not self.query_binary_type(
-            data_class.type_id, data_class.schema_id
-        ):
-            self.put_binary_type(
-                data_class.type_name,
-                affinity_key_field,
-                schema=data_class.schema,
-            )
+        if not self.query_binary_type(data_class.type_id, data_class.schema_id):
+            self.put_binary_type(data_class.type_name, affinity_key_field, schema=data_class.schema)
         self._registry[data_class.type_id][data_class.schema_id] = data_class
 
-    def query_binary_type(
-        self, binary_type: Union[int, str], schema: Union[int, dict] = None,
-        sync: bool = True
-    ):
+    def query_binary_type(self, binary_type: Union[int, str], schema: Union[int, dict] = None):
         """
         Queries the registry of Complex object classes.
 
         :param binary_type: Complex object type name or ID,
-        :param schema: (optional) Complex object schema or schema ID,
-        :param sync: (optional) look up the Ignite server for registered
-         Complex objects and create data classes for them if needed,
+        :param schema: (optional) Complex object schema or schema ID
         :return: found dataclass or None, if `schema` parameter is provided,
          a dict of {schema ID: dataclass} format otherwise.
         """
         type_id = entity_id(binary_type)
-        s_id = schema_id(schema)
 
-        if schema:
-            try:
-                result = self._registry[type_id][s_id]
-            except KeyError:
-                result = None
-        else:
-            result = self._registry[type_id]
-
-        if sync and not result:
-            self._sync_binary_registry(type_id)
-            return self.query_binary_type(type_id, s_id, sync=False)
+        result = self._get_from_registry(type_id, schema)
+        if not result:
+            type_info = self.get_binary_type(type_id)
+            self._sync_binary_registry(type_id, type_info)
+            return self._get_from_registry(type_id, schema)
 
         return result
+
+    def unwrap_binary(self, value: Any) -> Any:
+        """
+        Detects and recursively unwraps Binary Object.
+
+        :param value: anything that could be a Binary Object,
+        :return: the result of the Binary Object unwrapping with all other data
+         left intact.
+        """
+        if is_wrapped(value):
+            blob, offset = value
+            with BinaryStream(self, blob) as stream:
+                data_class = BinaryObject.parse(stream)
+                return BinaryObject.to_python(stream.read_ctype(data_class, direction=READ_BACKWARD), self)
+        return value
 
     def create_cache(self, settings: Union[str, dict]) -> 'Cache':
         """
@@ -477,7 +472,7 @@ class Client:
          :ref:`cache creation example <sql_cache_create>`,
         :return: :class:`~pyignite.cache.Cache` object.
         """
-        return Cache(self, settings)
+        return create_cache(self, settings)
 
     def get_or_create_cache(self, settings: Union[str, dict]) -> 'Cache':
         """
@@ -489,7 +484,7 @@ class Client:
          :ref:`cache creation example <sql_cache_create>`,
         :return: :class:`~pyignite.cache.Cache` object.
         """
-        return Cache(self, settings, with_get=True)
+        return get_or_create_cache(self, settings)
 
     def get_cache(self, settings: Union[str, dict]) -> 'Cache':
         """
@@ -501,7 +496,7 @@ class Client:
          property is allowed),
         :return: :class:`~pyignite.cache.Cache` object.
         """
-        return Cache(self, settings, get_only=True)
+        return get_cache(self, settings)
 
     @status_to_exception(CacheError)
     def get_cache_names(self) -> list:
@@ -559,42 +554,12 @@ class Client:
         :return: generator with result rows as a lists. If
          `include_field_names` was set, the first row will hold field names.
         """
-        def generate_result(value):
-            cursor = value['cursor']
-            more = value['more']
-
-            if include_field_names:
-                yield value['fields']
-                field_count = len(value['fields'])
-            else:
-                field_count = value['field_count']
-            for line in value['data']:
-                yield line
-
-            while more:
-                inner_result = sql_fields_cursor_get_page(
-                    conn, cursor, field_count
-                )
-                if inner_result.status != 0:
-                    raise SQLError(result.message)
-                more = inner_result.value['more']
-                for line in inner_result.value['data']:
-                    yield line
-
-        conn = self.random_node
 
         c_id = cache.cache_id if isinstance(cache, Cache) else cache_id(cache)
 
         if c_id != 0:
             schema = None
 
-        result = sql_fields(
-            conn, c_id, query_str, page_size, query_args, schema,
-            statement_type, distributed_joins, local, replicated_only,
-            enforce_join_order, collocated, lazy, include_field_names,
-            max_rows, timeout,
-        )
-        if result.status != 0:
-            raise SQLError(result.message)
-
-        return generate_result(result.value)
+        return SqlFieldsCursor(self, c_id, query_str, page_size, query_args, schema, statement_type, distributed_joins,
+                               local, replicated_only, enforce_join_order, collocated, lazy, include_field_names,
+                               max_rows, timeout)

@@ -18,16 +18,15 @@ from datetime import date, datetime, time, timedelta
 import decimal
 from io import SEEK_CUR
 from math import ceil
-from typing import Any, Tuple
+from typing import Tuple
 import uuid
 
 from pyignite.constants import *
 from pyignite.utils import datetime_hashcode, decimal_hashcode, hashcode
-from .base import IgniteDataType
 from .type_codes import *
 from .type_ids import *
 from .type_names import *
-from .null_object import Null, Nullable
+from .null_object import Nullable
 
 __all__ = [
     'String', 'DecimalObject', 'UUIDObject', 'TimestampObject', 'DateObject',
@@ -44,7 +43,7 @@ __all__ = [
 ]
 
 
-class StandardObject(IgniteDataType, Nullable):
+class StandardObject(Nullable):
     _type_name = None
     _type_id = None
     type_code = None
@@ -60,7 +59,7 @@ class StandardObject(IgniteDataType, Nullable):
         return data_type
 
 
-class String(IgniteDataType, Nullable):
+class String(Nullable):
     """
     Pascal-style string: `c_int` counter, followed by count*bytes.
     UTF-8-encoded, so that one character may take 1 to 4 bytes.
@@ -70,8 +69,8 @@ class String(IgniteDataType, Nullable):
     type_code = TC_STRING
     pythonic = str
 
-    @staticmethod
-    def hashcode(value: str, *args, **kwargs) -> int:
+    @classmethod
+    def hashcode(cls, value: str, *args, **kwargs) -> int:
         return hashcode(value)
 
     @classmethod
@@ -124,15 +123,15 @@ class String(IgniteDataType, Nullable):
         stream.write(data_object)
 
 
-class DecimalObject(IgniteDataType, Nullable):
+class DecimalObject(Nullable):
     _type_name = NAME_DECIMAL
     _type_id = TYPE_DECIMAL
     type_code = TC_DECIMAL
     pythonic = decimal.Decimal
     default = decimal.Decimal('0.00')
 
-    @staticmethod
-    def hashcode(value: decimal.Decimal, *args, **kwargs) -> int:
+    @classmethod
+    def hashcode(cls, value: decimal.Decimal, *args, **kwargs) -> int:
         return decimal_hashcode(value)
 
     @classmethod
@@ -180,11 +179,7 @@ class DecimalObject(IgniteDataType, Nullable):
             range(len(data))
         ])
         # apply scale
-        result = (
-            result
-            / decimal.Decimal('10')
-            ** decimal.Decimal(ctype_object.scale)
-        )
+        result = result / decimal.Decimal('10') ** decimal.Decimal(ctype_object.scale)
         if sign:
             # apply sign
             result = -result
@@ -195,7 +190,7 @@ class DecimalObject(IgniteDataType, Nullable):
         sign, digits, scale = value.normalize().as_tuple()
         integer = int(''.join([str(d) for d in digits]))
         # calculate number of bytes (at least one, and not forget the sign bit)
-        length = ceil((integer.bit_length() + 1)/8)
+        length = ceil((integer.bit_length() + 1) / 8)
         # write byte string
         data = []
         for i in range(length):
@@ -247,8 +242,8 @@ class UUIDObject(StandardObject):
 
     UUID_BYTE_ORDER = (7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8)
 
-    @staticmethod
-    def hashcode(value: 'UUID', *args, **kwargs) -> int:
+    @classmethod
+    def hashcode(cls, value: 'UUID', *args, **kwargs) -> int:
         msb = value.int >> 64
         lsb = value.int & 0xffffffffffffffff
         hilo = msb ^ lsb
@@ -309,8 +304,8 @@ class TimestampObject(StandardObject):
     pythonic = tuple
     default = (datetime(1970, 1, 1), 0)
 
-    @staticmethod
-    def hashcode(value: Tuple[datetime, int], *args, **kwargs) -> int:
+    @classmethod
+    def hashcode(cls, value: Tuple[datetime, int], *args, **kwargs) -> int:
         return datetime_hashcode(int(value[0].timestamp() * 1000))
 
     @classmethod
@@ -331,7 +326,7 @@ class TimestampObject(StandardObject):
         return cls._object_c_type
 
     @classmethod
-    def from_python_not_null(cls, stream, value: tuple):
+    def from_python_not_null(cls, stream, value: tuple, **kwargs):
         data_type = cls.build_c_type()
         data_object = data_type()
         data_object.type_code = int.from_bytes(
@@ -346,7 +341,7 @@ class TimestampObject(StandardObject):
     @classmethod
     def to_python_not_null(cls, ctypes_object, *args, **kwargs):
         return (
-            datetime.fromtimestamp(ctypes_object.epoch/1000),
+            datetime.fromtimestamp(ctypes_object.epoch / 1000),
             ctypes_object.fraction
         )
 
@@ -365,8 +360,8 @@ class DateObject(StandardObject):
     pythonic = datetime
     default = datetime(1970, 1, 1)
 
-    @staticmethod
-    def hashcode(value: datetime, *args, **kwargs) -> int:
+    @classmethod
+    def hashcode(cls, value: datetime, *args, **kwargs) -> int:
         return datetime_hashcode(int(value.timestamp() * 1000))
 
     @classmethod
@@ -401,7 +396,7 @@ class DateObject(StandardObject):
 
     @classmethod
     def to_python_not_null(cls, ctypes_object, *args, **kwargs):
-        return datetime.fromtimestamp(ctypes_object.epoch/1000)
+        return datetime.fromtimestamp(ctypes_object.epoch / 1000)
 
 
 class TimeObject(StandardObject):
@@ -417,8 +412,8 @@ class TimeObject(StandardObject):
     pythonic = timedelta
     default = timedelta()
 
-    @staticmethod
-    def hashcode(value: timedelta, *args, **kwargs) -> int:
+    @classmethod
+    def hashcode(cls, value: timedelta, *args, **kwargs) -> int:
         return datetime_hashcode(int(value.total_seconds() * 1000))
 
     @classmethod
@@ -510,7 +505,7 @@ class BinaryEnumObject(EnumObject):
     type_code = TC_BINARY_ENUM
 
 
-class StandardArray(IgniteDataType, Nullable):
+class StandardArray(Nullable):
     """
     Base class for array of primitives. Payload-only.
     """
@@ -519,15 +514,10 @@ class StandardArray(IgniteDataType, Nullable):
     standard_type = None
     type_code = None
 
-    @staticmethod
-    def hashcode(value: Any) -> int:
-        # Arrays are not supported as keys at the moment.
-        return 0
-
     @classmethod
     def build_header_class(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
@@ -575,7 +565,11 @@ class StandardArray(IgniteDataType, Nullable):
         return result
 
     @classmethod
-    def from_python_not_null(cls, stream, value):
+    async def to_python_async(cls, ctypes_object, *args, **kwargs):
+        return cls.to_python(ctypes_object, *args, **kwargs)
+
+    @classmethod
+    def from_python_not_null(cls, stream, value, **kwargs):
         header_class = cls.build_header_class()
         header = header_class()
         if hasattr(header, 'type_code'):
@@ -648,7 +642,7 @@ class StandardArrayObject(StandardArray):
     @classmethod
     def build_header_class(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
@@ -723,7 +717,7 @@ class EnumArrayObject(StandardArrayObject):
     @classmethod
     def build_header_class(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
@@ -736,7 +730,7 @@ class EnumArrayObject(StandardArrayObject):
         )
 
     @classmethod
-    def from_python_not_null(cls, stream, value):
+    def from_python_not_null(cls, stream, value, **kwargs):
         type_id, value = value
         header_class = cls.build_header_class()
         header = header_class()
@@ -754,7 +748,7 @@ class EnumArrayObject(StandardArrayObject):
             cls.standard_type.from_python(stream, x)
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
+    def to_python_not_null(cls, ctype_object, *args, **kwargs):
         type_id = getattr(ctype_object, "type_id", None)
         if type_id is None:
             return None

@@ -12,6 +12,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import asyncio
+
 import pytest
 
 
@@ -27,7 +29,7 @@ def run_examples(request):
 def skip_if_no_cext(request):
     skip = False
     try:
-        from pyignite import _cutils
+        from pyignite import _cutils  # noqa: F401
     except ImportError:
         if request.config.getoption('--force-cext'):
             pytest.fail("C extension failed to build, fail test because of --force-cext is set.")
@@ -36,6 +38,14 @@ def skip_if_no_cext(request):
 
     if skip and request.node.get_closest_marker('skip_if_no_cext'):
         pytest.skip('skipped c extensions test, c extension is not available.')
+
+
+@pytest.fixture(scope='session')
+def event_loop():
+    """Create an instance of the default event loop for each test case."""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
 
 
 def pytest_addoption(parser):

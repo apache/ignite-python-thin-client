@@ -15,17 +15,15 @@
 
 from typing import Union
 
-from pyignite.constants import *
-from pyignite.datatypes.binary import (
-    body_struct, enum_struct, schema_struct, binary_fields_struct,
-)
+from pyignite.connection import Connection, AioConnection
+from pyignite.constants import PROTOCOL_BYTE_ORDER
+from pyignite.datatypes.binary import enum_struct, schema_struct, binary_fields_struct
 from pyignite.datatypes import String, Int, Bool
-from pyignite.queries import Query
-from pyignite.queries.op_codes import *
+from pyignite.queries import Query, query_perform
+from pyignite.queries.op_codes import OP_GET_BINARY_TYPE, OP_PUT_BINARY_TYPE
 from pyignite.utils import entity_id, schema_id
 from .result import APIResult
-from ..stream import BinaryStream, READ_BACKWARD
-from ..queries.response import Response
+from ..queries.response import BinaryTypeResponse
 
 
 def get_binary_type(conn: 'Connection', binary_type: Union[str, int], query_id=None) -> APIResult:
@@ -39,75 +37,33 @@ def get_binary_type(conn: 'Connection', binary_type: Union[str, int], query_id=N
      is generated,
     :return: API result data object.
     """
+    return __get_binary_type(conn, binary_type, query_id)
 
+
+async def get_binary_type_async(conn: 'AioConnection', binary_type: Union[str, int], query_id=None) -> APIResult:
+    """
+    Async version of get_binary_type.
+    """
+    return await __get_binary_type(conn, binary_type, query_id)
+
+
+def __get_binary_type(conn, binary_type, query_id):
     query_struct = Query(
         OP_GET_BINARY_TYPE,
         [
             ('type_id', Int),
         ],
         query_id=query_id,
+        response_type=BinaryTypeResponse
     )
 
-    with BinaryStream(conn) as stream:
-        query_struct.from_python(stream, {
-            'type_id': entity_id(binary_type),
-        })
-        conn.send(stream.getbuffer())
-
-    response_head_struct = Response(protocol_version=conn.get_protocol_version(),
-                                    following=[('type_exists', Bool)])
-
-    with BinaryStream(conn, conn.recv()) as stream:
-        init_pos = stream.tell()
-        response_head_type = response_head_struct.parse(stream)
-        response_head = stream.read_ctype(response_head_type, direction=READ_BACKWARD)
-
-        response_parts = []
-        if response_head.type_exists:
-            resp_body_type = body_struct.parse(stream)
-            response_parts.append(('body', resp_body_type))
-            resp_body = stream.read_ctype(resp_body_type, direction=READ_BACKWARD)
-            if resp_body.is_enum:
-                resp_enum = enum_struct.parse(stream)
-                response_parts.append(('enums', resp_enum))
-
-            resp_schema_type = schema_struct.parse(stream)
-            response_parts.append(('schema', resp_schema_type))
-
-        response_class = type(
-            'GetBinaryTypeResponse',
-            (response_head_type,),
-            {
-                '_pack_': 1,
-                '_fields_': response_parts,
-            }
-        )
-        response = stream.read_ctype(response_class, position=init_pos)
-
-    result = APIResult(response)
-    if result.status != 0:
-        return result
-    result.value = {
-        'type_exists': Bool.to_python(response.type_exists)
-    }
-    if hasattr(response, 'body'):
-        result.value.update(body_struct.to_python(response.body))
-    if hasattr(response, 'enums'):
-        result.value['enums'] = enum_struct.to_python(response.enums)
-    if hasattr(response, 'schema'):
-        result.value['schema'] = {
-            x['schema_id']: [
-                z['schema_field_id'] for z in x['schema_fields']
-            ]
-            for x in schema_struct.to_python(response.schema)
-        }
-    return result
+    return query_perform(query_struct, conn, query_params={
+        'type_id': entity_id(binary_type),
+    })
 
 
-def put_binary_type(
-    connection: 'Connection', type_name: str, affinity_key_field: str=None,
-    is_enum=False, schema: dict=None, query_id=None,
-) -> APIResult:
+def put_binary_type(connection: 'Connection', type_name: str, affinity_key_field: str = None,
+                    is_enum=False, schema: dict = None, query_id=None) -> APIResult:
     """
     Registers binary type information in cluster.
 
@@ -125,6 +81,29 @@ def put_binary_type(
      is generated,
     :return: API result data object.
     """
+    return __put_binary_type(connection, type_name, affinity_key_field, is_enum, schema, query_id)
+
+
+async def put_binary_type_async(connection: 'AioConnection', type_name: str, affinity_key_field: str = None,
+                                is_enum=False, schema: dict = None, query_id=None) -> APIResult:
+    """
+    Async version of put_binary_type.
+    """
+    return await __put_binary_type(connection, type_name, affinity_key_field, is_enum, schema, query_id)
+
+
+def __post_process_put_binary(type_id):
+    def internal(result):
+        if result.status == 0:
+            result.value = {
+                'type_id': type_id,
+                'schema_id': schema_id,
+            }
+        return result
+    return internal
+
+
+def __put_binary_type(connection, type_name, affinity_key_field, is_enum, schema, query_id):
     # prepare data
     if schema is None:
         schema = {}
@@ -195,10 +174,5 @@ def put_binary_type(
             ],
             query_id=query_id,
         )
-    result = query_struct.perform(connection, query_params=data)
-    if result.status == 0:
-        result.value = {
-            'type_id': type_id,
-            'schema_id': schema_id,
-        }
-    return result
+    return query_perform(query_struct, connection, query_params=data,
+                         post_process_fun=__post_process_put_binary(type_id))

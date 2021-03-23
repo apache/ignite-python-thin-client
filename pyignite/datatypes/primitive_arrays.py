@@ -15,11 +15,8 @@
 
 import ctypes
 from io import SEEK_CUR
-from typing import Any
 
 from pyignite.constants import *
-from . import Null
-from .base import IgniteDataType
 from .null_object import Nullable
 from .primitive import *
 from .type_codes import *
@@ -35,7 +32,7 @@ __all__ = [
 ]
 
 
-class PrimitiveArray(IgniteDataType, Nullable):
+class PrimitiveArray(Nullable):
     """
     Base class for array of primitives. Payload-only.
     """
@@ -44,15 +41,10 @@ class PrimitiveArray(IgniteDataType, Nullable):
     primitive_type = None
     type_code = None
 
-    @staticmethod
-    def hashcode(value: Any) -> int:
-        # Arrays are not supported as keys at the moment.
-        return 0
-
     @classmethod
     def build_header_class(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
@@ -88,7 +80,11 @@ class PrimitiveArray(IgniteDataType, Nullable):
         return [ctype_object.data[i] for i in range(ctype_object.length)]
 
     @classmethod
-    def from_python_not_null(cls, stream, value):
+    async def to_python_async(cls, ctypes_object, *args, **kwargs):
+        return cls.to_python(ctypes_object, *args, **kwargs)
+
+    @classmethod
+    def from_python_not_null(cls, stream, value, **kwargs):
         header_class = cls.build_header_class()
         header = header_class()
         if hasattr(header, 'type_code'):
@@ -188,7 +184,7 @@ class PrimitiveArrayObject(PrimitiveArray):
     @classmethod
     def build_header_class(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
@@ -312,7 +308,5 @@ class BoolArrayObject(PrimitiveArrayObject):
         length = getattr(ctype_object, "length", None)
         if length is None:
             return None
-        result = [False] * length
-        for i in range(length):
-            result[i] = ctype_object.data[i] != 0
-        return result
+
+        return [ctype_object.data[i] != 0 for i in range(length)]

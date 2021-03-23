@@ -15,8 +15,7 @@
 
 import pytest
 
-from pyignite import Client
-from pyignite.api import cache_create, cache_destroy
+from pyignite import Client, AioClient
 from tests.util import start_ignite_gen
 
 
@@ -38,19 +37,36 @@ def server3():
 @pytest.fixture(scope='module')
 def client():
     client = Client()
+    try:
+        client.connect('127.0.0.1', 10801)
+        yield client
+    finally:
+        client.close()
 
-    client.connect('127.0.0.1', 10801)
 
-    yield client
+@pytest.fixture(scope='module')
+async def async_client(event_loop):
+    client = AioClient()
+    try:
+        await client.connect('127.0.0.1', 10801)
+        yield client
+    finally:
+        await client.close()
 
-    client.close()
+
+@pytest.fixture
+async def async_cache(async_client: 'AioClient'):
+    cache = await async_client.create_cache('my_bucket')
+    try:
+        yield cache
+    finally:
+        await cache.destroy()
 
 
 @pytest.fixture
 def cache(client):
-    cache_name = 'my_bucket'
-    conn = client.random_node
-
-    cache_create(conn, cache_name)
-    yield cache_name
-    cache_destroy(conn, cache_name)
+    cache = client.create_cache('my_bucket')
+    try:
+        yield cache
+    finally:
+        cache.destroy()

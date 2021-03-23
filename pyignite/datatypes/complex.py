@@ -12,30 +12,25 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import asyncio
 from collections import OrderedDict
 import ctypes
 from io import SEEK_CUR
-from typing import Iterable, Dict
+from typing import Optional
 
 from pyignite.constants import *
 from pyignite.exceptions import ParseError
-from .base import IgniteDataType
-from .internal import AnyDataObject, infer_from_python
+from .internal import AnyDataObject, Struct, infer_from_python, infer_from_python_async
 from .type_codes import *
 from .type_ids import *
 from .type_names import *
 from .null_object import Null, Nullable
+from ..stream import AioBinaryStream, BinaryStream
 
-__all__ = [
-    'Map', 'ObjectArrayObject', 'CollectionObject', 'MapObject',
-    'WrappedDataObject', 'BinaryObject',
-]
-
-from ..stream import BinaryStream
+__all__ = ['Map', 'ObjectArrayObject', 'CollectionObject', 'MapObject', 'WrappedDataObject', 'BinaryObject']
 
 
-class ObjectArrayObject(IgniteDataType, Nullable):
+class ObjectArrayObject(Nullable):
     """
     Array of Ignite objects of any consistent type. Its Python representation
     is tuple(type_id, iterable of any type). The only type ID that makes sense
@@ -48,15 +43,10 @@ class ObjectArrayObject(IgniteDataType, Nullable):
     _type_id = TYPE_OBJ_ARR
     type_code = TC_OBJECT_ARRAY
 
-    @staticmethod
-    def hashcode(value: Iterable) -> int:
-        # Arrays are not supported as keys at the moment.
-        return 0
-
     @classmethod
     def build_header(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
@@ -70,16 +60,36 @@ class ObjectArrayObject(IgniteDataType, Nullable):
 
     @classmethod
     def parse_not_null(cls, stream):
-        header_class = cls.build_header()
-        header = stream.read_ctype(header_class)
-        stream.seek(ctypes.sizeof(header_class), SEEK_CUR)
+        header, header_class = cls.__parse_header(stream)
 
         fields = []
         for i in range(header.length):
             c_type = AnyDataObject.parse(stream)
             fields.append(('element_{}'.format(i), c_type))
 
-        final_class = type(
+        return cls.__build_final_class(header_class, fields)
+
+    @classmethod
+    async def parse_not_null_async(cls, stream):
+        header, header_class = cls.__parse_header(stream)
+
+        fields = []
+        for i in range(header.length):
+            c_type = await AnyDataObject.parse_async(stream)
+            fields.append(('element_{}'.format(i), c_type))
+
+        return cls.__build_final_class(header_class, fields)
+
+    @classmethod
+    def __parse_header(cls, stream):
+        header_class = cls.build_header()
+        header = stream.read_ctype(header_class)
+        stream.seek(ctypes.sizeof(header_class), SEEK_CUR)
+        return header, header_class
+
+    @classmethod
+    def __build_final_class(cls, header_class, fields):
+        return type(
             cls.__name__,
             (header_class,),
             {
@@ -87,8 +97,6 @@ class ObjectArrayObject(IgniteDataType, Nullable):
                 '_fields_': fields,
             }
         )
-
-        return final_class
 
     @classmethod
     def to_python_not_null(cls, ctype_object, *args, **kwargs):
@@ -103,28 +111,55 @@ class ObjectArrayObject(IgniteDataType, Nullable):
         return ctype_object.type_id, result
 
     @classmethod
-    def from_python_not_null(cls, stream, value):
+    async def to_python_not_null_async(cls, ctype_object, *args, **kwargs):
+        result = [
+            await AnyDataObject.to_python_async(
+                getattr(ctype_object, 'element_{}'.format(i)), *args, **kwargs
+            )
+            for i in range(ctype_object.length)]
+        return ctype_object.type_id, result
+
+    @classmethod
+    def from_python_not_null(cls, stream, value, *args, **kwargs):
         type_or_id, value = value
+        try:
+            length = len(value)
+        except TypeError:
+            value = [value]
+            length = 1
+
+        cls.__write_header(stream, type_or_id, length)
+        for x in value:
+            infer_from_python(stream, x)
+
+    @classmethod
+    async def from_python_not_null_async(cls, stream, value, *args, **kwargs):
+        type_or_id, value = value
+        try:
+            length = len(value)
+        except TypeError:
+            value = [value]
+            length = 1
+
+        cls.__write_header(stream, type_or_id, length)
+        for x in value:
+            await infer_from_python_async(stream, x)
+
+    @classmethod
+    def __write_header(cls, stream, type_or_id, length):
         header_class = cls.build_header()
         header = header_class()
         header.type_code = int.from_bytes(
             cls.type_code,
             byteorder=PROTOCOL_BYTE_ORDER
         )
-        try:
-            length = len(value)
-        except TypeError:
-            value = [value]
-            length = 1
         header.length = length
         header.type_id = type_or_id
 
         stream.write(header)
-        for x in value:
-            infer_from_python(stream, x)
 
 
-class WrappedDataObject(IgniteDataType, Nullable):
+class WrappedDataObject(Nullable):
     """
     One or more binary objects can be wrapped in an array. This allows reading,
     storing, passing and writing objects efficiently without understanding
@@ -138,7 +173,7 @@ class WrappedDataObject(IgniteDataType, Nullable):
     @classmethod
     def build_header(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
@@ -160,7 +195,7 @@ class WrappedDataObject(IgniteDataType, Nullable):
             {
                 '_pack_': 1,
                 '_fields_': [
-                    ('payload', ctypes.c_byte*header.length),
+                    ('payload', ctypes.c_byte * header.length),
                     ('offset', ctypes.c_int),
                 ],
             }
@@ -170,15 +205,15 @@ class WrappedDataObject(IgniteDataType, Nullable):
         return final_class
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
+    def to_python_not_null(cls, ctype_object, *args, **kwargs):
         return bytes(ctype_object.payload), ctype_object.offset
 
     @classmethod
-    def from_python(cls, stream, value):
+    def from_python(cls, stream, value, *args, **kwargs):
         raise ParseError('Send unwrapped data.')
 
 
-class CollectionObject(IgniteDataType, Nullable):
+class CollectionObject(Nullable):
     """
     Similar to object array, but contains platform-agnostic deserialization
     type hint instead of type ID.
@@ -220,15 +255,10 @@ class CollectionObject(IgniteDataType, Nullable):
     pythonic = list
     default = []
 
-    @staticmethod
-    def hashcode(value: Iterable) -> int:
-        # Collections are not supported as keys at the moment.
-        return 0
-
     @classmethod
     def build_header(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
@@ -242,16 +272,36 @@ class CollectionObject(IgniteDataType, Nullable):
 
     @classmethod
     def parse_not_null(cls, stream):
-        header_class = cls.build_header()
-        header = stream.read_ctype(header_class)
-        stream.seek(ctypes.sizeof(header_class), SEEK_CUR)
+        header, header_class = cls.__parse_header(stream)
 
         fields = []
         for i in range(header.length):
             c_type = AnyDataObject.parse(stream)
             fields.append(('element_{}'.format(i), c_type))
 
-        final_class = type(
+        return cls.__build_final_class(header_class, fields)
+
+    @classmethod
+    async def parse_not_null_async(cls, stream):
+        header, header_class = cls.__parse_header(stream)
+
+        fields = []
+        for i in range(header.length):
+            c_type = await AnyDataObject.parse_async(stream)
+            fields.append(('element_{}'.format(i), c_type))
+
+        return cls.__build_final_class(header_class, fields)
+
+    @classmethod
+    def __parse_header(cls, stream):
+        header_class = cls.build_header()
+        header = stream.read_ctype(header_class)
+        stream.seek(ctypes.sizeof(header_class), SEEK_CUR)
+        return header, header_class
+
+    @classmethod
+    def __build_final_class(cls, header_class, fields):
+        return type(
             cls.__name__,
             (header_class,),
             {
@@ -259,46 +309,78 @@ class CollectionObject(IgniteDataType, Nullable):
                 '_fields_': fields,
             }
         )
-        return final_class
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
-        result = []
-        length = getattr(ctype_object, "length", None)
+        length = cls.__get_length(ctype_object)
         if length is None:
             return None
-        for i in range(length):
-            result.append(
-                AnyDataObject.to_python(
-                    getattr(ctype_object, 'element_{}'.format(i)),
-                    *args, **kwargs
-                )
-            )
+
+        result = [
+            AnyDataObject.to_python(getattr(ctype_object, f'element_{i}'), *args, **kwargs)
+            for i in range(length)
+        ]
         return ctype_object.type, result
 
     @classmethod
-    def from_python_not_null(cls, stream, value):
+    async def to_python_async(cls, ctype_object, *args, **kwargs):
+        length = cls.__get_length(ctype_object)
+        if length is None:
+            return None
+
+        result_coro = [
+            AnyDataObject.to_python_async(getattr(ctype_object, f'element_{i}'), *args, **kwargs)
+            for i in range(length)
+        ]
+
+        return ctype_object.type, await asyncio.gather(*result_coro)
+
+    @classmethod
+    def __get_length(cls, ctype_object):
+        return getattr(ctype_object, "length", None)
+
+    @classmethod
+    def from_python_not_null(cls, stream, value, *args, **kwargs):
         type_or_id, value = value
+        try:
+            length = len(value)
+        except TypeError:
+            value = [value]
+            length = 1
+
+        cls.__write_header(stream, type_or_id, length)
+        for x in value:
+            infer_from_python(stream, x)
+
+    @classmethod
+    async def from_python_not_null_async(cls, stream, value, *args, **kwargs):
+        type_or_id, value = value
+        try:
+            length = len(value)
+        except TypeError:
+            value = [value]
+            length = 1
+
+        cls.__write_header(stream, type_or_id, length)
+        for x in value:
+            await infer_from_python_async(stream, x)
+
+    @classmethod
+    def __write_header(cls, stream, type_or_id, length):
         header_class = cls.build_header()
         header = header_class()
         header.type_code = int.from_bytes(
             cls.type_code,
             byteorder=PROTOCOL_BYTE_ORDER
         )
-        try:
-            length = len(value)
-        except TypeError:
-            value = [value]
-            length = 1
+
         header.length = length
         header.type = type_or_id
 
         stream.write(header)
-        for x in value:
-            infer_from_python(stream, x)
 
 
-class Map(IgniteDataType, Nullable):
+class Map(Nullable):
     """
     Dictionary type, payload-only.
 
@@ -310,15 +392,10 @@ class Map(IgniteDataType, Nullable):
     HASH_MAP = 1
     LINKED_HASH_MAP = 2
 
-    @staticmethod
-    def hashcode(value: Dict) -> int:
-        # Maps are not supported as keys at the moment.
-        return 0
-
     @classmethod
     def build_header(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
@@ -330,16 +407,36 @@ class Map(IgniteDataType, Nullable):
 
     @classmethod
     def parse_not_null(cls, stream):
-        header_class = cls.build_header()
-        header = stream.read_ctype(header_class)
-        stream.seek(ctypes.sizeof(header_class), SEEK_CUR)
+        header, header_class = cls.__parse_header(stream)
 
         fields = []
         for i in range(header.length << 1):
             c_type = AnyDataObject.parse(stream)
             fields.append(('element_{}'.format(i), c_type))
 
-        final_class = type(
+        return cls.__build_final_class(header_class, fields)
+
+    @classmethod
+    async def parse_not_null_async(cls, stream):
+        header, header_class = cls.__parse_header(stream)
+
+        fields = []
+        for i in range(header.length << 1):
+            c_type = await AnyDataObject.parse_async(stream)
+            fields.append(('element_{}'.format(i), c_type))
+
+        return cls.__build_final_class(header_class, fields)
+
+    @classmethod
+    def __parse_header(cls, stream):
+        header_class = cls.build_header()
+        header = stream.read_ctype(header_class)
+        stream.seek(ctypes.sizeof(header_class), SEEK_CUR)
+        return header, header_class
+
+    @classmethod
+    def __build_final_class(cls, header_class, fields):
+        return type(
             cls.__name__,
             (header_class,),
             {
@@ -347,43 +444,75 @@ class Map(IgniteDataType, Nullable):
                 '_fields_': fields,
             }
         )
-        return final_class
 
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
-        map_type = getattr(ctype_object, 'type', cls.HASH_MAP)
-        result = OrderedDict() if map_type == cls.LINKED_HASH_MAP else {}
+        map_cls = cls.__get_map_class(ctype_object)
 
+        result = map_cls()
         for i in range(0, ctype_object.length << 1, 2):
             k = AnyDataObject.to_python(
-                    getattr(ctype_object, 'element_{}'.format(i)),
-                    *args, **kwargs
-                )
+                getattr(ctype_object, 'element_{}'.format(i)),
+                *args, **kwargs
+            )
             v = AnyDataObject.to_python(
-                    getattr(ctype_object, 'element_{}'.format(i + 1)),
-                    *args, **kwargs
-                )
+                getattr(ctype_object, 'element_{}'.format(i + 1)),
+                *args, **kwargs
+            )
             result[k] = v
         return result
 
     @classmethod
+    async def to_python_async(cls, ctype_object, *args, **kwargs):
+        map_cls = cls.__get_map_class(ctype_object)
+
+        kv_pairs_coro = [
+            asyncio.gather(
+                AnyDataObject.to_python_async(
+                    getattr(ctype_object, 'element_{}'.format(i)),
+                    *args, **kwargs
+                ),
+                AnyDataObject.to_python_async(
+                    getattr(ctype_object, 'element_{}'.format(i + 1)),
+                    *args, **kwargs
+                )
+            ) for i in range(0, ctype_object.length << 1, 2)
+        ]
+
+        return map_cls(await asyncio.gather(*kv_pairs_coro))
+
+    @classmethod
+    def __get_map_class(cls, ctype_object):
+        map_type = getattr(ctype_object, 'type', cls.HASH_MAP)
+        return OrderedDict if map_type == cls.LINKED_HASH_MAP else dict
+
+    @classmethod
     def from_python(cls, stream, value, type_id=None):
+        cls.__write_header(stream, type_id, len(value))
+        for k, v in value.items():
+            infer_from_python(stream, k)
+            infer_from_python(stream, v)
+
+    @classmethod
+    async def from_python_async(cls, stream, value, type_id=None):
+        cls.__write_header(stream, type_id, len(value))
+        for k, v in value.items():
+            await infer_from_python_async(stream, k)
+            await infer_from_python_async(stream, v)
+
+    @classmethod
+    def __write_header(cls, stream, type_id, length):
         header_class = cls.build_header()
         header = header_class()
-        length = len(value)
         header.length = length
+
         if hasattr(header, 'type_code'):
-            header.type_code = int.from_bytes(
-                cls.type_code,
-                byteorder=PROTOCOL_BYTE_ORDER
-            )
+            header.type_code = int.from_bytes(cls.type_code, byteorder=PROTOCOL_BYTE_ORDER)
+
         if hasattr(header, 'type'):
             header.type = type_id
 
         stream.write(header)
-        for k, v in value.items():
-            infer_from_python(stream, k)
-            infer_from_python(stream, v)
 
 
 class MapObject(Map):
@@ -404,7 +533,7 @@ class MapObject(Map):
     @classmethod
     def build_header(cls):
         return type(
-            cls.__name__+'Header',
+            cls.__name__ + 'Header',
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
@@ -419,23 +548,43 @@ class MapObject(Map):
     @classmethod
     def to_python(cls, ctype_object, *args, **kwargs):
         obj_type = getattr(ctype_object, "type", None)
-        if obj_type is None:
-            return None
-        return obj_type, super().to_python(
-            ctype_object, *args, **kwargs
-        )
+        if obj_type:
+            return obj_type, super().to_python(ctype_object, *args, **kwargs)
+        return None
 
     @classmethod
-    def from_python(cls, stream, value):
+    async def to_python_async(cls, ctype_object, *args, **kwargs):
+        obj_type = getattr(ctype_object, "type", None)
+        if obj_type:
+            return obj_type, await super().to_python_async(ctype_object, *args, **kwargs)
+        return None
+
+    @classmethod
+    def __get_obj_type(cls, ctype_object):
+        return getattr(ctype_object, "type", None)
+
+    @classmethod
+    def from_python(cls, stream, value, **kwargs):
+        type_id, value = cls.__unpack_value(stream, value)
+        if value:
+            super().from_python(stream, value, type_id)
+
+    @classmethod
+    async def from_python_async(cls, stream, value, **kwargs):
+        type_id, value = cls.__unpack_value(stream, value)
+        if value:
+            await super().from_python_async(stream, value, type_id)
+
+    @classmethod
+    def __unpack_value(cls, stream, value):
         if value is None:
             Null.from_python(stream)
-            return
+            return None, None
 
-        type_id, value = value
-        super().from_python(stream, value, type_id)
+        return value
 
 
-class BinaryObject(IgniteDataType, Nullable):
+class BinaryObject(Nullable):
     _type_id = TYPE_BINARY_OBJ
     type_code = TC_COMPLEX_OBJECT
 
@@ -446,15 +595,22 @@ class BinaryObject(IgniteDataType, Nullable):
     OFFSET_TWO_BYTES = 0x0010
     COMPACT_FOOTER = 0x0020
 
-    @staticmethod
-    def hashcode(value: object, client: None) -> int:
+    @classmethod
+    def hashcode(cls, value: object, client: Optional['Client']) -> int:
         # binary objects's hashcode implementation is special in the sense
         # that you need to fully serialize the object to calculate
         # its hashcode
-        if not value._hashcode and client :
-
-            with BinaryStream(client.random_node) as stream:
+        if not value._hashcode and client:
+            with BinaryStream(client) as stream:
                 value._from_python(stream, save_to_buf=True)
+
+        return value._hashcode
+
+    @classmethod
+    async def hashcode_async(cls, value: object, client: Optional['AioClient']) -> int:
+        if not value._hashcode and client:
+            with AioBinaryStream(client) as stream:
+                await value._from_python_async(stream, save_to_buf=True)
 
         return value._hashcode
 
@@ -504,22 +660,47 @@ class BinaryObject(IgniteDataType, Nullable):
 
     @classmethod
     def parse_not_null(cls, stream):
-        from pyignite.datatypes import Struct
-
-        header_class = cls.build_header()
-        header = stream.read_ctype(header_class)
-        stream.seek(ctypes.sizeof(header_class), SEEK_CUR)
+        header, header_class = cls.__parse_header(stream)
 
         # ignore full schema, always retrieve fields' types and order
         # from complex types registry
         data_class = stream.get_dataclass(header)
-        fields = data_class.schema.items()
-        object_fields_struct = Struct(fields)
+        object_fields_struct = cls.__build_object_fields_struct(data_class)
         object_fields = object_fields_struct.parse(stream)
-        final_class_fields = [('object_fields', object_fields)]
 
+        return cls.__build_final_class(stream, header, header_class, object_fields,
+                                       len(object_fields_struct.fields))
+
+    @classmethod
+    async def parse_not_null_async(cls, stream):
+        header, header_class = cls.__parse_header(stream)
+
+        # ignore full schema, always retrieve fields' types and order
+        # from complex types registry
+        data_class = await stream.get_dataclass(header)
+        object_fields_struct = cls.__build_object_fields_struct(data_class)
+        object_fields = await object_fields_struct.parse_async(stream)
+
+        return cls.__build_final_class(stream, header, header_class, object_fields,
+                                       len(object_fields_struct.fields))
+
+    @classmethod
+    def __parse_header(cls, stream):
+        header_class = cls.build_header()
+        header = stream.read_ctype(header_class)
+        stream.seek(ctypes.sizeof(header_class), SEEK_CUR)
+        return header, header_class
+
+    @staticmethod
+    def __build_object_fields_struct(data_class):
+        fields = data_class.schema.items()
+        return Struct(fields)
+
+    @classmethod
+    def __build_final_class(cls, stream, header, header_class, object_fields, fields_len):
+        final_class_fields = [('object_fields', object_fields)]
         if header.flags & cls.HAS_SCHEMA:
-            schema = cls.schema_type(header.flags) * len(fields)
+            schema = cls.schema_type(header.flags) * fields_len
             stream.seek(ctypes.sizeof(schema), SEEK_CUR)
             final_class_fields.append(('schema', schema))
 
@@ -537,35 +718,71 @@ class BinaryObject(IgniteDataType, Nullable):
 
     @classmethod
     def to_python(cls, ctype_object, client: 'Client' = None, *args, **kwargs):
-        type_id = getattr(ctype_object, "type_id", None)
-        if type_id is None:
-            return None
+        type_id = cls.__get_type_id(ctype_object, client)
+        if type_id:
+            data_class = client.query_binary_type(type_id, ctype_object.schema_id)
 
-        if not client:
-            raise ParseError(
-                'Can not query binary type {}'.format(type_id)
-            )
-
-        data_class = client.query_binary_type(
-            type_id,
-            ctype_object.schema_id
-        )
-        result = data_class()
-
-        result.version = ctype_object.version
-        for field_name, field_type in data_class.schema.items():
-            setattr(
-                result, field_name, field_type.to_python(
-                    getattr(ctype_object.object_fields, field_name),
-                    client, *args, **kwargs
+            result = data_class()
+            result.version = ctype_object.version
+            for field_name, field_type in data_class.schema.items():
+                setattr(
+                    result, field_name, field_type.to_python(
+                        getattr(ctype_object.object_fields, field_name),
+                        client, *args, **kwargs
+                    )
                 )
-            )
-        return result
+            return result
+
+        return None
 
     @classmethod
-    def from_python_not_null(cls, stream, value):
-        if getattr(value, '_buffer', None):
-            stream.write(value._buffer)
-        else:
+    async def to_python_async(cls, ctype_object, client: 'AioClient' = None, *args, **kwargs):
+        type_id = cls.__get_type_id(ctype_object, client)
+        if type_id:
+            data_class = await client.query_binary_type(type_id, ctype_object.schema_id)
+
+            result = data_class()
+            result.version = ctype_object.version
+
+            field_values = await asyncio.gather(
+                *[
+                    field_type.to_python_async(
+                        getattr(ctype_object.object_fields, field_name), client, *args, **kwargs
+                    )
+                    for field_name, field_type in data_class.schema.items()
+                ]
+            )
+
+            for i, field_name in enumerate(data_class.schema.keys()):
+                setattr(result, field_name, field_values[i])
+
+            return result
+        return None
+
+    @classmethod
+    def __get_type_id(cls, ctype_object, client):
+        type_id = getattr(ctype_object, "type_id", None)
+        if type_id:
+            if not client:
+                raise ParseError(f'Can not query binary type {type_id}')
+            return type_id
+        return None
+
+    @classmethod
+    def from_python_not_null(cls, stream, value, **kwargs):
+        if cls.__write_fast_path(stream, value):
             stream.register_binary_type(value.__class__)
             value._from_python(stream)
+
+    @classmethod
+    async def from_python_not_null_async(cls, stream, value, **kwargs):
+        if cls.__write_fast_path(stream, value):
+            await stream.register_binary_type(value.__class__)
+            await value._from_python_async(stream)
+
+    @classmethod
+    def __write_fast_path(cls, stream, value):
+        if getattr(value, '_buffer', None):
+            stream.write(value._buffer)
+            return False
+        return True

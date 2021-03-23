@@ -16,15 +16,17 @@ import re
 from collections import OrderedDict
 from decimal import Decimal
 
+import pytest
+
 from pyignite import GenericObjectMeta
+from pyignite.aio_cache import AioCache
 from pyignite.datatypes import (
     BinaryObject, BoolObject, IntObject, DecimalObject, LongObject, String, ByteObject, ShortObject, FloatObject,
     DoubleObject, CharObject, UUIDObject, DateObject, TimestampObject, TimeObject, EnumObject, BinaryEnumObject,
     ByteArrayObject, ShortArrayObject, IntArrayObject, LongArrayObject, FloatArrayObject, DoubleArrayObject,
     CharArrayObject, BoolArrayObject, UUIDArrayObject, DateArrayObject, TimestampArrayObject, TimeArrayObject,
     EnumArrayObject, StringArrayObject, DecimalArrayObject, ObjectArrayObject, CollectionObject, MapObject)
-from pyignite.datatypes.prop_codes import *
-
+from pyignite.datatypes.prop_codes import PROP_NAME, PROP_SQL_SCHEMA, PROP_QUERY_ENTITIES
 
 insert_data = [
     [1, True, 'asdf', 42, Decimal('2.4')],
@@ -54,7 +56,7 @@ CREATE TABLE {} (
 
 insert_query = '''
 INSERT INTO {} (
-  test_pk, test_bool, test_str, test_int, test_decimal, 
+  test_pk, test_bool, test_str, test_int, test_decimal,
 ) VALUES (?, ?, ?, ?, ?)'''.format(table_sql_name)
 
 select_query = '''SELECT * FROM {}'''.format(table_sql_name)
@@ -62,51 +64,69 @@ select_query = '''SELECT * FROM {}'''.format(table_sql_name)
 drop_query = 'DROP TABLE {} IF EXISTS'.format(table_sql_name)
 
 
-def test_sql_read_as_binary(client):
+@pytest.fixture
+def table_cache_read(client):
     client.sql(drop_query)
-
-    # create table
     client.sql(create_query)
 
-    # insert some rows
     for line in insert_data:
         client.sql(insert_query, query_args=line)
 
-    table_cache = client.get_cache(table_cache_name)
-    result = table_cache.scan()
-
-    # convert Binary object fields' values to a tuple
-    # to compare it with the initial data
-    for key, value in result:
-        assert key in {x[0] for x in insert_data}
-        assert (
-                   value.TEST_BOOL,
-                   value.TEST_STR,
-                   value.TEST_INT,
-                   value.TEST_DECIMAL
-               ) in {tuple(x[1:]) for x in insert_data}
-
-    client.sql(drop_query)
+    cache = client.get_cache(table_cache_name)
+    yield cache
+    cache.destroy()
 
 
-def test_sql_write_as_binary(client):
-    # configure cache as an SQL table
-    type_name = table_cache_name
+@pytest.fixture
+async def table_cache_read_async(async_client):
+    await async_client.sql(drop_query)
+    await async_client.sql(create_query)
 
-    # register binary type
-    class AllDataType(
-        metaclass=GenericObjectMeta,
-        type_name=type_name,
-        schema=OrderedDict([
-            ('TEST_BOOL', BoolObject),
-            ('TEST_STR', String),
-            ('TEST_INT', IntObject),
-            ('TEST_DECIMAL', DecimalObject),
-        ]),
-    ):
-        pass
+    for line in insert_data:
+        await async_client.sql(insert_query, query_args=line)
 
-    table_cache = client.get_or_create_cache({
+    cache = await async_client.get_cache(table_cache_name)
+    yield cache
+    await cache.destroy()
+
+
+def test_sql_read_as_binary(table_cache_read):
+    with table_cache_read.scan() as cursor:
+        # convert Binary object fields' values to a tuple
+        # to compare it with the initial data
+        for key, value in cursor:
+            assert key in {x[0] for x in insert_data}
+            assert (value.TEST_BOOL, value.TEST_STR, value.TEST_INT, value.TEST_DECIMAL) \
+                   in {tuple(x[1:]) for x in insert_data}
+
+
+@pytest.mark.asyncio
+async def test_sql_read_as_binary_async(table_cache_read_async):
+    async with table_cache_read_async.scan() as cursor:
+        # convert Binary object fields' values to a tuple
+        # to compare it with the initial data
+        async for key, value in cursor:
+            assert key in {x[0] for x in insert_data}
+            assert (value.TEST_BOOL, value.TEST_STR, value.TEST_INT, value.TEST_DECIMAL) \
+                   in {tuple(x[1:]) for x in insert_data}
+
+
+class AllDataType(
+    metaclass=GenericObjectMeta,
+    type_name=table_cache_name,
+    schema=OrderedDict([
+        ('TEST_BOOL', BoolObject),
+        ('TEST_STR', String),
+        ('TEST_INT', IntObject),
+        ('TEST_DECIMAL', DecimalObject),
+    ]),
+):
+    pass
+
+
+@pytest.fixture
+def table_cache_write_settings():
+    return {
         PROP_NAME: table_cache_name,
         PROP_SQL_SCHEMA: scheme_name,
         PROP_QUERY_ENTITIES: [
@@ -142,15 +162,18 @@ def test_sql_write_as_binary(client):
                     },
                 ],
                 'query_indexes': [],
-                'value_type_name': type_name,
+                'value_type_name': table_cache_name,
                 'value_field_name': None,
             },
         ],
-    })
-    table_settings = table_cache.settings
-    assert table_settings, 'SQL table cache settings are empty'
+    }
 
-    # insert rows as k-v
+
+@pytest.fixture
+def table_cache_write(client, table_cache_write_settings):
+    cache = client.get_or_create_cache(table_cache_write_settings)
+    assert cache.settings, 'SQL table cache settings are empty'
+
     for row in insert_data:
         value = AllDataType()
         (
@@ -159,13 +182,39 @@ def test_sql_write_as_binary(client):
             value.TEST_INT,
             value.TEST_DECIMAL,
         ) = row[1:]
-        table_cache.put(row[0], value, key_hint=IntObject)
+        cache.put(row[0], value, key_hint=IntObject)
 
-    data = table_cache.scan()
-    assert len(list(data)) == len(insert_data), (
-        'Not all data was read as key-value'
-    )
+    data = cache.scan()
+    assert len(list(data)) == len(insert_data), 'Not all data was read as key-value'
 
+    yield cache
+    cache.destroy()
+
+
+@pytest.fixture
+async def async_table_cache_write(async_client, table_cache_write_settings):
+    cache = await async_client.get_or_create_cache(table_cache_write_settings)
+    assert await cache.settings(), 'SQL table cache settings are empty'
+
+    for row in insert_data:
+        value = AllDataType()
+        (
+            value.TEST_BOOL,
+            value.TEST_STR,
+            value.TEST_INT,
+            value.TEST_DECIMAL,
+        ) = row[1:]
+        await cache.put(row[0], value, key_hint=IntObject)
+
+    async with cache.scan() as cursor:
+        data = [a async for a in cursor]
+        assert len(data) == len(insert_data), 'Not all data was read as key-value'
+
+    yield cache
+    await cache.destroy()
+
+
+def test_sql_write_as_binary(client, table_cache_write):
     # read rows as SQL
     data = client.sql(select_query, include_field_names=True)
 
@@ -176,14 +225,29 @@ def test_sql_write_as_binary(client):
     data = list(data)
     assert len(data) == len(insert_data), 'Not all data was read as SQL rows'
 
-    # cleanup
-    table_cache.destroy()
+
+@pytest.mark.asyncio
+async def test_sql_write_as_binary_async(async_client, async_table_cache_write):
+    # read rows as SQL
+    async with async_client.sql(select_query, include_field_names=True) as cursor:
+        header_row = await cursor.__anext__()
+        for field_name in AllDataType.schema.keys():
+            assert field_name in header_row, 'Not all field names in header row'
+
+        data = [v async for v in cursor]
+        assert len(data) == len(insert_data), 'Not all data was read as SQL rows'
 
 
-def test_nested_binary_objects(client):
+def test_nested_binary_objects(cache):
+    __check_nested_binary_objects(cache)
 
-    nested_cache = client.get_or_create_cache('nested_binary')
 
+@pytest.mark.asyncio
+async def test_nested_binary_objects_async(async_cache):
+    await __check_nested_binary_objects(async_cache)
+
+
+def __check_nested_binary_objects(cache):
     class InnerType(
         metaclass=GenericObjectMeta,
         schema=OrderedDict([
@@ -203,29 +267,42 @@ def test_nested_binary_objects(client):
     ):
         pass
 
-    inner = InnerType(inner_int=42, inner_str='This is a test string')
+    def prepare_obj():
+        inner = InnerType(inner_int=42, inner_str='This is a test string')
 
-    outer = OuterType(
-        outer_int=43,
-        nested_binary=inner,
-        outer_str='This is another test string'
-    )
+        return OuterType(
+            outer_int=43,
+            nested_binary=inner,
+            outer_str='This is another test string'
+        )
 
-    nested_cache.put(1, outer)
+    def check_obj(result):
+        assert result.outer_int == 43
+        assert result.outer_str == 'This is another test string'
+        assert result.nested_binary.inner_int == 42
+        assert result.nested_binary.inner_str == 'This is a test string'
 
-    result = nested_cache.get(1)
-    assert result.outer_int == 43
-    assert result.outer_str == 'This is another test string'
-    assert result.nested_binary.inner_int == 42
-    assert result.nested_binary.inner_str == 'This is a test string'
+    async def inner_async():
+        await cache.put(1, prepare_obj())
+        check_obj(await cache.get(1))
 
-    nested_cache.destroy()
+    def inner():
+        cache.put(1, prepare_obj())
+        check_obj(cache.get(1))
+
+    return inner_async() if isinstance(cache, AioCache) else inner()
 
 
-def test_add_schema_to_binary_object(client):
+def test_add_schema_to_binary_object(cache):
+    __check_add_schema_to_binary_object(cache)
 
-    migrate_cache = client.get_or_create_cache('migrate_binary')
 
+@pytest.mark.asyncio
+async def test_add_schema_to_binary_object_async(async_cache):
+    await __check_add_schema_to_binary_object(async_cache)
+
+
+def __check_add_schema_to_binary_object(cache):
     class MyBinaryType(
         metaclass=GenericObjectMeta,
         schema=OrderedDict([
@@ -236,54 +313,66 @@ def test_add_schema_to_binary_object(client):
     ):
         pass
 
-    binary_object = MyBinaryType(
-        test_str='Test string',
-        test_int=42,
-        test_bool=True,
-    )
-    migrate_cache.put(1, binary_object)
+    def prepare_bo_v1():
+        return MyBinaryType(test_str='Test string', test_int=42, test_bool=True)
 
-    result = migrate_cache.get(1)
-    assert result.test_str == 'Test string'
-    assert result.test_int == 42
-    assert result.test_bool is True
+    def check_bo_v1(result):
+        assert result.test_str == 'Test string'
+        assert result.test_int == 42
+        assert result.test_bool is True
 
-    modified_schema = MyBinaryType.schema.copy()
-    modified_schema['test_decimal'] = DecimalObject
-    del modified_schema['test_bool']
+    def prepare_bo_v2():
+        modified_schema = MyBinaryType.schema.copy()
+        modified_schema['test_decimal'] = DecimalObject
+        del modified_schema['test_bool']
 
-    class MyBinaryTypeV2(
-        metaclass=GenericObjectMeta,
-        type_name='MyBinaryType',
-        schema=modified_schema,
-    ):
-        pass
+        class MyBinaryTypeV2(
+            metaclass=GenericObjectMeta,
+            type_name='MyBinaryType',
+            schema=modified_schema,
+        ):
+            pass
 
-    assert MyBinaryType.type_id == MyBinaryTypeV2.type_id
-    assert MyBinaryType.schema_id != MyBinaryTypeV2.schema_id
+        assert MyBinaryType.type_id == MyBinaryTypeV2.type_id
+        assert MyBinaryType.schema_id != MyBinaryTypeV2.schema_id
 
-    binary_object_v2 = MyBinaryTypeV2(
-        test_str='Another test',
-        test_int=43,
-        test_decimal=Decimal('2.34')
-    )
+        return MyBinaryTypeV2(test_str='Another test', test_int=43, test_decimal=Decimal('2.34'))
 
-    migrate_cache.put(2, binary_object_v2)
+    def check_bo_v2(result):
+        assert result.test_str == 'Another test'
+        assert result.test_int == 43
+        assert result.test_decimal == Decimal('2.34')
+        assert not hasattr(result, 'test_bool')
 
-    result = migrate_cache.get(2)
-    assert result.test_str == 'Another test'
-    assert result.test_int == 43
-    assert result.test_decimal == Decimal('2.34')
-    assert not hasattr(result, 'test_bool')
+    async def inner_async():
+        await cache.put(1, prepare_bo_v1())
+        check_bo_v1(await cache.get(1))
+        await cache.put(2, prepare_bo_v2())
+        check_bo_v2(await cache.get(2))
 
-    migrate_cache.destroy()
+    def inner():
+        cache.put(1, prepare_bo_v1())
+        check_bo_v1(cache.get(1))
+        cache.put(2, prepare_bo_v2())
+        check_bo_v2(cache.get(2))
+
+    return inner_async() if isinstance(cache, AioCache) else inner()
 
 
-def test_complex_object_names(client):
+def test_complex_object_names(cache):
     """
     Test the ability to work with Complex types, which names contains symbols
     not suitable for use in Python identifiers.
     """
+    __check_complex_object_names(cache)
+
+
+@pytest.mark.asyncio
+async def test_complex_object_names_async(async_cache):
+    await __check_complex_object_names(async_cache)
+
+
+def __check_complex_object_names(cache):
     type_name = 'Non.Pythonic#type-name$'
     key = 'key'
     data = 'test'
@@ -297,41 +386,47 @@ def test_complex_object_names(client):
     ):
         pass
 
-    cache = client.get_or_create_cache('test_name_cache')
-    cache.put(key, NonPythonicallyNamedType(field=data))
+    def check(obj):
+        assert obj.type_name == type_name, 'Complex type name mismatch'
+        assert obj.field == data, 'Complex object data failure'
 
-    obj = cache.get(key)
-    assert obj.type_name == type_name, 'Complex type name mismatch'
-    assert obj.field == data, 'Complex object data failure'
+    async def inner_async():
+        await cache.put(key, NonPythonicallyNamedType(field=data))
+        check(await cache.get(key))
+
+    def inner():
+        cache.put(key, NonPythonicallyNamedType(field=data))
+        check(cache.get(key))
+
+    return inner_async() if isinstance(cache, AioCache) else inner()
 
 
-def test_complex_object_hash(client):
-    """
-    Test that Python client correctly calculates hash of the binary object that
-    contains negative bytes.
-    """
-    class Internal(
-        metaclass=GenericObjectMeta,
-        type_name='Internal',
-        schema=OrderedDict([
-            ('id', IntObject),
-            ('str', String),
-        ])
-    ):
-        pass
+class Internal(
+    metaclass=GenericObjectMeta, type_name='Internal',
+    schema=OrderedDict([
+        ('id', IntObject),
+        ('str', String)
+    ])
+):
+    pass
 
-    class TestObject(
-        metaclass=GenericObjectMeta,
-        type_name='TestObject',
-        schema=OrderedDict([
-            ('id', IntObject),
-            ('str', String),
-            ('internal', BinaryObject),
-        ])
-    ):
-        pass
 
-    obj_ascii = TestObject()
+class NestedObject(
+    metaclass=GenericObjectMeta, type_name='NestedObject',
+    schema=OrderedDict([
+        ('id', IntObject),
+        ('str', String),
+        ('internal', BinaryObject)
+    ])
+):
+    pass
+
+
+@pytest.fixture
+def complex_objects():
+    fixtures = []
+
+    obj_ascii = NestedObject()
     obj_ascii.id = 1
     obj_ascii.str = 'test_string'
 
@@ -339,11 +434,9 @@ def test_complex_object_hash(client):
     obj_ascii.internal.id = 2
     obj_ascii.internal.str = 'lorem ipsum'
 
-    hash_ascii = BinaryObject.hashcode(obj_ascii, client=client)
+    fixtures.append((obj_ascii, -1314567146))
 
-    assert hash_ascii == -1314567146, 'Invalid hashcode value for object with ASCII strings'
-
-    obj_utf8 = TestObject()
+    obj_utf8 = NestedObject()
     obj_utf8.id = 1
     obj_utf8.str = 'юникод'
 
@@ -351,39 +444,63 @@ def test_complex_object_hash(client):
     obj_utf8.internal.id = 2
     obj_utf8.internal.str = 'ユニコード'
 
-    hash_utf8 = BinaryObject.hashcode(obj_utf8, client=client)
+    fixtures.append((obj_utf8, -1945378474))
 
-    assert hash_utf8 == -1945378474, 'Invalid hashcode value for object with UTF-8 strings'
+    yield fixtures
 
 
-def test_complex_object_null_fields(client):
+def test_complex_object_hash(client, complex_objects):
+    for obj, hash in complex_objects:
+        assert hash == BinaryObject.hashcode(obj, client)
+
+
+@pytest.mark.asyncio
+async def test_complex_object_hash_async(async_client, complex_objects):
+    for obj, hash in complex_objects:
+        assert hash == await BinaryObject.hashcode_async(obj, async_client)
+
+
+def camel_to_snake(name):
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', name).lower()
+
+
+fields = {camel_to_snake(type_.__name__): type_ for type_ in [
+    ByteObject, ShortObject, IntObject, LongObject, FloatObject, DoubleObject, CharObject, BoolObject, UUIDObject,
+    DateObject, TimestampObject, TimeObject, EnumObject, BinaryEnumObject, ByteArrayObject, ShortArrayObject,
+    IntArrayObject, LongArrayObject, FloatArrayObject, DoubleArrayObject, CharArrayObject, BoolArrayObject,
+    UUIDArrayObject, DateArrayObject, TimestampArrayObject, TimeArrayObject, EnumArrayObject, String,
+    StringArrayObject, DecimalObject, DecimalArrayObject, ObjectArrayObject, CollectionObject, MapObject,
+    BinaryObject]}
+
+
+class AllTypesObject(metaclass=GenericObjectMeta, type_name='AllTypesObject', schema=fields):
+    pass
+
+
+@pytest.fixture
+def null_fields_object():
+    res = AllTypesObject()
+
+    for field in fields.keys():
+        setattr(res, field, None)
+
+    yield res
+
+
+def test_complex_object_null_fields(cache, null_fields_object):
     """
     Test that Python client can correctly write and read binary object that
     contains null fields.
     """
-    def camel_to_snake(name):
-        return re.sub('([a-z0-9])([A-Z])', r'\1_\2', name).lower()
+    cache.put(1, null_fields_object)
+    assert cache.get(1) == null_fields_object, 'Objects mismatch'
 
-    fields = {camel_to_snake(type_.__name__): type_ for type_ in [
-        ByteObject, ShortObject, IntObject, LongObject, FloatObject, DoubleObject, CharObject, BoolObject, UUIDObject,
-        DateObject, TimestampObject, TimeObject, EnumObject, BinaryEnumObject, ByteArrayObject, ShortArrayObject,
-        IntArrayObject, LongArrayObject, FloatArrayObject, DoubleArrayObject, CharArrayObject, BoolArrayObject,
-        UUIDArrayObject, DateArrayObject, TimestampArrayObject, TimeArrayObject, EnumArrayObject, String,
-        StringArrayObject, DecimalObject, DecimalArrayObject, ObjectArrayObject, CollectionObject, MapObject,
-        BinaryObject]}
 
-    class AllTypesObject(metaclass=GenericObjectMeta, type_name='AllTypesObject', schema=fields):
-        pass
-
-    key = 42
-    null_fields_value = AllTypesObject()
-
-    for field in fields.keys():
-        setattr(null_fields_value, field, None)
-
-    cache = client.get_or_create_cache('all_types_test_cache')
-    cache.put(key, null_fields_value)
-
-    got_obj = cache.get(key)
-
-    assert got_obj == null_fields_value, 'Objects mismatch'
+@pytest.mark.asyncio
+async def test_complex_object_null_fields_async(async_cache, null_fields_object):
+    """
+    Test that Python client can correctly write and read binary object that
+    contains null fields.
+    """
+    await async_cache.put(1, null_fields_object)
+    assert await async_cache.get(1) == null_fields_object, 'Objects mismatch'

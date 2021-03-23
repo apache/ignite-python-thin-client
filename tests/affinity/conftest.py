@@ -15,8 +15,7 @@
 
 import pytest
 
-from pyignite import Client
-from pyignite.api import cache_create, cache_destroy
+from pyignite import Client, AioClient
 from tests.util import start_ignite_gen
 
 # Sometimes on slow testing servers and unstable topology
@@ -42,29 +41,21 @@ def server3():
 @pytest.fixture
 def client():
     client = Client(partition_aware=True, timeout=CLIENT_SOCKET_TIMEOUT)
-
-    client.connect([('127.0.0.1', 10800 + i) for i in range(1, 4)])
-
-    yield client
-
-    client.close()
-
-
-@pytest.fixture
-def client_not_connected():
-    client = Client(partition_aware=True, timeout=CLIENT_SOCKET_TIMEOUT)
-    yield client
-    client.close()
+    try:
+        client.connect([('127.0.0.1', 10800 + i) for i in range(1, 4)])
+        yield client
+    finally:
+        client.close()
 
 
 @pytest.fixture
-def cache(connected_client):
-    cache_name = 'my_bucket'
-    conn = connected_client.random_node
-
-    cache_create(conn, cache_name)
-    yield cache_name
-    cache_destroy(conn, cache_name)
+async def async_client():
+    client = AioClient(partition_aware=True)
+    try:
+        await client.connect([('127.0.0.1', 10800 + i) for i in range(1, 4)])
+        yield client
+    finally:
+        await client.close()
 
 
 @pytest.fixture(scope='module', autouse=True)

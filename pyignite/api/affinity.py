@@ -15,9 +15,10 @@
 
 from typing import Iterable, Union
 
+from pyignite.connection import AioConnection, Connection
 from pyignite.datatypes import Bool, Int, Long, UUIDObject
 from pyignite.datatypes.internal import StructArray, Conditional, Struct
-from pyignite.queries import Query
+from pyignite.queries import Query, query_perform
 from pyignite.queries.op_codes import OP_CACHE_PARTITIONS
 from pyignite.utils import is_iterable
 from .result import APIResult
@@ -67,10 +68,7 @@ partition_mapping = StructArray([
 ])
 
 
-def cache_get_node_partitions(
-    conn: 'Connection', caches: Union[int, Iterable[int]],
-    query_id: int = None,
-) -> APIResult:
+def cache_get_node_partitions(conn: 'Connection', caches: Union[int, Iterable[int]], query_id: int = None) -> APIResult:
     """
     Gets partition mapping for an Ignite cache or a number of caches. See
     “IEP-23: Best Effort Affinity for thin clients”.
@@ -82,6 +80,62 @@ def cache_get_node_partitions(
      is generated,
     :return: API result data object.
     """
+    return __cache_get_node_partitions(conn, caches, query_id)
+
+
+async def cache_get_node_partitions_async(conn: 'AioConnection', caches: Union[int, Iterable[int]],
+                                          query_id: int = None) -> APIResult:
+    """
+    Async version of cache_get_node_partitions.
+    """
+    return await __cache_get_node_partitions(conn, caches, query_id)
+
+
+def __post_process_partitions(result):
+    if result.status == 0:
+        # tidying up the result
+        value = {
+            'version': (
+                result.value['version_major'],
+                result.value['version_minor']
+            ),
+            'partition_mapping': {},
+        }
+        for partition_map in result.value['partition_mapping']:
+            is_applicable = partition_map['is_applicable']
+
+            node_mapping = None
+            if is_applicable:
+                node_mapping = {
+                    p['node_uuid']: set(x['partition_id'] for x in p['node_partitions'])
+                    for p in partition_map['node_mapping']
+                }
+
+            for cache_info in partition_map['cache_mapping']:
+                cache_id = cache_info['cache_id']
+
+                cache_partition_mapping = {
+                    'is_applicable': is_applicable,
+                }
+
+                parts = 0
+                if is_applicable:
+                    cache_partition_mapping['cache_config'] = {
+                        a['key_type_id']: a['affinity_key_field_id']
+                        for a in cache_info['cache_config']
+                    }
+                    cache_partition_mapping['node_mapping'] = node_mapping
+
+                    parts = sum(len(p) for p in cache_partition_mapping['node_mapping'].values())
+
+                cache_partition_mapping['number_of_partitions'] = parts
+
+                value['partition_mapping'][cache_id] = cache_partition_mapping
+        result.value = value
+    return result
+
+
+def __cache_get_node_partitions(conn, caches, query_id):
     query_struct = Query(
         OP_CACHE_PARTITIONS,
         [
@@ -92,7 +146,8 @@ def cache_get_node_partitions(
     if not is_iterable(caches):
         caches = [caches]
 
-    result = query_struct.perform(
+    return query_perform(
+        query_struct,
         conn,
         query_params={
             'cache_ids': [{'cache_id': cache} for cache in caches],
@@ -102,36 +157,5 @@ def cache_get_node_partitions(
             ('version_minor', Int),
             ('partition_mapping', partition_mapping),
         ],
+        post_process_fun=__post_process_partitions
     )
-    if result.status == 0:
-        # tidying up the result
-        value = {
-            'version': (
-                result.value['version_major'],
-                result.value['version_minor']
-            ),
-            'partition_mapping': [],
-        }
-        for i, partition_map in enumerate(result.value['partition_mapping']):
-            cache_id = partition_map['cache_mapping'][0]['cache_id']
-            value['partition_mapping'].insert(
-                i,
-                {
-                    'cache_id': cache_id,
-                    'is_applicable': partition_map['is_applicable'],
-                }
-            )
-            if partition_map['is_applicable']:
-                value['partition_mapping'][i]['cache_config'] = {
-                    a['key_type_id']: a['affinity_key_field_id']
-                    for a in partition_map['cache_mapping'][0]['cache_config']
-                }
-                value['partition_mapping'][i]['node_mapping'] = {
-                    p['node_uuid']: [
-                        x['partition_id'] for x in p['node_partitions']
-                    ]
-                    for p in partition_map['node_mapping']
-                }
-        result.value = value
-
-    return result
