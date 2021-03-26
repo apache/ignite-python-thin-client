@@ -417,3 +417,27 @@ def test_put_get_collection(cache, key, hinted_value, value):
 async def test_put_get_collection_async(async_cache, key, hinted_value, value):
     await async_cache.put(key, hinted_value)
     assert await async_cache.get(key) == value
+
+
+@pytest.fixture
+def complex_map():
+    return {"test" + str(i): ((MapObject.HASH_MAP,
+                               {"key_1": ((1, ["value_1", 1.0]), CollectionObject),
+                                "key_2": ((1, [["value_2_1", "1.0"], ["value_2_2", "0.25"]]), CollectionObject),
+                                "key_3": ((1, [["value_3_1", "1.0"], ["value_3_2", "0.25"]]), CollectionObject),
+                                "key_4": ((1, [["value_4_1", "1.0"], ["value_4_2", "0.25"]]), CollectionObject),
+                                'key_5': False,
+                                "key_6": "value_6"}), MapObject) for i in range(10000)}
+
+
+def test_put_all_large_complex_map(cache, complex_map):
+    cache.put_all(complex_map)
+    values = cache.get_all(complex_map.keys())
+    assert len(values) == len(complex_map)
+
+
+@pytest.mark.asyncio
+async def test_put_all_large_complex_map_async(async_cache, complex_map):
+    await async_cache.put_all(complex_map)
+    values = await async_cache.get_all(complex_map.keys())
+    assert len(values) == len(complex_map)
