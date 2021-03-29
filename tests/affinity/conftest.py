@@ -39,20 +39,25 @@ def server3():
 
 
 @pytest.fixture
-def client():
+def connection_param():
+    return [('127.0.0.1', 10800 + i) for i in range(1, 4)]
+
+
+@pytest.fixture
+def client(connection_param):
     client = Client(partition_aware=True, timeout=CLIENT_SOCKET_TIMEOUT)
     try:
-        client.connect([('127.0.0.1', 10800 + i) for i in range(1, 4)])
+        client.connect(connection_param)
         yield client
     finally:
         client.close()
 
 
 @pytest.fixture
-async def async_client():
+async def async_client(connection_param):
     client = AioClient(partition_aware=True)
     try:
-        await client.connect([('127.0.0.1', 10800 + i) for i in range(1, 4)])
+        await client.connect(connection_param)
         yield client
     finally:
         await client.close()

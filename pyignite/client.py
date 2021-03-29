@@ -243,6 +243,19 @@ class BaseClient:
         return self._registry[type_id]
 
 
+class _ConnectionContextManager:
+    def __init__(self, client, nodes):
+        self.client = client
+        self.nodes = nodes
+        self.client._connect(self.nodes)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.client.close()
+
+
 class Client(BaseClient):
     """
     This is a main `pyignite` class, that is build upon the
@@ -280,7 +293,9 @@ class Client(BaseClient):
         :param args: (optional) host(s) and port(s) to connect to.
         """
         nodes = self._process_connect_args(*args)
+        return _ConnectionContextManager(self, nodes)
 
+    def _connect(self, nodes):
         # the following code is quite twisted, because the protocol version
         # is initially unknown
 
