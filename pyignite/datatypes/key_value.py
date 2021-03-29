@@ -13,14 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .primitive_arrays import ByteArray
+from enum import IntEnum
 
 
-class PeekModes(ByteArray):
-
-    ALL = 1
-    NEAR = 2
-    PRIMARY = 4
-    BACKUP = 8
-    ONHEAP = 16
-    OFFHEAP = 32
+class PeekModes(IntEnum):
+    ALL = 0
+    NEAR = 1
+    PRIMARY = 2
+    BACKUP = 3
+    ONHEAP = 4
+    OFFHEAP = 5
