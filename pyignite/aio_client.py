@@ -33,6 +33,22 @@ from .utils import cache_id, entity_id, status_to_exception, is_iterable, is_wra
 __all__ = ['AioClient']
 
 
+class _ConnectionContextManager:
+    def __init__(self, client, nodes):
+        self.client = client
+        self.nodes = nodes
+
+    def __await__(self):
+        return (yield from self.__aenter__().__await__())
+
+    async def __aenter__(self):
+        await self.client._connect(self.nodes)
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.client.close()
+
+
 class AioClient(BaseClient):
     """
     Asynchronous Client implementation.
@@ -57,14 +73,16 @@ class AioClient(BaseClient):
         super().__init__(compact_footer, partition_aware, **kwargs)
         self._registry_mux = asyncio.Lock()
 
-    async def connect(self, *args):
+    def connect(self, *args):
         """
         Connect to Ignite cluster node(s).
 
         :param args: (optional) host(s) and port(s) to connect to.
         """
         nodes = self._process_connect_args(*args)
+        return _ConnectionContextManager(self, nodes)
 
+    async def _connect(self, nodes):
         for i, node in enumerate(nodes):
             host, port = node
             conn = AioConnection(self, host, port, **self._connection_args)

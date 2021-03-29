@@ -14,8 +14,9 @@
 # limitations under the License.
 import pytest
 
+from pyignite import Client, AioClient
 from pyignite.exceptions import ReconnectError
-from tests.util import start_ignite_gen, get_client, get_or_create_cache, get_client_async, get_or_create_cache_async
+from tests.util import start_ignite_gen, get_or_create_cache, get_or_create_cache_async
 
 
 @pytest.fixture(scope='module', autouse=True)
@@ -45,18 +46,16 @@ def __test_connect_ssl(is_async=False, **kwargs):
     kwargs['use_ssl'] = True
 
     def inner():
-        with get_client(**kwargs) as client:
-            client.connect("127.0.0.1", 10801)
-
+        client = Client(**kwargs)
+        with client.connect("127.0.0.1", 10801):
             with get_or_create_cache(client, 'test-cache') as cache:
                 cache.put(1, 1)
 
                 assert cache.get(1) == 1
 
     async def inner_async():
-        async with get_client_async(**kwargs) as client:
-            await client.connect("127.0.0.1", 10801)
-
+        client = AioClient(**kwargs)
+        async with client.connect("127.0.0.1", 10801):
             async with get_or_create_cache_async(client, 'test-cache') as cache:
                 await cache.put(1, 1)
 
@@ -75,13 +74,15 @@ invalid_params = [
 @pytest.mark.parametrize('invalid_ssl_params', invalid_params)
 def test_connection_error_with_incorrect_config(invalid_ssl_params):
     with pytest.raises(ReconnectError):
-        with get_client(**invalid_ssl_params) as client:
-            client.connect([("127.0.0.1", 10801)])
+        client = Client(**invalid_ssl_params)
+        with client.connect([("127.0.0.1", 10801)]):
+            pass
 
 
 @pytest.mark.parametrize('invalid_ssl_params', invalid_params)
 @pytest.mark.asyncio
 async def test_connection_error_with_incorrect_config_async(invalid_ssl_params):
     with pytest.raises(ReconnectError):
-        async with get_client_async(**invalid_ssl_params) as client:
-            await client.connect([("127.0.0.1", 10801)])
+        client = AioClient(**invalid_ssl_params)
+        async with client.connect([("127.0.0.1", 10801)]):
+            pass
