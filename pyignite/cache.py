@@ -694,13 +694,13 @@ class Cache(BaseCacheMixin):
         return result
 
     @status_to_exception(CacheError)
-    def get_size(self, peek_modes=0):
+    def get_size(self, peek_modes=None):
         """
         Gets the number of entries in cache.
 
         :param peek_modes: (optional) limit count to near cache partition
          (PeekModes.NEAR), primary cache (PeekModes.PRIMARY), or backup cache
-         (PeekModes.BACKUP). Defaults to all cache partitions (PeekModes.ALL),
+         (PeekModes.BACKUP). Defaults to primary cache partitions (PeekModes.PRIMARY),
         :return: integer number of cache entries.
         """
         return cache_get_size(

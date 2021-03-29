@@ -35,8 +35,8 @@ except ImportError:
 
 
 @contextlib.contextmanager
-def get_or_create_cache(client, cache_name):
-    cache = client.get_or_create_cache(cache_name)
+def get_or_create_cache(client, settings):
+    cache = client.get_or_create_cache(settings)
     try:
         yield cache
     finally:
@@ -44,8 +44,8 @@ def get_or_create_cache(client, cache_name):
 
 
 @asynccontextmanager
-async def get_or_create_cache_async(client, cache_name):
-    cache = await client.get_or_create_cache(cache_name)
+async def get_or_create_cache_async(client, settings):
+    cache = await client.get_or_create_cache(settings)
     try:
         yield cache
     finally:
