@@ -20,6 +20,7 @@ from typing import Iterable, Type, Union, Any, Dict
 from .api import cache_get_node_partitions_async
 from .api.binary import get_binary_type_async, put_binary_type_async
 from .api.cache_config import cache_get_names_async
+from .cache import BaseCache
 from .client import BaseClient
 from .cursors import AioSqlFieldsCursor
 from .aio_cache import AioCache, get_cache, create_cache, get_or_create_cache
@@ -293,7 +294,7 @@ class AioClient(BaseClient):
         return result
 
     async def get_best_node(
-            self, cache_id: int, key: Any = None, key_hint: 'IgniteDataType' = None
+            self, cache: Union[int, str, 'BaseCache'], key: Any = None, key_hint: 'IgniteDataType' = None
     ) -> 'AioConnection':
         """
         Returns the node from the list of the nodes, opened by client, that
@@ -303,7 +304,7 @@ class AioClient(BaseClient):
         extend the `pyignite` capabilities (with additional testing, logging,
         examining connections, et c.) you probably should not use it.
 
-        :param cache_id: Cache id.
+        :param cache: Ignite cache, cache name or cache id,
         :param key: (optional) pythonic key,
         :param key_hint: (optional) Ignite data type, for which the given key
          should be converted,
@@ -340,16 +341,17 @@ class AioClient(BaseClient):
                             # server did not create mapping in time
                             return conn
 
-            parts = self._cache_partition_mapping(cache_id).get('number_of_partitions')
+            c_id = cache.cache_id if isinstance(cache, BaseCache) else cache_id(cache)
+            parts = self._cache_partition_mapping(c_id).get('number_of_partitions')
 
             if not parts:
                 return conn
 
-            key, key_hint = self._get_affinity_key(cache_id, key, key_hint)
+            key, key_hint = self._get_affinity_key(c_id, key, key_hint)
 
             hashcode = await key_hint.hashcode_async(key, self)
 
-            best_node = self._get_node_by_hashcode(cache_id, hashcode, parts)
+            best_node = self._get_node_by_hashcode(c_id, hashcode, parts)
             if best_node:
                 return best_node
 

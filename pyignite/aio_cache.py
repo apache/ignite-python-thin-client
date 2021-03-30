@@ -31,7 +31,7 @@ from .api.key_value import (
     cache_remove_if_equals_async, cache_replace_if_equals_async, cache_get_size_async,
 )
 from .cursors import AioScanCursor
-from .cache import __parse_settings
+from .cache import __parse_settings, BaseCache
 
 
 async def get_cache(client: 'AioClient', settings: Union[str, dict]) -> 'AioCache':
@@ -72,13 +72,13 @@ async def get_or_create_cache(client: 'AioClient', settings: Union[str, dict]) -
     return AioCache(client, name)
 
 
-class AioCache:
+class AioCache(BaseCache):
     """
     Ignite cache abstraction. Users should never use this class directly,
     but construct its instances with
-    :py:meth:`~pyignite.client.Client.create_cache`,
-    :py:meth:`~pyignite.client.Client.get_or_create_cache` or
-    :py:meth:`~pyignite.client.Client.get_cache` methods instead. See
+    :py:meth:`~pyignite.aio_client.AioClient.create_cache`,
+    :py:meth:`~pyignite.aio_client.AioClient.get_or_create_cache` or
+    :py:meth:`~pyignite.aio_client.AioClient.get_cache` methods instead. See
     :ref:`this example <create_cache>` on how to do it.
     """
     def __init__(self, client: 'AioClient', name: str):
@@ -88,11 +88,7 @@ class AioCache:
         :param client: Async Ignite client,
         :param name: Cache name.
         """
-        self._client = client
-        self._name = name
-        self._cache_id = cache_id(self._name)
-        self._settings = None
-        self.client.register_cache(self._cache_id)
+        super().__init__(client, name)
 
     async def settings(self) -> Optional[dict]:
         """
@@ -113,36 +109,6 @@ class AioCache:
                 raise CacheError(config_result.message)
 
         return self._settings
-
-    async def name(self) -> str:
-        """
-        Lazy cache name.
-
-        :return: cache name string.
-        """
-        if self._name is None:
-            settings = await self.settings()
-            self._name = settings[prop_codes.PROP_NAME]
-
-        return self._name
-
-    @property
-    def client(self) -> 'AioClient':
-        """
-        Ignite :class:`~pyignite.aio_client.AioClient` object.
-
-        :return: Async client object, through which the cache is accessed.
-        """
-        return self._client
-
-    @property
-    def cache_id(self) -> int:
-        """
-        Cache ID.
-
-        :return: integer value of the cache ID.
-        """
-        return self._cache_id
 
     @status_to_exception(CacheError)
     async def destroy(self):

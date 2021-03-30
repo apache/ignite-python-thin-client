@@ -50,7 +50,7 @@ from .api import cache_get_node_partitions
 from .api.binary import get_binary_type, put_binary_type
 from .api.cache_config import cache_get_names
 from .cursors import SqlFieldsCursor
-from .cache import Cache, create_cache, get_cache, get_or_create_cache
+from .cache import Cache, create_cache, get_cache, get_or_create_cache, BaseCache
 from .connection import Connection
 from .constants import IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT, PROTOCOL_BYTE_ORDER, AFFINITY_RETRIES, AFFINITY_DELAY
 from .datatypes import BinaryObject, AnyDataObject
@@ -569,7 +569,9 @@ class Client(BaseClient):
 
         return result
 
-    def get_best_node(self, cache_id: int, key: Any = None, key_hint: 'IgniteDataType' = None) -> 'Connection':
+    def get_best_node(
+            self, cache: Union[int, str, 'BaseCache'], key: Any = None, key_hint: 'IgniteDataType' = None
+    ) -> 'Connection':
         """
         Returns the node from the list of the nodes, opened by client, that
         most probably contains the needed key-value pair. See IEP-23.
@@ -578,7 +580,7 @@ class Client(BaseClient):
         extend the `pyignite` capabilities (with additional testing, logging,
         examining connections, et c.) you probably should not use it.
 
-        :param cache_id: Cache id.
+        :param cache: Ignite cache, cache name or cache id,
         :param key: (optional) pythonic key,
         :param key_hint: (optional) Ignite data type, for which the given key
          should be converted,
@@ -608,15 +610,16 @@ class Client(BaseClient):
                     if not conn.alive:
                         conn.reconnect()
 
-            parts = self._cache_partition_mapping(cache_id).get('number_of_partitions')
+            c_id = cache.cache_id if isinstance(cache, BaseCache) else cache_id(cache)
+            parts = self._cache_partition_mapping(c_id).get('number_of_partitions')
 
             if not parts:
                 return conn
 
-            key, key_hint = self._get_affinity_key(cache_id, key, key_hint)
+            key, key_hint = self._get_affinity_key(c_id, key, key_hint)
             hashcode = key_hint.hashcode(key, self)
 
-            best_node = self._get_node_by_hashcode(cache_id, hashcode, parts)
+            best_node = self._get_node_by_hashcode(c_id, hashcode, parts)
             if best_node:
                 return best_node
 

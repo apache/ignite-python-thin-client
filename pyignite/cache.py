@@ -92,7 +92,39 @@ def __parse_settings(settings: Union[str, dict]) -> Tuple[Optional[str], Optiona
         raise ParameterError('You should supply at least cache name')
 
 
-class Cache:
+class BaseCache:
+    def __init__(self, client: 'BaseClient', name: str):
+        self._client = client
+        self._name = name
+        self._settings = None
+        self._cache_id = cache_id(self._name)
+        self._client.register_cache(self._cache_id)
+
+    @property
+    def name(self) -> str:
+        """
+        :return: cache name string.
+        """
+        return self._name
+
+    @property
+    def client(self) -> 'BaseClient':
+        """
+        :return: Client object, through which the cache is accessed.
+        """
+        return self._client
+
+    @property
+    def cache_id(self) -> int:
+        """
+        Cache ID.
+
+        :return: integer value of the cache ID.
+        """
+        return self._cache_id
+
+
+class Cache(BaseCache):
     """
     Ignite cache abstraction. Users should never use this class directly,
     but construct its instances with
@@ -109,11 +141,7 @@ class Cache:
         :param client: Ignite client,
         :param name: Cache name.
         """
-        self._client = client
-        self._name = name
-        self._settings = None
-        self._cache_id = cache_id(self._name)
-        self.client.register_cache(self._cache_id)
+        super().__init__(client, name)
 
     @property
     def settings(self) -> Optional[dict]:
@@ -136,36 +164,6 @@ class Cache:
                 raise CacheError(config_result.message)
 
         return self._settings
-
-    @property
-    def name(self) -> str:
-        """
-        Lazy cache name.
-
-        :return: cache name string.
-        """
-        if self._name is None:
-            self._name = self.settings[prop_codes.PROP_NAME]
-
-        return self._name
-
-    @property
-    def client(self) -> 'Client':
-        """
-        Ignite :class:`~pyignite.client.Client` object.
-
-        :return: Client object, through which the cache is accessed.
-        """
-        return self._client
-
-    @property
-    def cache_id(self) -> int:
-        """
-        Cache ID.
-
-        :return: integer value of the cache ID.
-        """
-        return self._cache_id
 
     @status_to_exception(CacheError)
     def destroy(self):
