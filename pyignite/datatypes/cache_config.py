@@ -120,16 +120,16 @@ CacheKeyConfiguration = StructArray([
 
 cache_config_struct = Struct([
     ('length', Int),
+    ('cache_atomicity_mode', CacheAtomicityMode),
     ('backups_number', Int),
     ('cache_mode', CacheMode),
-    ('cache_atomicity_mode', CacheAtomicityMode),
     ('copy_on_read', Bool),
     ('data_region_name', String),
     ('eager_ttl', Bool),
     ('statistics_enabled', Bool),
     ('group_name', String),
-    ('invalidate', Int),
     ('default_lock_timeout', Long),
+    ('max_concurrent_async_operations', Int),
     ('max_query_iterators', Int),
     ('name', String),
     ('is_onheap_cache_enabled', Bool),

@@ -27,19 +27,30 @@
         http://www.springframework.org/schema/util/spring-util.xsd">
 
     <bean id="grid.cfg" class="org.apache.ignite.configuration.IgniteConfiguration">
-        {% if use_auth %}
-            <property name="dataStorageConfiguration">
-                <bean class="org.apache.ignite.configuration.DataStorageConfiguration">
-                    <property name="defaultDataRegionConfiguration">
+        <property name="dataStorageConfiguration">
+            <bean class="org.apache.ignite.configuration.DataStorageConfiguration">
+                <property name="defaultDataRegionConfiguration">
+                    <bean class="org.apache.ignite.configuration.DataRegionConfiguration">
+                        {% if use_auth %}
+                        <property name="persistenceEnabled" value="true"/>
+                        {% endif %}
+                    </bean>
+                </property>
+                <property name="dataRegionConfigurations">
+                    <list>
                         <bean class="org.apache.ignite.configuration.DataRegionConfiguration">
-                            <property name="persistenceEnabled" value="true"/>
+                            <property name="name" value="SmallDataRegion"/>
+                            <property name="maxSize" value="#{20 * 1024 * 1024}"/>
                         </bean>
-                    </property>
-                </bean>
-            </property>
+                    </list>
+                </property>
+            </bean>
+        </property>
 
-            <property name="authenticationEnabled" value="true"/>
+        {% if use_auth %}
+        <property name="authenticationEnabled" value="true"/>
         {% endif %}
+
 
         {% if use_ssl %}
             <property name="connectorConfiguration"><null/></property>
