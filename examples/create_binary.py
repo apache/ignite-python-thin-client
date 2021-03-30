@@ -17,87 +17,80 @@ from collections import OrderedDict
 
 from pyignite import Client, GenericObjectMeta
 from pyignite.datatypes import DoubleObject, IntObject, String
-from pyignite.datatypes.prop_codes import *
+from pyignite.datatypes.prop_codes import PROP_NAME, PROP_SQL_SCHEMA, PROP_QUERY_ENTITIES
 
 client = Client()
-client.connect('127.0.0.1', 10800)
+with client.connect('127.0.0.1', 10800):
+    student_cache = client.create_cache({
+        PROP_NAME: 'SQL_PUBLIC_STUDENT',
+        PROP_SQL_SCHEMA: 'PUBLIC',
+        PROP_QUERY_ENTITIES: [
+            {
+                'table_name': 'Student'.upper(),
+                'key_field_name': 'SID',
+                'key_type_name': 'java.lang.Integer',
+                'field_name_aliases': [],
+                'query_fields': [
+                    {
+                        'name': 'SID',
+                        'type_name': 'java.lang.Integer',
+                        'is_key_field': True,
+                        'is_notnull_constraint_field': True,
+                    },
+                    {
+                        'name': 'NAME',
+                        'type_name': 'java.lang.String',
+                    },
+                    {
+                        'name': 'LOGIN',
+                        'type_name': 'java.lang.String',
+                    },
+                    {
+                        'name': 'AGE',
+                        'type_name': 'java.lang.Integer',
+                    },
+                    {
+                        'name': 'GPA',
+                        'type_name': 'java.math.Double',
+                    },
+                ],
+                'query_indexes': [],
+                'value_type_name': 'SQL_PUBLIC_STUDENT_TYPE',
+                'value_field_name': None,
+            },
+        ],
+    })
 
-student_cache = client.create_cache({
-    PROP_NAME: 'SQL_PUBLIC_STUDENT',
-    PROP_SQL_SCHEMA: 'PUBLIC',
-    PROP_QUERY_ENTITIES: [
-        {
-            'table_name': 'Student'.upper(),
-            'key_field_name': 'SID',
-            'key_type_name': 'java.lang.Integer',
-            'field_name_aliases': [],
-            'query_fields': [
-                {
-                    'name': 'SID',
-                    'type_name': 'java.lang.Integer',
-                    'is_key_field': True,
-                    'is_notnull_constraint_field': True,
-                },
-                {
-                    'name': 'NAME',
-                    'type_name': 'java.lang.String',
-                },
-                {
-                    'name': 'LOGIN',
-                    'type_name': 'java.lang.String',
-                },
-                {
-                    'name': 'AGE',
-                    'type_name': 'java.lang.Integer',
-                },
-                {
-                    'name': 'GPA',
-                    'type_name': 'java.math.Double',
-                },
-            ],
-            'query_indexes': [],
-            'value_type_name': 'SQL_PUBLIC_STUDENT_TYPE',
-            'value_field_name': None,
-        },
-    ],
-})
+    class Student(
+        metaclass=GenericObjectMeta,
+        type_name='SQL_PUBLIC_STUDENT_TYPE',
+        schema=OrderedDict([
+            ('NAME', String),
+            ('LOGIN', String),
+            ('AGE', IntObject),
+            ('GPA', DoubleObject),
+        ])
+    ):
+        pass
 
+    student_cache.put(
+        1,
+        Student(LOGIN='jdoe', NAME='John Doe', AGE=17, GPA=4.25),
+        key_hint=IntObject
+    )
 
-class Student(
-    metaclass=GenericObjectMeta,
-    type_name='SQL_PUBLIC_STUDENT_TYPE',
-    schema=OrderedDict([
-        ('NAME', String),
-        ('LOGIN', String),
-        ('AGE', IntObject),
-        ('GPA', DoubleObject),
-    ])
-):
-    pass
+    with client.sql(r'SELECT * FROM Student', include_field_names=True) as cursor:
+        print(next(cursor))
+        # ['SID', 'NAME', 'LOGIN', 'AGE', 'GPA']
 
+        print(*cursor)
+        # [1, 'John Doe', 'jdoe', 17, 4.25]
 
-student_cache.put(
-    1,
-    Student(LOGIN='jdoe', NAME='John Doe', AGE=17, GPA=4.25),
-    key_hint=IntObject
-)
+    # DROP_QUERY = 'DROP TABLE Student'
+    # client.sql(DROP_QUERY)
+    #
+    # pyignite.exceptions.SQLError: class org.apache.ignite.IgniteCheckedException:
+    # Only cache created with CREATE TABLE may be removed with DROP TABLE
+    # [cacheName=SQL_PUBLIC_STUDENT]
 
-result = client.sql(
-    r'SELECT * FROM Student',
-    include_field_names=True
-)
-print(next(result))
-# ['SID', 'NAME', 'LOGIN', 'AGE', 'GPA']
-
-print(*result)
-# [1, 'John Doe', 'jdoe', 17, 4.25]
-
-# DROP_QUERY = 'DROP TABLE Student'
-# client.sql(DROP_QUERY)
-#
-# pyignite.exceptions.SQLError: class org.apache.ignite.IgniteCheckedException:
-# Only cache created with CREATE TABLE may be removed with DROP TABLE
-# [cacheName=SQL_PUBLIC_STUDENT]
-
-student_cache.destroy()
-client.close()
+    student_cache.destroy()

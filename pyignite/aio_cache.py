@@ -471,7 +471,7 @@ class AioCache(BaseCache):
         conn = await self._get_best_node()
         return await cache_get_size_async(conn, self._cache_id, peek_modes)
 
-    def scan(self, page_size: int = 1, partitions: int = -1, local: bool = False):
+    def scan(self, page_size: int = 1, partitions: int = -1, local: bool = False) -> AioScanCursor:
         """
         Returns all key-value pairs from the cache, similar to `get_all`, but
         with internal pagination, which is slower, but safer.

@@ -31,7 +31,9 @@ matters.
 | name                                  | value    | type     |                                                       |
 +=======================================+==========+==========+=======================================================+
 | Read/write cache properties, used to configure cache via :py:meth:`~pyignite.client.Client.create_cache` or         |
-| :py:meth:`~pyignite.client.Client.get_or_create_cache`                                                              |
+| :py:meth:`~pyignite.client.Client.get_or_create_cache` of :py:class:`~pyignite.client.Client`                       |
+| (:py:meth:`~pyignite.aio_client.AioClient.create_cache` or                                                          |
+| :py:meth:`~pyignite.aio_client.AioClient.get_or_create_cache` of :py:class:`~pyignite.aio_client.AioClient`).       |
 +---------------------------------------+----------+----------+-------------------------------------------------------+
 | PROP_NAME                             |        0 | str      | Cache name. This is the only *required* property.     |
 +---------------------------------------+----------+----------+-------------------------------------------------------+
@@ -95,10 +97,6 @@ matters.
 | PROP_EAGER_TTL                        |      405 | bool     | Eager TTL                                             |
 +---------------------------------------+----------+----------+-------------------------------------------------------+
 | PROP_STATISTICS_ENABLED               |      406 | bool     | Statistics enabled                                    |
-+---------------------------------------+----------+----------+-------------------------------------------------------+
-| Read-only cache properties. Can not be set, but only retrieved via :py:meth:`~pyignite.cache.Cache.settings`        |
-+---------------------------------------+----------+----------+-------------------------------------------------------+
-| PROP_INVALIDATE                       |       -1 | bool     | Invalidate                                            |
 +---------------------------------------+----------+----------+-------------------------------------------------------+
 
 Query entity

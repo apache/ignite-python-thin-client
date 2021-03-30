@@ -16,7 +16,7 @@
 from decimal import Decimal
 
 from pyignite import Client
-from pyignite.datatypes.prop_codes import *
+from pyignite.datatypes.prop_codes import PROP_NAME, PROP_QUERY_ENTITIES
 
 
 COUNTRY_TABLE_NAME = 'Country'
@@ -194,82 +194,98 @@ LANGUAGE_DATA = [
 
 # establish connection
 client = Client()
-client.connect('127.0.0.1', 10800)
+with client.connect('127.0.0.1', 10800):
 
-# create tables
-for query in [
-    COUNTRY_CREATE_TABLE_QUERY,
-    CITY_CREATE_TABLE_QUERY,
-    LANGUAGE_CREATE_TABLE_QUERY,
-]:
-    client.sql(query)
+    # create tables
+    for query in [
+        COUNTRY_CREATE_TABLE_QUERY,
+        CITY_CREATE_TABLE_QUERY,
+        LANGUAGE_CREATE_TABLE_QUERY,
+    ]:
+        client.sql(query)
 
-# create indices
-for query in [CITY_CREATE_INDEX, LANGUAGE_CREATE_INDEX]:
-    client.sql(query)
+    # create indices
+    for query in [CITY_CREATE_INDEX, LANGUAGE_CREATE_INDEX]:
+        client.sql(query)
 
-# load data
-for row in COUNTRY_DATA:
-    client.sql(COUNTRY_INSERT_QUERY, query_args=row)
+    # load data
+    for row in COUNTRY_DATA:
+        client.sql(COUNTRY_INSERT_QUERY, query_args=row)
 
-for row in CITY_DATA:
-    client.sql(CITY_INSERT_QUERY, query_args=row)
+    for row in CITY_DATA:
+        client.sql(CITY_INSERT_QUERY, query_args=row)
 
-for row in LANGUAGE_DATA:
-    client.sql(LANGUAGE_INSERT_QUERY, query_args=row)
+    for row in LANGUAGE_DATA:
+        client.sql(LANGUAGE_INSERT_QUERY, query_args=row)
 
-# examine the storage
-result = client.get_cache_names()
-print(result)
-# [
-#     'SQL_PUBLIC_CITY',
-#     'SQL_PUBLIC_COUNTRY',
-#     'PUBLIC',
-#     'SQL_PUBLIC_COUNTRYLANGUAGE'
-# ]
+    # examine the storage
+    result = client.get_cache_names()
+    print(result)
+    # [
+    #     'SQL_PUBLIC_CITY',
+    #     'SQL_PUBLIC_COUNTRY',
+    #     'PUBLIC',
+    #     'SQL_PUBLIC_COUNTRYLANGUAGE'
+    # ]
 
-city_cache = client.get_or_create_cache('SQL_PUBLIC_CITY')
-print(city_cache.settings[PROP_NAME])
-# 'SQL_PUBLIC_CITY'
+    city_cache = client.get_or_create_cache('SQL_PUBLIC_CITY')
+    print(city_cache.settings[PROP_NAME])
+    # 'SQL_PUBLIC_CITY'
 
-print(city_cache.settings[PROP_QUERY_ENTITIES])
-# {
-#     'key_type_name': (
-#         'SQL_PUBLIC_CITY_9ac8e17a_2f99_45b7_958e_06da32882e9d_KEY'
-#     ),
-#     'value_type_name': (
-#         'SQL_PUBLIC_CITY_9ac8e17a_2f99_45b7_958e_06da32882e9d'
-#     ),
-#     'table_name': 'CITY',
-#     'query_fields': [
-#         ...
-#     ],
-#     'field_name_aliases': [
-#         ...
-#     ],
-#     'query_indexes': []
-# }
+    print(city_cache.settings[PROP_QUERY_ENTITIES])
+    # {
+    #     'key_type_name': (
+    #         'SQL_PUBLIC_CITY_9ac8e17a_2f99_45b7_958e_06da32882e9d_KEY'
+    #     ),
+    #     'value_type_name': (
+    #         'SQL_PUBLIC_CITY_9ac8e17a_2f99_45b7_958e_06da32882e9d'
+    #     ),
+    #     'table_name': 'CITY',
+    #     'query_fields': [
+    #         ...
+    #     ],
+    #     'field_name_aliases': [
+    #         ...
+    #     ],
+    #     'query_indexes': []
+    # }
 
-result = city_cache.scan()
-print(next(result))
-# (
-#     SQL_PUBLIC_CITY_6fe650e1_700f_4e74_867d_58f52f433c43_KEY(
-#         ID=1890,
-#         COUNTRYCODE='CHN',
-#         version=1
-#     ),
-#     SQL_PUBLIC_CITY_6fe650e1_700f_4e74_867d_58f52f433c43(
-#         NAME='Shanghai',
-#         DISTRICT='Shanghai',
-#         POPULATION=9696300,
-#         version=1
-#     )
-# )
+    with city_cache.scan() as cursor:
+        print(next(cursor))
+    # (
+    #     SQL_PUBLIC_CITY_6fe650e1_700f_4e74_867d_58f52f433c43_KEY(
+    #         ID=1890,
+    #         COUNTRYCODE='CHN',
+    #         version=1
+    #     ),
+    #     SQL_PUBLIC_CITY_6fe650e1_700f_4e74_867d_58f52f433c43(
+    #         NAME='Shanghai',
+    #         DISTRICT='Shanghai',
+    #         POPULATION=9696300,
+    #         version=1
+    #     )
+    # )
 
-# clean up
-for table_name in [
-    CITY_TABLE_NAME,
-    LANGUAGE_TABLE_NAME,
-    COUNTRY_TABLE_NAME,
-]:
-    result = client.sql(DROP_TABLE_QUERY.format(table_name))
+    with client.sql('SELECT _KEY, _VAL FROM CITY WHERE ID = ?', query_args=[1890]) as cursor:
+        print(next(cursor))
+    # (
+    #     SQL_PUBLIC_CITY_6fe650e1_700f_4e74_867d_58f52f433c43_KEY(
+    #         ID=1890,
+    #         COUNTRYCODE='CHN',
+    #         version=1
+    #     ),
+    #     SQL_PUBLIC_CITY_6fe650e1_700f_4e74_867d_58f52f433c43(
+    #         NAME='Shanghai',
+    #         DISTRICT='Shanghai',
+    #         POPULATION=9696300,
+    #         version=1
+    #     )
+    # )
+
+    # clean up
+    for table_name in [
+        CITY_TABLE_NAME,
+        LANGUAGE_TABLE_NAME,
+        COUNTRY_TABLE_NAME,
+    ]:
+        result = client.sql(DROP_TABLE_QUERY.format(table_name))

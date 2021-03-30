@@ -13,10 +13,10 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 
-pyignite.datatypes.prop\_codes module
-=====================================
+pyignite.aio_cache module
+=========================
 
-.. automodule:: pyignite.datatypes.prop_codes
+.. automodule:: pyignite.aio_cache
     :members:
     :undoc-members:
     :show-inheritance:

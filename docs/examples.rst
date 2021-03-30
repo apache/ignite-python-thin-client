@@ -37,28 +37,32 @@ Create cache
 
 .. literalinclude:: ../examples/get_and_put.py
   :language: python
-  :lines: 21
+  :dedent: 4
+  :lines: 20
 
 Put value in cache
 ==================
 
 .. literalinclude:: ../examples/get_and_put.py
   :language: python
-  :lines: 23
+  :dedent: 4
+  :lines: 22
 
 Get value from cache
 ====================
 
 .. literalinclude:: ../examples/get_and_put.py
   :language: python
-  :lines: 25-29
+  :dedent: 4
+  :lines: 24-28
 
 Get multiple values from cache
 ==============================
 
 .. literalinclude:: ../examples/get_and_put.py
   :language: python
-  :lines: 31-36
+  :dedent: 4
+  :lines: 30-35
 
 Type hints usage
 ================
@@ -66,6 +70,7 @@ File: `type_hints.py`_
 
 .. literalinclude:: ../examples/type_hints.py
   :language: python
+  :dedent: 4
   :lines: 24-48
 
 As a rule of thumb:
@@ -91,33 +96,27 @@ Let us put some data in cache.
 
 .. literalinclude:: ../examples/scans.py
   :language: python
-  :lines: 23-33
+  :dedent: 4
+  :lines: 20-29
 
-:py:meth:`~pyignite.cache.Cache.scan` returns a generator, that yields
+:py:meth:`~pyignite.cache.Cache.scan` returns a cursor, that yields
 two-tuples of key and value. You can iterate through the generated pairs
 in a safe manner:
 
 .. literalinclude:: ../examples/scans.py
   :language: python
-  :lines: 34-41
+  :dedent: 4
+  :lines: 31-39
 
-Or, alternatively, you can convert the generator to dictionary in one go:
+Or, alternatively, you can convert the cursor to dictionary in one go:
 
 .. literalinclude:: ../examples/scans.py
   :language: python
-  :lines: 44-52
+  :dedent: 4
+  :lines: 41-50
 
 But be cautious: if the cache contains a large set of data, the dictionary
-may eat too much memory!
-
-Do cleanup
-==========
-
-Destroy created cache and close connection.
-
-.. literalinclude:: ../examples/scans.py
-  :language: python
-  :lines: 54-55
+may consume too much memory!
 
 .. _sql_examples:
 
@@ -132,7 +131,7 @@ each of the collection type. Second comes the data value.
 
 .. literalinclude:: ../examples/get_and_put_complex.py
   :language: python
-  :lines: 19-21
+  :lines: 19
 
 Map
 ===
@@ -148,7 +147,8 @@ Since CPython 3.6 all dictionaries became de facto ordered. You can always use
 
 .. literalinclude:: ../examples/get_and_put_complex.py
   :language: python
-  :lines: 29-41
+  :dedent: 4
+  :lines: 26-38
 
 Collection
 ==========
@@ -164,7 +164,8 @@ and you always get `list` back.
 
 .. literalinclude:: ../examples/get_and_put_complex.py
   :language: python
-  :lines: 43-57
+  :dedent: 4
+  :lines: 40-54
 
 Object array
 ============
@@ -175,7 +176,8 @@ contents. But it still can be used for interoperability with Java.
 
 .. literalinclude:: ../examples/get_and_put_complex.py
   :language: python
-  :lines: 59-68
+  :dedent: 4
+  :lines: 56-65
 
 SQL
 ---
@@ -198,19 +200,34 @@ tables `City` and `CountryLanguage`.
 
 .. literalinclude:: ../examples/sql.py
   :language: python
-  :lines: 25-42, 51-59, 67-74, 199-204
+  :lines: 25-42, 51-59, 67-74
+
+.. literalinclude:: ../examples/sql.py
+  :language: python
+  :dedent: 4
+  :lines: 199-204
 
 Create indexes.
 
 .. literalinclude:: ../examples/sql.py
   :language: python
-  :lines: 60-62, 75-77, 207-208
+  :lines: 60-62, 75-77
+
+.. literalinclude:: ../examples/sql.py
+  :language: python
+  :dedent: 4
+  :lines: 207-208
 
 Fill tables with data.
 
 .. literalinclude:: ../examples/sql.py
   :language: python
-  :lines: 43-50, 63-66, 78-81, 211-218
+  :lines: 43-50, 63-66, 78-81
+
+.. literalinclude:: ../examples/sql.py
+  :language: python
+  :dedent: 4
+  :lines: 211-218
 
 Data samples are taken from `PyIgnite GitHub repository`_.
 
@@ -221,6 +238,7 @@ What are the 10 largest cities in our data sample (population-wise)?
 
 .. literalinclude:: ../examples/sql.py
   :language: python
+  :dedent: 4
   :lines: 24, 221-238
 
 The :py:meth:`~pyignite.client.Client.sql` method returns a generator,
@@ -236,20 +254,27 @@ column names as a first yield. You can access field names with Python built-in
 
 .. literalinclude:: ../examples/sql.py
   :language: python
-  :lines: 241-269
+  :dedent: 4
+  :lines: 241-266
 
 Display all the information about a given city
 ==============================================
 
 .. literalinclude:: ../examples/sql.py
   :language: python
-  :lines: 272-290
+  :dedent: 4
+  :lines: 268-283
 
 Finally, delete the tables used in this example with the following queries:
 
 .. literalinclude:: ../examples/sql.py
   :language: python
-  :lines: 82-83, 293-298
+  :lines: 82-83
+
+.. literalinclude:: ../examples/sql.py
+  :language: python
+  :dedent: 4
+  :lines: 285-291
 
 .. _complex_object_usage:
 
@@ -291,7 +316,8 @@ automatically when reading Complex objects.
 
 .. literalinclude:: ../examples/binary_basics.py
   :language: python
-  :lines: 18-20, 30-34, 39-42, 48-49
+  :dedent: 4
+  :lines: 32-34, 39-42, 48-49
 
 Here you can see how :class:`~pyignite.binary.GenericObjectMeta` uses
 `attrs`_ package internally for creating nice `__init__()` and `__repr__()`
@@ -317,14 +343,15 @@ Anyway, you can reuse the autogenerated dataclass for subsequent writes:
 
 .. literalinclude:: ../examples/binary_basics.py
   :language: python
-  :lines: 53, 34-37
+  :dedent: 4
+  :lines: 52, 33-37
 
 :class:`~pyignite.binary.GenericObjectMeta` can also be used directly
 for creating custom classes:
 
 .. literalinclude:: ../examples/binary_basics.py
   :language: python
-  :lines: 22-27
+  :lines: 18-27
 
 Note how the `Person` class is defined. `schema` is a
 :class:`~pyignite.binary.GenericObjectMeta` metaclass parameter.
@@ -343,7 +370,8 @@ register said class explicitly with your client:
 
 .. literalinclude:: ../examples/binary_basics.py
   :language: python
-  :lines: 51
+  :dedent: 4
+  :lines: 50
 
 Now, when we dealt with the basics of `pyignite` implementation of Complex
 Objects, let us move on to more elaborate examples.
@@ -364,6 +392,7 @@ Let us do it again and examine the Ignite storage afterwards.
 
 .. literalinclude:: ../examples/read_binary.py
   :language: python
+  :dedent: 4
   :lines: 222-229
 
 We can see that Ignite created a cache for each of our tables. The caches are
@@ -374,6 +403,7 @@ using a :py:attr:`~pyignite.cache.Cache.settings` property.
 
 .. literalinclude:: ../examples/read_binary.py
   :language: python
+  :dedent: 4
   :lines: 231-251
 
 The values of `value_type_name` and `key_type_name` are names of the binary
@@ -386,6 +416,7 @@ functions and verify the correctness of the result.
 
 .. literalinclude:: ../examples/read_binary.py
   :language: python
+  :dedent: 4
   :lines: 253-267
 
 What we see is a tuple of key and value, extracted from the cache. Both key
@@ -421,37 +452,37 @@ These are the necessary steps to perform the task.
 
 .. literalinclude:: ../examples/create_binary.py
   :language: python
-  :lines: 22-63
+  :dedent: 4
+  :lines: 24-63
 
 2. Define Complex object data class.
 
 .. literalinclude:: ../examples/create_binary.py
   :language: python
-  :lines: 66-76
+  :dedent: 4
+  :lines: 64-75
 
 3. Insert row.
 
 .. literalinclude:: ../examples/create_binary.py
   :language: python
-  :lines: 79-83
+  :dedent: 4
+  :lines: 76-80
 
 Now let us make sure that our cache really can be used with SQL functions.
 
 .. literalinclude:: ../examples/create_binary.py
   :language: python
-  :lines: 85-93
+  :dedent: 4
+  :lines: 82-87
 
 Note, however, that the cache we create can not be dropped with DDL command.
-
-.. literalinclude:: ../examples/create_binary.py
-  :language: python
-  :lines: 95-100
-
 It should be deleted as any other key-value cache.
 
 .. literalinclude:: ../examples/create_binary.py
   :language: python
-  :lines: 102
+  :dedent: 4
+  :lines: 89-96
 
 Migrate
 =======
@@ -470,7 +501,8 @@ First get the vouchers' cache.
 
 .. literalinclude:: ../examples/migrate_binary.py
   :language: python
-  :lines: 108-111
+  :dedent: 4
+  :lines: 111
 
 If you do not store the schema of the Complex object in code, you can obtain
 it as a dataclass property with
@@ -478,14 +510,15 @@ it as a dataclass property with
 
 .. literalinclude:: ../examples/migrate_binary.py
   :language: python
-  :lines: 116-123
+  :dedent: 4
+  :lines: 116-120
 
 Let us modify the schema and create a new Complex object class with an updated
 schema.
 
 .. literalinclude:: ../examples/migrate_binary.py
   :language: python
-  :lines: 125-138
+  :lines: 122-138
 
 Now migrate the data from the old schema to the new one.
 
@@ -525,21 +558,16 @@ Gather 3 Ignite nodes on `localhost` into one cluster and run:
 
 .. literalinclude:: ../examples/failover.py
   :language: python
-  :lines: 16-51
+  :lines: 16-53
 
 Then try shutting down and restarting nodes, and see what happens.
 
 .. literalinclude:: ../examples/failover.py
   :language: python
-  :lines: 53-65
+  :lines: 55-67
 
 Client reconnection do not require an explicit user action, like calling
 a special method or resetting a parameter.
-
-.. literalinclude:: ../examples/failover.py
-  :language: python
-  :lines: 48
-
 It means that instead of checking the connection status it is better for
 `pyignite` user to just try the supposed data operations and catch
 the resulting exception.
@@ -651,10 +679,12 @@ with the following message:
     # pyignite.exceptions.HandshakeError: Handshake error: Unauthenticated sessions are prohibited.
 
 .. _get_and_put.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/get_and_put.py
+.. _async_key_value.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/async_key_value.py
 .. _type_hints.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/type_hints.py
 .. _failover.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/failover.py
 .. _scans.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/scans.py
 .. _sql.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/sql.py
+.. _async_sql.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/async_sql.py
 .. _binary_basics.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/binary_basics.py
 .. _read_binary.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/read_binary.py
 .. _create_binary.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/create_binary.py

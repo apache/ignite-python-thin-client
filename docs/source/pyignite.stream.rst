@@ -13,10 +13,17 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 
-pyignite.datatypes.prop\_codes module
-=====================================
+pyignite.stream module
+======================
 
-.. automodule:: pyignite.datatypes.prop_codes
+.. automodule:: pyignite.stream
     :members:
     :undoc-members:
     :show-inheritance:
+
+Submodules
+----------
+
+.. toctree::
+
+   pyignite.stream.binary_stream
