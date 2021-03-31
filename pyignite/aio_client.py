@@ -15,19 +15,21 @@
 import asyncio
 import random
 from itertools import chain
-from typing import Iterable, Type, Union, Any
+from typing import Iterable, Type, Union, Any, Dict
 
+from .api import cache_get_node_partitions_async
 from .api.binary import get_binary_type_async, put_binary_type_async
 from .api.cache_config import cache_get_names_async
+from .cache import BaseCache
 from .client import BaseClient
 from .cursors import AioSqlFieldsCursor
 from .aio_cache import AioCache, get_cache, create_cache, get_or_create_cache
 from .connection import AioConnection
-from .constants import IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT
+from .constants import AFFINITY_RETRIES, AFFINITY_DELAY
 from .datatypes import BinaryObject
 from .exceptions import BinaryTypeError, CacheError, ReconnectError, connection_errors
 from .stream import AioBinaryStream, READ_BACKWARD
-from .utils import cache_id, entity_id, status_to_exception, is_iterable, is_wrapped
+from .utils import cache_id, entity_id, status_to_exception, is_wrapped
 
 
 __all__ = ['AioClient']
@@ -72,6 +74,7 @@ class AioClient(BaseClient):
         """
         super().__init__(compact_footer, partition_aware, **kwargs)
         self._registry_mux = asyncio.Lock()
+        self._affinity_query_mux = asyncio.Lock()
 
     def connect(self, *args):
         """
@@ -270,6 +273,89 @@ class AioClient(BaseClient):
                 data_class = await BinaryObject.parse_async(stream)
                 return await BinaryObject.to_python_async(stream.read_ctype(data_class, direction=READ_BACKWARD), self)
         return value
+
+    @status_to_exception(CacheError)
+    async def _get_affinity(self, conn: 'AioConnection', caches: Iterable[int]) -> Dict:
+        """
+        Queries server for affinity mappings. Retries in case
+        of an intermittent error (most probably “Getting affinity for topology
+        version earlier than affinity is calculated”).
+
+        :param conn: connection to Igneite server,
+        :param caches: Ids of caches,
+        :return: OP_CACHE_PARTITIONS operation result value.
+        """
+        for _ in range(AFFINITY_RETRIES or 1):
+            result = await cache_get_node_partitions_async(conn, caches)
+            if result.status == 0 and result.value['partition_mapping']:
+                break
+            await asyncio.sleep(AFFINITY_DELAY)
+
+        return result
+
+    async def get_best_node(
+            self, cache: Union[int, str, 'BaseCache'], key: Any = None, key_hint: 'IgniteDataType' = None
+    ) -> 'AioConnection':
+        """
+        Returns the node from the list of the nodes, opened by client, that
+        most probably contains the needed key-value pair. See IEP-23.
+
+        This method is not a part of the public API. Unless you wish to
+        extend the `pyignite` capabilities (with additional testing, logging,
+        examining connections, et c.) you probably should not use it.
+
+        :param cache: Ignite cache, cache name or cache id,
+        :param key: (optional) pythonic key,
+        :param key_hint: (optional) Ignite data type, for which the given key
+         should be converted,
+        :return: Ignite connection object.
+        """
+        conn = await self.random_node()
+
+        if self.partition_aware and key is not None:
+            caches = self._caches_to_update_affinity()
+            if caches:
+                async with self._affinity_query_mux:
+                    while True:
+                        caches = self._caches_to_update_affinity()
+                        if not caches:
+                            break
+
+                        try:
+                            full_affinity = await self._get_affinity(conn, caches)
+                            self._update_affinity(full_affinity)
+
+                            asyncio.ensure_future(
+                                asyncio.gather(
+                                    *[conn.reconnect() for conn in self._nodes if not conn.alive],
+                                    return_exceptions=True
+                                )
+                            )
+
+                            break
+                        except connection_errors:
+                            # retry if connection failed
+                            conn = await self.random_node()
+                            pass
+                        except CacheError:
+                            # server did not create mapping in time
+                            return conn
+
+            c_id = cache.cache_id if isinstance(cache, BaseCache) else cache_id(cache)
+            parts = self._cache_partition_mapping(c_id).get('number_of_partitions')
+
+            if not parts:
+                return conn
+
+            key, key_hint = self._get_affinity_key(c_id, key, key_hint)
+
+            hashcode = await key_hint.hashcode_async(key, self)
+
+            best_node = self._get_node_by_hashcode(c_id, hashcode, parts)
+            if best_node:
+                return best_node
+
+        return conn
 
     async def create_cache(self, settings: Union[str, dict]) -> 'AioCache':
         """

@@ -39,25 +39,28 @@ It returns a generator with result rows.
 :py:meth:`~pyignite.client.Client.query_binary_type` methods operates
 the local (class-wise) registry for Ignite Complex objects.
 """
-
+import time
 from collections import defaultdict, OrderedDict
 import random
 import re
 from itertools import chain
-from typing import Iterable, Type, Union, Any
+from typing import Iterable, Type, Union, Any, Dict
 
+from .api import cache_get_node_partitions
 from .api.binary import get_binary_type, put_binary_type
 from .api.cache_config import cache_get_names
 from .cursors import SqlFieldsCursor
-from .cache import Cache, create_cache, get_cache, get_or_create_cache
+from .cache import Cache, create_cache, get_cache, get_or_create_cache, BaseCache
 from .connection import Connection
-from .constants import IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT, PROTOCOL_BYTE_ORDER
-from .datatypes import BinaryObject
+from .constants import IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT, PROTOCOL_BYTE_ORDER, AFFINITY_RETRIES, AFFINITY_DELAY
+from .datatypes import BinaryObject, AnyDataObject
+from .datatypes.base import IgniteDataType
 from .datatypes.internal import tc_map
 from .exceptions import BinaryTypeError, CacheError, ReconnectError, connection_errors
 from .stream import BinaryStream, READ_BACKWARD
 from .utils import (
-    cache_id, capitalize, entity_id, schema_id, process_delimiter, status_to_exception, is_iterable, is_wrapped
+    cache_id, capitalize, entity_id, schema_id, process_delimiter, status_to_exception, is_iterable, is_wrapped,
+    get_field_by_id, unsigned
 )
 from .binary import GenericObjectMeta
 
@@ -79,6 +82,7 @@ class BaseClient:
         self._current_node = 0
         self._partition_aware = partition_aware
         self.affinity_version = (0, 0)
+        self._affinity = {'version': self.affinity_version, 'partition_mapping': defaultdict(dict)}
         self._protocol_version = None
 
     @property
@@ -241,6 +245,76 @@ class BaseClient:
             except KeyError:
                 return None
         return self._registry[type_id]
+
+    def register_cache(self, cache_id: int):
+        if self.partition_aware and cache_id not in self._affinity:
+            self._affinity['partition_mapping'][cache_id] = {}
+
+    def _get_affinity_key(self, cache_id, key, key_hint=None):
+        if key_hint is None:
+            key_hint = AnyDataObject.map_python_type(key)
+
+        cache_partition_mapping = self._cache_partition_mapping(cache_id)
+        if cache_partition_mapping and cache_partition_mapping.get('is_applicable'):
+            config = cache_partition_mapping.get('cache_config')
+            if config:
+                affinity_key_id = config.get(key_hint.type_id)
+
+                if affinity_key_id and isinstance(key, GenericObjectMeta):
+                    return get_field_by_id(key, affinity_key_id)
+
+        return key, key_hint
+
+    def _update_affinity(self, full_affinity):
+        self._affinity['version'] = full_affinity['version']
+
+        full_mapping = full_affinity.get('partition_mapping')
+        if full_mapping:
+            self._affinity['partition_mapping'].update(full_mapping)
+
+    def _caches_to_update_affinity(self):
+        if self._affinity['version'] < self.affinity_version:
+            return list(self._affinity['partition_mapping'].keys())
+        else:
+            return list(c_id for c_id, c_mapping in self._affinity['partition_mapping'].items() if not c_mapping)
+
+    def _cache_partition_mapping(self, cache_id):
+        return self._affinity['partition_mapping'][cache_id]
+
+    def _get_node_by_hashcode(self, cache_id, hashcode, parts):
+        """
+        Get node by key hashcode. Calculate partition and return node on that it is primary.
+        (algorithm is taken from `RendezvousAffinityFunction.java`)
+        """
+
+        # calculate partition for key or affinity key
+        # (algorithm is taken from `RendezvousAffinityFunction.java`)
+        mask = parts - 1
+
+        if parts & mask == 0:
+            part = (hashcode ^ (unsigned(hashcode) >> 16)) & mask
+        else:
+            part = abs(hashcode // parts)
+
+        assert 0 <= part < parts, 'Partition calculation has failed'
+
+        node_mapping = self._cache_partition_mapping(cache_id).get('node_mapping')
+        if not node_mapping:
+            return None
+
+        node_uuid, best_conn = None, None
+        for u, p in node_mapping.items():
+            if part in p:
+                node_uuid = u
+                break
+
+        if node_uuid:
+            for n in self._nodes:
+                if n.uuid == node_uuid:
+                    best_conn = n
+                    break
+            if best_conn and best_conn.alive:
+                return best_conn
 
 
 class _ConnectionContextManager:
@@ -475,6 +549,81 @@ class Client(BaseClient):
                 data_class = BinaryObject.parse(stream)
                 return BinaryObject.to_python(stream.read_ctype(data_class, direction=READ_BACKWARD), self)
         return value
+
+    @status_to_exception(CacheError)
+    def _get_affinity(self, conn: 'Connection', caches: Iterable[int]) -> Dict:
+        """
+        Queries server for affinity mappings. Retries in case
+        of an intermittent error (most probably “Getting affinity for topology
+        version earlier than affinity is calculated”).
+
+        :param conn: connection to Ignite server,
+        :param caches: Ids of caches,
+        :return: OP_CACHE_PARTITIONS operation result value.
+        """
+        for _ in range(AFFINITY_RETRIES or 1):
+            result = cache_get_node_partitions(conn, caches)
+            if result.status == 0 and result.value['partition_mapping']:
+                break
+            time.sleep(AFFINITY_DELAY)
+
+        return result
+
+    def get_best_node(
+            self, cache: Union[int, str, 'BaseCache'], key: Any = None, key_hint: 'IgniteDataType' = None
+    ) -> 'Connection':
+        """
+        Returns the node from the list of the nodes, opened by client, that
+        most probably contains the needed key-value pair. See IEP-23.
+
+        This method is not a part of the public API. Unless you wish to
+        extend the `pyignite` capabilities (with additional testing, logging,
+        examining connections, et c.) you probably should not use it.
+
+        :param cache: Ignite cache, cache name or cache id,
+        :param key: (optional) pythonic key,
+        :param key_hint: (optional) Ignite data type, for which the given key
+         should be converted,
+        :return: Ignite connection object.
+        """
+        conn = self.random_node
+
+        if self.partition_aware and key is not None:
+            caches = self._caches_to_update_affinity()
+            if caches:
+                # update partition mapping
+                while True:
+                    try:
+                        full_affinity = self._get_affinity(conn, caches)
+                        break
+                    except connection_errors:
+                        # retry if connection failed
+                        conn = self.random_node
+                        pass
+                    except CacheError:
+                        # server did not create mapping in time
+                        return conn
+
+                self._update_affinity(full_affinity)
+
+                for conn in self._nodes:
+                    if not conn.alive:
+                        conn.reconnect()
+
+            c_id = cache.cache_id if isinstance(cache, BaseCache) else cache_id(cache)
+            parts = self._cache_partition_mapping(c_id).get('number_of_partitions')
+
+            if not parts:
+                return conn
+
+            key, key_hint = self._get_affinity_key(c_id, key, key_hint)
+            hashcode = key_hint.hashcode(key, self)
+
+            best_node = self._get_node_by_hashcode(c_id, hashcode, parts)
+            if best_node:
+                return best_node
+
+        return conn
 
     def create_cache(self, settings: Union[str, dict]) -> 'Cache':
         """

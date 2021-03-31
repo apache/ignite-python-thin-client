@@ -36,7 +36,7 @@ def test_cache_create(client):
 async def test_cache_create_async(async_client):
     cache = await async_client.get_or_create_cache('my_oop_cache')
     try:
-        assert (await cache.name()) == (await cache.settings())[PROP_NAME] == 'my_oop_cache'
+        assert cache.name == (await cache.settings())[PROP_NAME] == 'my_oop_cache'
     finally:
         await cache.destroy()
 
@@ -94,7 +94,7 @@ async def test_cache_config_async(async_client, cache_config):
     await async_client.create_cache(cache_config)
     cache = await async_client.get_or_create_cache('my_oop_cache')
     try:
-        assert await cache.name() == cache_config[PROP_NAME]
+        assert cache.name == cache_config[PROP_NAME]
         assert (await cache.settings())[PROP_CACHE_KEY_CONFIGURATION] == cache_config[PROP_CACHE_KEY_CONFIGURATION]
     finally:
         await cache.destroy()

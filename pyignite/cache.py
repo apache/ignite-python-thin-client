@@ -13,15 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
-from typing import Any, Dict, Iterable, Optional, Tuple, Union
+from typing import Any, Iterable, Optional, Tuple, Union
 
-from .constants import AFFINITY_RETRIES, AFFINITY_DELAY
-from .binary import GenericObjectMeta
 from .datatypes import prop_codes
 from .datatypes.internal import AnyDataObject
-from .exceptions import CacheCreationError, CacheError, ParameterError, SQLError, connection_errors
-from .utils import cache_id, get_field_by_id, status_to_exception, unsigned
+from .exceptions import CacheCreationError, CacheError, ParameterError, SQLError
+from .utils import cache_id, status_to_exception
 from .api.cache_config import (
     cache_create, cache_create_with_config, cache_get_or_create, cache_get_or_create_with_config, cache_destroy,
     cache_get_configuration
@@ -33,7 +30,6 @@ from .api.key_value import (
     cache_remove_if_equals, cache_replace_if_equals, cache_get_size
 )
 from .cursors import ScanCursor, SqlCursor
-from .api.affinity import cache_get_node_partitions
 
 PROP_CODES = set([
     getattr(prop_codes, x)
@@ -96,65 +92,39 @@ def __parse_settings(settings: Union[str, dict]) -> Tuple[Optional[str], Optiona
         raise ParameterError('You should supply at least cache name')
 
 
-class BaseCacheMixin:
-    def _get_affinity_key(self, key, key_hint=None):
-        if key_hint is None:
-            key_hint = AnyDataObject.map_python_type(key)
+class BaseCache:
+    def __init__(self, client: 'BaseClient', name: str):
+        self._client = client
+        self._name = name
+        self._settings = None
+        self._cache_id = cache_id(self._name)
+        self._client.register_cache(self._cache_id)
 
-        if self.affinity.get('is_applicable'):
-            config = self.affinity.get('cache_config')
-            if config:
-                affinity_key_id = config.get(key_hint.type_id)
-
-                if affinity_key_id and isinstance(key, GenericObjectMeta):
-                    return get_field_by_id(key, affinity_key_id)
-
-        return key, key_hint
-
-    def _update_affinity(self, full_affinity):
-        self.affinity['version'] = full_affinity['version']
-
-        full_mapping = full_affinity.get('partition_mapping')
-        if full_mapping and self.cache_id in full_mapping:
-            self.affinity.update(full_mapping[self.cache_id])
-
-    def _get_node_by_hashcode(self, hashcode, parts):
+    @property
+    def name(self) -> str:
         """
-        Get node by key hashcode. Calculate partition and return node on that it is primary.
-        (algorithm is taken from `RendezvousAffinityFunction.java`)
+        :return: cache name string.
         """
+        return self._name
 
-        # calculate partition for key or affinity key
-        # (algorithm is taken from `RendezvousAffinityFunction.java`)
-        mask = parts - 1
+    @property
+    def client(self) -> 'BaseClient':
+        """
+        :return: Client object, through which the cache is accessed.
+        """
+        return self._client
 
-        if parts & mask == 0:
-            part = (hashcode ^ (unsigned(hashcode) >> 16)) & mask
-        else:
-            part = abs(hashcode // parts)
+    @property
+    def cache_id(self) -> int:
+        """
+        Cache ID.
 
-        assert 0 <= part < parts, 'Partition calculation has failed'
-
-        node_mapping = self.affinity.get('node_mapping')
-        if not node_mapping:
-            return None
-
-        node_uuid, best_conn = None, None
-        for u, p in node_mapping.items():
-            if part in p:
-                node_uuid = u
-                break
-
-        if node_uuid:
-            for n in self.client._nodes:
-                if n.uuid == node_uuid:
-                    best_conn = n
-                    break
-            if best_conn and best_conn.alive:
-                return best_conn
+        :return: integer value of the cache ID.
+        """
+        return self._cache_id
 
 
-class Cache(BaseCacheMixin):
+class Cache(BaseCache):
     """
     Ignite cache abstraction. Users should never use this class directly,
     but construct its instances with
@@ -171,11 +141,10 @@ class Cache(BaseCacheMixin):
         :param client: Ignite client,
         :param name: Cache name.
         """
-        self._client = client
-        self._name = name
-        self._settings = None
-        self._cache_id = cache_id(self._name)
-        self.affinity = {'version': (0, 0)}
+        super().__init__(client, name)
+
+    def _get_best_node(self, key=None, key_hint=None):
+        return self.client.get_best_node(self._cache_id, key, key_hint)
 
     @property
     def settings(self) -> Optional[dict]:
@@ -189,7 +158,7 @@ class Cache(BaseCacheMixin):
         """
         if self._settings is None:
             config_result = cache_get_configuration(
-                self.get_best_node(),
+                self._get_best_node(),
                 self._cache_id
             )
             if config_result.status == 0:
@@ -199,111 +168,12 @@ class Cache(BaseCacheMixin):
 
         return self._settings
 
-    @property
-    def name(self) -> str:
-        """
-        Lazy cache name.
-
-        :return: cache name string.
-        """
-        if self._name is None:
-            self._name = self.settings[prop_codes.PROP_NAME]
-
-        return self._name
-
-    @property
-    def client(self) -> 'Client':
-        """
-        Ignite :class:`~pyignite.client.Client` object.
-
-        :return: Client object, through which the cache is accessed.
-        """
-        return self._client
-
-    @property
-    def cache_id(self) -> int:
-        """
-        Cache ID.
-
-        :return: integer value of the cache ID.
-        """
-        return self._cache_id
-
     @status_to_exception(CacheError)
     def destroy(self):
         """
         Destroys cache with a given name.
         """
-        return cache_destroy(self.get_best_node(), self._cache_id)
-
-    @status_to_exception(CacheError)
-    def _get_affinity(self, conn: 'Connection') -> Dict:
-        """
-        Queries server for affinity mappings. Retries in case
-        of an intermittent error (most probably “Getting affinity for topology
-        version earlier than affinity is calculated”).
-
-        :param conn: connection to Igneite server,
-        :return: OP_CACHE_PARTITIONS operation result value.
-        """
-        for _ in range(AFFINITY_RETRIES or 1):
-            result = cache_get_node_partitions(conn, self._cache_id)
-            if result.status == 0 and result.value['partition_mapping']:
-                break
-            time.sleep(AFFINITY_DELAY)
-
-        return result
-
-    def get_best_node(self, key: Any = None, key_hint: 'IgniteDataType' = None) -> 'Connection':
-        """
-        Returns the node from the list of the nodes, opened by client, that
-        most probably contains the needed key-value pair. See IEP-23.
-
-        This method is not a part of the public API. Unless you wish to
-        extend the `pyignite` capabilities (with additional testing, logging,
-        examining connections, et c.) you probably should not use it.
-
-        :param key: (optional) pythonic key,
-        :param key_hint: (optional) Ignite data type, for which the given key
-         should be converted,
-        :return: Ignite connection object.
-        """
-        conn = self._client.random_node
-
-        if self.client.partition_aware and key is not None:
-            if self.affinity['version'] < self._client.affinity_version:
-                # update partition mapping
-                while True:
-                    try:
-                        full_affinity = self._get_affinity(conn)
-                        break
-                    except connection_errors:
-                        # retry if connection failed
-                        conn = self._client.random_node
-                        pass
-                    except CacheError:
-                        # server did not create mapping in time
-                        return conn
-
-                self._update_affinity(full_affinity)
-
-                for conn in self.client._nodes:
-                    if not conn.alive:
-                        conn.reconnect()
-
-            parts = self.affinity.get('number_of_partitions')
-
-            if not parts:
-                return conn
-
-            key, key_hint = self._get_affinity_key(key, key_hint)
-            hashcode = key_hint.hashcode(key, self._client)
-
-            best_node = self._get_node_by_hashcode(hashcode, parts)
-            if best_node:
-                return best_node
-
-        return conn
+        return cache_destroy(self._get_best_node(), self._cache_id)
 
     @status_to_exception(CacheError)
     def get(self, key, key_hint: object = None) -> Any:
@@ -319,7 +189,7 @@ class Cache(BaseCacheMixin):
             key_hint = AnyDataObject.map_python_type(key)
 
         result = cache_get(
-            self.get_best_node(key, key_hint),
+            self._get_best_node(key, key_hint),
             self._cache_id,
             key,
             key_hint=key_hint
@@ -346,7 +216,7 @@ class Cache(BaseCacheMixin):
             key_hint = AnyDataObject.map_python_type(key)
 
         return cache_put(
-            self.get_best_node(key, key_hint),
+            self._get_best_node(key, key_hint),
             self._cache_id, key, value,
             key_hint=key_hint, value_hint=value_hint
         )
@@ -359,7 +229,7 @@ class Cache(BaseCacheMixin):
         :param keys: list of keys or tuples of (key, key_hint),
         :return: a dict of key-value pairs.
         """
-        result = cache_get_all(self.get_best_node(), self._cache_id, keys)
+        result = cache_get_all(self._get_best_node(), self._cache_id, keys)
         if result.value:
             for key, value in result.value.items():
                 result.value[key] = self.client.unwrap_binary(value)
@@ -375,7 +245,7 @@ class Cache(BaseCacheMixin):
          to save. Each key or value can be an item of representable
          Python type or a tuple of (item, hint),
         """
-        return cache_put_all(self.get_best_node(), self._cache_id, pairs)
+        return cache_put_all(self._get_best_node(), self._cache_id, pairs)
 
     @status_to_exception(CacheError)
     def replace(
@@ -395,7 +265,7 @@ class Cache(BaseCacheMixin):
             key_hint = AnyDataObject.map_python_type(key)
 
         result = cache_replace(
-            self.get_best_node(key, key_hint),
+            self._get_best_node(key, key_hint),
             self._cache_id, key, value,
             key_hint=key_hint, value_hint=value_hint
         )
@@ -410,7 +280,7 @@ class Cache(BaseCacheMixin):
         :param keys: (optional) list of cache keys or (key, key type
          hint) tuples to clear (default: clear all).
         """
-        conn = self.get_best_node()
+        conn = self._get_best_node()
         if keys:
             return cache_clear_keys(conn, self._cache_id, keys)
         else:
@@ -429,7 +299,7 @@ class Cache(BaseCacheMixin):
             key_hint = AnyDataObject.map_python_type(key)
 
         return cache_clear_key(
-            self.get_best_node(key, key_hint),
+            self._get_best_node(key, key_hint),
             self._cache_id,
             key,
             key_hint=key_hint
@@ -443,7 +313,7 @@ class Cache(BaseCacheMixin):
         :param keys: a list of keys or (key, type hint) tuples
         """
 
-        return cache_clear_keys(self.get_best_node(), self._cache_id, keys)
+        return cache_clear_keys(self._get_best_node(), self._cache_id, keys)
 
     @status_to_exception(CacheError)
     def contains_key(self, key, key_hint=None) -> bool:
@@ -459,7 +329,7 @@ class Cache(BaseCacheMixin):
             key_hint = AnyDataObject.map_python_type(key)
 
         return cache_contains_key(
-            self.get_best_node(key, key_hint),
+            self._get_best_node(key, key_hint),
             self._cache_id,
             key,
             key_hint=key_hint
@@ -473,7 +343,7 @@ class Cache(BaseCacheMixin):
         :param keys: a list of keys or (key, type hint) tuples,
         :return: boolean `True` when all keys are present, `False` otherwise.
         """
-        return cache_contains_keys(self.get_best_node(), self._cache_id, keys)
+        return cache_contains_keys(self._get_best_node(), self._cache_id, keys)
 
     @status_to_exception(CacheError)
     def get_and_put(self, key, value, key_hint=None, value_hint=None) -> Any:
@@ -493,7 +363,7 @@ class Cache(BaseCacheMixin):
             key_hint = AnyDataObject.map_python_type(key)
 
         result = cache_get_and_put(
-            self.get_best_node(key, key_hint),
+            self._get_best_node(key, key_hint),
             self._cache_id,
             key, value,
             key_hint, value_hint
@@ -521,7 +391,7 @@ class Cache(BaseCacheMixin):
             key_hint = AnyDataObject.map_python_type(key)
 
         result = cache_get_and_put_if_absent(
-            self.get_best_node(key, key_hint),
+            self._get_best_node(key, key_hint),
             self._cache_id,
             key, value,
             key_hint, value_hint
@@ -546,7 +416,7 @@ class Cache(BaseCacheMixin):
             key_hint = AnyDataObject.map_python_type(key)
 
         return cache_put_if_absent(
-            self.get_best_node(key, key_hint),
+            self._get_best_node(key, key_hint),
             self._cache_id,
             key, value,
             key_hint, value_hint
@@ -566,7 +436,7 @@ class Cache(BaseCacheMixin):
             key_hint = AnyDataObject.map_python_type(key)
 
         result = cache_get_and_remove(
-            self.get_best_node(key, key_hint),
+            self._get_best_node(key, key_hint),
             self._cache_id,
             key,
             key_hint
@@ -595,7 +465,7 @@ class Cache(BaseCacheMixin):
             key_hint = AnyDataObject.map_python_type(key)
 
         result = cache_get_and_replace(
-            self.get_best_node(key, key_hint),
+            self._get_best_node(key, key_hint),
             self._cache_id,
             key, value,
             key_hint, value_hint
@@ -616,7 +486,7 @@ class Cache(BaseCacheMixin):
             key_hint = AnyDataObject.map_python_type(key)
 
         return cache_remove_key(
-            self.get_best_node(key, key_hint), self._cache_id, key, key_hint
+            self._get_best_node(key, key_hint), self._cache_id, key, key_hint
         )
 
     @status_to_exception(CacheError)
@@ -628,7 +498,7 @@ class Cache(BaseCacheMixin):
         :param keys: list of keys or tuples of (key, key_hint) to remove.
         """
         return cache_remove_keys(
-            self.get_best_node(), self._cache_id, keys
+            self._get_best_node(), self._cache_id, keys
         )
 
     @status_to_exception(CacheError)
@@ -636,7 +506,7 @@ class Cache(BaseCacheMixin):
         """
         Removes all cache entries, notifying listeners and cache writers.
         """
-        return cache_remove_all(self.get_best_node(), self._cache_id)
+        return cache_remove_all(self._get_best_node(), self._cache_id)
 
     @status_to_exception(CacheError)
     def remove_if_equals(self, key, sample, key_hint=None, sample_hint=None):
@@ -655,7 +525,7 @@ class Cache(BaseCacheMixin):
             key_hint = AnyDataObject.map_python_type(key)
 
         return cache_remove_if_equals(
-            self.get_best_node(key, key_hint),
+            self._get_best_node(key, key_hint),
             self._cache_id,
             key, sample,
             key_hint, sample_hint
@@ -685,7 +555,7 @@ class Cache(BaseCacheMixin):
             key_hint = AnyDataObject.map_python_type(key)
 
         result = cache_replace_if_equals(
-            self.get_best_node(key, key_hint),
+            self._get_best_node(key, key_hint),
             self._cache_id,
             key, sample, value,
             key_hint, sample_hint, value_hint
@@ -704,7 +574,7 @@ class Cache(BaseCacheMixin):
         :return: integer number of cache entries.
         """
         return cache_get_size(
-            self.get_best_node(), self._cache_id, peek_modes
+            self._get_best_node(), self._cache_id, peek_modes
         )
 
     def scan(self, page_size: int = 1, partitions: int = -1, local: bool = False):

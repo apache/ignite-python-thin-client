@@ -26,7 +26,6 @@ import signal
 import subprocess
 import time
 
-from pyignite import Client, AioClient
 
 try:
     from contextlib import asynccontextmanager

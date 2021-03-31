@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import asyncio
+import contextlib
 from collections import OrderedDict, deque
 import random
 
@@ -27,6 +28,11 @@ from pyignite.datatypes import String, LongObject
 from pyignite.datatypes.cache_config import CacheMode
 from pyignite.datatypes.prop_codes import PROP_NAME, PROP_BACKUPS_NUMBER, PROP_CACHE_KEY_CONFIGURATION, PROP_CACHE_MODE
 from tests.util import wait_for_condition, wait_for_condition_async, start_ignite, kill_process_tree
+
+try:
+    from contextlib import asynccontextmanager
+except ImportError:
+    from async_generator import asynccontextmanager
 
 requests = deque()
 old_send = Connection.send
@@ -208,23 +214,34 @@ client_routed_connection_string = [('127.0.0.1', 10800 + idx) for idx in range(1
 
 
 @pytest.fixture
-def client_routed_cache(request):
+def client_routed():
     client = Client(partition_aware=True)
     try:
         client.connect(client_routed_connection_string)
-        yield client.get_or_create_cache(request.node.name)
+        yield client
     finally:
         client.close()
 
 
 @pytest.fixture
-async def async_client_routed_cache(request):
+def client_routed_cache(client_routed, request):
+    yield client_routed.get_or_create_cache(request.node.name)
+
+
+@pytest.fixture
+async def async_client_routed():
     client = AioClient(partition_aware=True)
     try:
         await client.connect(client_routed_connection_string)
-        yield await client.get_or_create_cache(request.node.name)
+        yield client
     finally:
         await client.close()
+
+
+@pytest.fixture
+async def async_client_routed_cache(async_client_routed, request):
+    cache = await async_client_routed.get_or_create_cache(request.node.name)
+    yield cache
 
 
 def test_cache_operation_routed_to_new_cluster_node(client_routed_cache):
@@ -345,3 +362,114 @@ def verify_random_node(cache):
         assert idx1 != idx2
 
     return inner_async() if isinstance(cache, AioCache) else inner()
+
+
+@contextlib.contextmanager
+def create_caches(client):
+    caches = []
+    try:
+        caches = [client.create_cache(f'test_cache_{i}') for i in range(0, 10)]
+        yield caches
+    finally:
+        for cache in caches:
+            try:
+                cache.destroy()
+            except:  # noqa: 13
+                cache.destroy()  # Retry if connection failed.
+                pass
+
+
+@asynccontextmanager
+async def create_caches_async(client):
+    caches = []
+    try:
+        caches = await asyncio.gather(*[client.create_cache(f'test_cache_{i}') for i in range(0, 10)])
+        yield caches
+    finally:
+        for cache in caches:
+            try:
+                await cache.destroy()
+            except:  # noqa: 13
+                await cache.destroy()  # Retry if connection failed.
+                pass
+
+
+def test_new_registered_cache_affinity(client):
+    with create_caches(client) as caches:
+        key = 12
+        test_cache = random.choice(caches)
+        test_cache.put(key, key)
+        wait_for_affinity_distribution(test_cache, key, 3)
+
+        caches.append(client.create_cache('new_cache'))
+
+        for cache in caches:
+            cache.get(key)
+            assert requests.pop() == 3
+
+
+@pytest.mark.asyncio
+async def test_new_registered_cache_affinity_async(async_client):
+    async with create_caches_async(async_client) as caches:
+        key = 12
+        test_cache = random.choice(caches)
+        test_cache.put(key, key)
+        await wait_for_affinity_distribution_async(test_cache, key, 3)
+
+        caches.append(await async_client.create_cache('new_cache'))
+
+        for cache in caches:
+            await cache.get(key)
+            assert requests.pop() == 3
+
+
+def test_all_registered_cache_updated_on_new_server(client_routed):
+    with create_caches(client_routed) as caches:
+        key = 12
+        test_cache = random.choice(caches)
+        wait_for_affinity_distribution(test_cache, key, 3)
+        test_cache.put(key, key)
+        assert requests.pop() == 3
+
+        srv = start_ignite(idx=4)
+        try:
+            # Wait for rebalance and partition map exchange
+            wait_for_affinity_distribution(test_cache, key, 4)
+
+            for cache in caches:
+                cache.get(key)
+                assert requests.pop() == 4
+        finally:
+            kill_process_tree(srv.pid)
+
+
+@pytest.mark.asyncio
+async def test_all_registered_cache_updated_on_new_server_async(async_client_routed):
+    async with create_caches_async(async_client_routed) as caches:
+        key = 12
+        test_cache = random.choice(caches)
+        await wait_for_affinity_distribution_async(test_cache, key, 3)
+        await test_cache.put(key, key)
+        assert requests.pop() == 3
+
+        srv = start_ignite(idx=4)
+        try:
+            # Wait for rebalance and partition map exchange
+            await wait_for_affinity_distribution_async(test_cache, key, 4)
+
+            for cache in caches:
+                await cache.get(key)
+                assert requests.pop() == 4
+        finally:
+            kill_process_tree(srv.pid)
+
+
+@pytest.mark.asyncio
+async def test_update_affinity_concurrently(async_client):
+    async with create_caches_async(async_client) as caches:
+        key = 12
+        await asyncio.gather(*[cache.put(key, key) for cache in caches])
+
+        for cache in caches:
+            await cache.get(key)
+            assert requests.pop() == 3
