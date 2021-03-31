@@ -89,6 +89,9 @@ class AioCache(BaseCache):
         """
         super().__init__(client, name)
 
+    async def _get_best_node(self, key=None, key_hint=None):
+        return await self.client.get_best_node(self._cache_id, key, key_hint)
+
     async def settings(self) -> Optional[dict]:
         """
         Lazy Cache settings. See the :ref:`example <sql_cache_read>`
@@ -99,7 +102,7 @@ class AioCache(BaseCache):
         :return: dict of cache properties and their values.
         """
         if self._settings is None:
-            conn = await self.client.get_best_node(self._cache_id)
+            conn = await self._get_best_node()
             config_result = await cache_get_configuration_async(conn, self._cache_id)
 
             if config_result.status == 0:
@@ -114,7 +117,7 @@ class AioCache(BaseCache):
         """
         Destroys cache with a given name.
         """
-        conn = await self.client.get_best_node(self._cache_id)
+        conn = await self._get_best_node()
         return await cache_destroy_async(conn, self._cache_id)
 
     @status_to_exception(CacheError)
@@ -130,7 +133,7 @@ class AioCache(BaseCache):
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
 
-        conn = await self.client.get_best_node(self._cache_id, key, key_hint)
+        conn = await self._get_best_node(key, key_hint)
         result = await cache_get_async(conn, self._cache_id, key, key_hint=key_hint)
         result.value = await self.client.unwrap_binary(result.value)
         return result
@@ -151,7 +154,7 @@ class AioCache(BaseCache):
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
 
-        conn = await self.client.get_best_node(self._cache_id, key, key_hint)
+        conn = await self._get_best_node(key, key_hint)
         return await cache_put_async(conn, self._cache_id, key, value, key_hint=key_hint, value_hint=value_hint)
 
     @status_to_exception(CacheError)
@@ -162,7 +165,7 @@ class AioCache(BaseCache):
         :param keys: list of keys or tuples of (key, key_hint),
         :return: a dict of key-value pairs.
         """
-        conn = await self.client.get_best_node(self._cache_id)
+        conn = await self._get_best_node()
         result = await cache_get_all_async(conn, self._cache_id, keys)
         if result.value:
             keys = list(result.value.keys())
@@ -182,7 +185,7 @@ class AioCache(BaseCache):
          to save. Each key or value can be an item of representable
          Python type or a tuple of (item, hint),
         """
-        conn = await self.client.get_best_node(self._cache_id)
+        conn = await self._get_best_node()
         return await cache_put_all_async(conn, self._cache_id, pairs)
 
     @status_to_exception(CacheError)
@@ -200,7 +203,7 @@ class AioCache(BaseCache):
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
 
-        conn = await self.client.get_best_node(self._cache_id, key, key_hint)
+        conn = await self._get_best_node(key, key_hint)
         result = await cache_replace_async(conn, self._cache_id, key, value, key_hint=key_hint, value_hint=value_hint)
         result.value = await self.client.unwrap_binary(result.value)
         return result
@@ -213,7 +216,7 @@ class AioCache(BaseCache):
         :param keys: (optional) list of cache keys or (key, key type
          hint) tuples to clear (default: clear all).
         """
-        conn = await self.client.get_best_node(self._cache_id)
+        conn = await self._get_best_node()
         if keys:
             return await cache_clear_keys_async(conn, self._cache_id, keys)
         else:
@@ -231,7 +234,7 @@ class AioCache(BaseCache):
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
 
-        conn = await self.client.get_best_node(self._cache_id, key, key_hint)
+        conn = await self._get_best_node(key, key_hint)
         return await cache_clear_key_async(conn, self._cache_id, key, key_hint=key_hint)
 
     @status_to_exception(CacheError)
@@ -241,7 +244,7 @@ class AioCache(BaseCache):
 
         :param keys: a list of keys or (key, type hint) tuples
         """
-        conn = await self.client.get_best_node(self._cache_id)
+        conn = await self._get_best_node()
         return await cache_clear_keys_async(conn, self._cache_id, keys)
 
     @status_to_exception(CacheError)
@@ -257,7 +260,7 @@ class AioCache(BaseCache):
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
 
-        conn = await self.client.get_best_node(self._cache_id, key, key_hint)
+        conn = await self._get_best_node(key, key_hint)
         return await cache_contains_key_async(conn, self._cache_id, key, key_hint=key_hint)
 
     @status_to_exception(CacheError)
@@ -268,7 +271,7 @@ class AioCache(BaseCache):
         :param keys: a list of keys or (key, type hint) tuples,
         :return: boolean `True` when all keys are present, `False` otherwise.
         """
-        conn = await self.client.get_best_node(self._cache_id)
+        conn = await self._get_best_node()
         return await cache_contains_keys_async(conn, self._cache_id, keys)
 
     @status_to_exception(CacheError)
@@ -288,7 +291,7 @@ class AioCache(BaseCache):
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
 
-        conn = await self.client.get_best_node(self._cache_id, key, key_hint)
+        conn = await self._get_best_node(key, key_hint)
         result = await cache_get_and_put_async(conn, self._cache_id, key, value, key_hint, value_hint)
 
         result.value = await self.client.unwrap_binary(result.value)
@@ -311,7 +314,7 @@ class AioCache(BaseCache):
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
 
-        conn = await self.client.get_best_node(self._cache_id, key, key_hint)
+        conn = await self._get_best_node(key, key_hint)
         result = await cache_get_and_put_if_absent_async(conn, self._cache_id, key, value, key_hint, value_hint)
         result.value = await self.client.unwrap_binary(result.value)
         return result
@@ -332,7 +335,7 @@ class AioCache(BaseCache):
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
 
-        conn = await self.client.get_best_node(self._cache_id, key, key_hint)
+        conn = await self._get_best_node(key, key_hint)
         return await cache_put_if_absent_async(conn, self._cache_id, key, value, key_hint, value_hint)
 
     @status_to_exception(CacheError)
@@ -348,7 +351,7 @@ class AioCache(BaseCache):
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
 
-        conn = await self.client.get_best_node(self._cache_id, key, key_hint)
+        conn = await self._get_best_node(key, key_hint)
         result = await cache_get_and_remove_async(conn, self._cache_id, key, key_hint)
         result.value = await self.client.unwrap_binary(result.value)
         return result
@@ -371,7 +374,7 @@ class AioCache(BaseCache):
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
 
-        conn = await self.client.get_best_node(self._cache_id, key, key_hint)
+        conn = await self._get_best_node(key, key_hint)
         result = await cache_get_and_replace_async(conn, self._cache_id, key, value, key_hint, value_hint)
         result.value = await self.client.unwrap_binary(result.value)
         return result
@@ -388,7 +391,7 @@ class AioCache(BaseCache):
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
 
-        conn = await self.client.get_best_node(self._cache_id, key, key_hint)
+        conn = await self._get_best_node(key, key_hint)
         return await cache_remove_key_async(conn, self._cache_id, key, key_hint)
 
     @status_to_exception(CacheError)
@@ -399,7 +402,7 @@ class AioCache(BaseCache):
 
         :param keys: list of keys or tuples of (key, key_hint) to remove.
         """
-        conn = await self.client.get_best_node(self._cache_id)
+        conn = await self._get_best_node()
         return await cache_remove_keys_async(conn, self._cache_id, keys)
 
     @status_to_exception(CacheError)
@@ -407,7 +410,7 @@ class AioCache(BaseCache):
         """
         Removes all cache entries, notifying listeners and cache writers.
         """
-        conn = await self.client.get_best_node(self._cache_id)
+        conn = await self._get_best_node()
         return await cache_remove_all_async(conn, self._cache_id)
 
     @status_to_exception(CacheError)
@@ -426,7 +429,7 @@ class AioCache(BaseCache):
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
 
-        conn = await self.client.get_best_node(self._cache_id, key, key_hint)
+        conn = await self._get_best_node(key, key_hint)
         return await cache_remove_if_equals_async(conn, self._cache_id, key, sample, key_hint, sample_hint)
 
     @status_to_exception(CacheError)
@@ -449,7 +452,7 @@ class AioCache(BaseCache):
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
 
-        conn = await self.client.get_best_node(self._cache_id, key, key_hint)
+        conn = await self._get_best_node(key, key_hint)
         result = await cache_replace_if_equals_async(conn, self._cache_id, key, sample, value, key_hint, sample_hint,
                                                      value_hint)
         result.value = await self.client.unwrap_binary(result.value)
@@ -465,7 +468,7 @@ class AioCache(BaseCache):
          (PeekModes.BACKUP). Defaults to primary cache partitions (PeekModes.PRIMARY),
         :return: integer number of cache entries.
         """
-        conn = await self.client.get_best_node(self._cache_id)
+        conn = await self._get_best_node()
         return await cache_get_size_async(conn, self._cache_id, peek_modes)
 
     def scan(self, page_size: int = 1, partitions: int = -1, local: bool = False):
