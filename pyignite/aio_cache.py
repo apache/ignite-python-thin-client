@@ -15,10 +15,9 @@
 import asyncio
 from typing import Any, Iterable, Optional, Union
 
-from .datatypes import prop_codes
 from .datatypes.internal import AnyDataObject
 from .exceptions import CacheCreationError, CacheError, ParameterError
-from .utils import cache_id, status_to_exception
+from .utils import status_to_exception
 from .api.cache_config import (
     cache_create_async, cache_get_or_create_async, cache_destroy_async, cache_get_configuration_async,
     cache_create_with_config_async, cache_get_or_create_with_config_async
