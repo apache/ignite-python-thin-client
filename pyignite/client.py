@@ -49,6 +49,7 @@ from typing import Iterable, Type, Union, Any, Dict
 from .api import cache_get_node_partitions
 from .api.binary import get_binary_type, put_binary_type
 from .api.cache_config import cache_get_names
+from .cluster import Cluster
 from .cursors import SqlFieldsCursor
 from .cache import Cache, create_cache, get_cache, get_or_create_cache, BaseCache
 from .connection import Connection
@@ -727,3 +728,11 @@ class Client(BaseClient):
         return SqlFieldsCursor(self, c_id, query_str, page_size, query_args, schema, statement_type, distributed_joins,
                                local, replicated_only, enforce_join_order, collocated, lazy, include_field_names,
                                max_rows, timeout)
+
+    def get_cluster(self) -> 'Cluster':
+        """
+        Gets client cluster facade.
+
+        :return: Client cluster facade.
+        """
+        return Cluster(self)

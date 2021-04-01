@@ -460,3 +460,11 @@ class AioClient(BaseClient):
         return AioSqlFieldsCursor(self, c_id, query_str, page_size, query_args, schema, statement_type,
                                   distributed_joins, local, replicated_only, enforce_join_order, collocated,
                                   lazy, include_field_names, max_rows, timeout)
+
+    def get_cluster(self) -> 'AioCluster':
+        """
+        Gets client cluster facade.
+
+        :return: AioClient cluster facade.
+        """
+        return AioCluster(self)
