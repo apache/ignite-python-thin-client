@@ -15,7 +15,6 @@
 
 from typing import Optional
 
-from pyignite.connection.bitmask_feature import feature_flags_as_bytes
 from pyignite.connection.protocol_context import ProtocolContext
 from pyignite.datatypes import Byte, Int, Short, String, UUIDObject, ByteArrayObject
 from pyignite.datatypes.internal import Struct
@@ -74,7 +73,7 @@ class HandshakeRequest:
             'client_code': 2,  # fixed value defined by protocol
         }
         if self.protocol_context.is_feature_flags_supported():
-            features = feature_flags_as_bytes(self.protocol_context.features)
+            features = self.protocol_context.features.to_bytearray()
             handshake_data.update({
                 'features': features,
             })

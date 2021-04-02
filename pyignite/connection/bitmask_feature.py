@@ -14,44 +14,31 @@
 # limitations under the License.
 
 
-from enum import IntEnum
+from enum import IntFlag
 
 from pyignite.constants import PROTOCOL_BYTE_ORDER
 
 
-class BitmaskFeature(IntEnum):
-    CLUSTER_API = 2
+class BitmaskFeature(IntFlag):
+    CLUSTER_API = 1 << 2
 
+    def to_bytearray(self) -> bytearray:
+        """
+        Convert feature flags array to bytearray bitmask.
 
-def feature_flags_as_bytes(features: [int]) -> bytearray:
-    """
-    Convert feature flags array to bytearray bitmask.
+        :return: Bitmask as bytearray.
+        """
+        full_bytes = self.bit_length() // 8 + 1
+        return bytearray(self.to_bytes(full_bytes, byteorder=PROTOCOL_BYTE_ORDER))
 
-    :param features: Features list,
-    :return: Bitmask as bytearray.
-    """
-    value = 0
-    for feature in features:
-        value |= (1 << feature)
+    @staticmethod
+    def all_supported() -> 'BitmaskFeature':
+        """
+        Get all supported features.
 
-    bytes_num = max(features) // 8 + 1
-
-    return bytearray(value.to_bytes(bytes_num, byteorder=PROTOCOL_BYTE_ORDER))
-
-
-def all_supported_features() -> [int]:
-    """
-    Get all supported features.
-
-    :return: List of supported features.
-    """
-    return [f.value for f in BitmaskFeature]
-
-
-def all_supported_feature_flags_as_bytes() -> bytearray:
-    """
-    Get all supported features as bytearray bitmask.
-
-    :return: Bitmask as bytearray.
-    """
-    return feature_flags_as_bytes(all_supported_features())
+        :return: All supported features.
+        """
+        supported = BitmaskFeature(0)
+        for feature in BitmaskFeature:
+            supported |= feature
+        return supported

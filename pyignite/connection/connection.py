@@ -19,7 +19,7 @@ from typing import Union
 
 from pyignite.constants import PROTOCOLS, IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT, PROTOCOL_BYTE_ORDER
 from pyignite.exceptions import HandshakeError, SocketError, connection_errors, AuthenticationError
-from .bitmask_feature import all_supported_features
+from .bitmask_feature import BitmaskFeature
 
 from .handshake import HandshakeRequest, HandshakeResponse
 from .protocol_context import ProtocolContext
@@ -168,7 +168,7 @@ class Connection(BaseConnection):
         # choose highest version first
         if self.client.protocol_context is None:
             detecting_protocol = True
-            self.client.protocol_context = ProtocolContext(max(PROTOCOLS), all_supported_features())
+            self.client.protocol_context = ProtocolContext(max(PROTOCOLS), BitmaskFeature.all_supported())
 
         try:
             result = self._connect_version()
