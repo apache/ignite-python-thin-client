@@ -101,4 +101,12 @@ class ClusterError(Exception):
     pass
 
 
+class NotSupportedByClusterError(Exception):
+    """
+    This exception is raised, whenever cluster is not supported specific
+    operation probably because it is outdated.
+    """
+    pass
+
+
 connection_errors = (IOError, OSError, EOFError)

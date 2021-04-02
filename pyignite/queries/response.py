@@ -45,7 +45,7 @@ class Response:
                 ('query_id', ctypes.c_longlong),
             ]
 
-            if self.protocol_context and self.protocol_context.is_status_flags_supported():
+            if self.protocol_context.is_status_flags_supported():
                 fields.append(('flags', ctypes.c_short))
             else:
                 fields.append(('status_code', ctypes.c_int),)
@@ -69,7 +69,7 @@ class Response:
 
         fields = []
         has_error = False
-        if self.protocol_context and self.protocol_context.is_status_flags_supported():
+        if self.protocol_context.is_status_flags_supported():
             if header.flags & RHF_TOPOLOGY_CHANGED:
                 fields = [
                     ('affinity_version', ctypes.c_longlong),

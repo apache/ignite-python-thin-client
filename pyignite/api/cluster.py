@@ -12,12 +12,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import warnings
-
 from pyignite.api import APIResult
 from pyignite.connection import AioConnection, Connection
 from pyignite.datatypes import Byte
-from pyignite.datatypes.cluster_state import ClusterState
+from pyignite.exceptions import NotSupportedByClusterError
 from pyignite.queries import Query, query_perform
 from pyignite.queries.op_codes import OP_CLUSTER_GET_STATE, OP_CLUSTER_CHANGE_STATE
 
@@ -50,6 +48,9 @@ def __post_process_get_state(result):
 
 
 def __cluster_get_state(connection, query_id):
+    if not connection.protocol_context.if_cluster_api_supported():
+        raise NotSupportedByClusterError('Cluster API is not supported by the cluster')
+
     query_struct = Query(OP_CLUSTER_GET_STATE, query_id=query_id)
     return query_perform(
         query_struct, connection,
@@ -87,9 +88,8 @@ def __post_process_set_state(result):
 
 
 def __cluster_set_state(connection, state, query_id):
-    if state == ClusterState.ACTIVE_READ_ONLY and \
-            not connection.protocol_context.if_cluster_api_supported():
-        warnings.warn(f'ClusterState.ACTIVE_READ_ONLY is not supported by the cluster', category=RuntimeWarning)
+    if not connection.protocol_context.if_cluster_api_supported():
+        raise NotSupportedByClusterError('Cluster API is not supported by the cluster')
 
     query_struct = Query(
         OP_CLUSTER_CHANGE_STATE,

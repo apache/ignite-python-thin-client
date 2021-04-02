@@ -42,7 +42,7 @@ def test_cluster_set_active(start_ignite_server, start_client, with_persistence,
 
     start_state = ClusterState.INACTIVE if with_persistence else ClusterState.ACTIVE
     try:
-        client = start_client()
+        client = start_client(timeout=0)
         with client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802)]):
             cluster = client.get_cluster()
             assert cluster.get_state() == start_state
