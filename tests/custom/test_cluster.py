@@ -15,8 +15,9 @@
 
 import pytest
 
+from pyignite import Client, AioClient
 from pyignite.exceptions import CacheError
-from tests.util import kill_process_tree, clear_ignite_work_dir
+from tests.util import kill_process_tree, clear_ignite_work_dir, start_ignite_gen
 
 from pyignite.datatypes.cluster_state import ClusterState
 
@@ -33,96 +34,92 @@ def cleanup():
     clear_ignite_work_dir()
 
 
-def test_cluster_set_active(start_ignite_server, start_client, with_persistence, cleanup):
+@pytest.fixture(autouse=True)
+def server1(with_persistence):
+    yield from start_ignite_gen(idx=1, use_persistence=with_persistence)
+
+
+@pytest.fixture(autouse=True)
+def server2(with_persistence):
+    yield from start_ignite_gen(idx=2, use_persistence=with_persistence)
+
+
+def test_cluster_set_active(start_client, with_persistence):
     key = 42
     val = 42
-
-    server1 = start_ignite_server(idx=1, use_persistence=with_persistence)
-    server2 = start_ignite_server(idx=2, use_persistence=with_persistence)
-
     start_state = ClusterState.INACTIVE if with_persistence else ClusterState.ACTIVE
-    try:
-        client = start_client()
-        with client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802)]):
-            cluster = client.get_cluster()
-            assert cluster.get_state() == start_state
 
-            cluster.set_state(ClusterState.ACTIVE)
-            assert cluster.get_state() == ClusterState.ACTIVE
+    client = start_client()
+    with client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802)]):
+        cluster = client.get_cluster()
+        assert cluster.get_state() == start_state
 
-            cache = client.get_or_create_cache("test_cache")
-            cache.put(key, val)
-            assert cache.get(key) == val
+        cluster.set_state(ClusterState.ACTIVE)
+        assert cluster.get_state() == ClusterState.ACTIVE
 
-            cluster.set_state(ClusterState.ACTIVE_READ_ONLY)
-            assert cluster.get_state() == ClusterState.ACTIVE_READ_ONLY
+        cache = client.get_or_create_cache("test_cache")
+        cache.put(key, val)
+        assert cache.get(key) == val
 
-            assert cache.get(key) == val
-            with pytest.raises(CacheError):
-                cache.put(key, val + 1)
+        cluster.set_state(ClusterState.ACTIVE_READ_ONLY)
+        assert cluster.get_state() == ClusterState.ACTIVE_READ_ONLY
 
-            cluster.set_state(ClusterState.INACTIVE)
-            assert cluster.get_state() == ClusterState.INACTIVE
+        assert cache.get(key) == val
+        with pytest.raises(CacheError):
+            cache.put(key, val + 1)
 
-            with pytest.raises(CacheError):
-                cache.get(key)
+        cluster.set_state(ClusterState.INACTIVE)
+        assert cluster.get_state() == ClusterState.INACTIVE
 
-            with pytest.raises(CacheError):
-                cache.put(key, val + 1)
+        with pytest.raises(CacheError):
+            cache.get(key)
 
-            cluster.set_state(ClusterState.ACTIVE)
-            assert cluster.get_state() == ClusterState.ACTIVE
+        with pytest.raises(CacheError):
+            cache.put(key, val + 1)
 
-            cache.put(key, val + 2)
-            assert cache.get(key) == val + 2
-    finally:
-        kill_process_tree(server1.pid)
-        kill_process_tree(server2.pid)
+        cluster.set_state(ClusterState.ACTIVE)
+        assert cluster.get_state() == ClusterState.ACTIVE
+
+        cache.put(key, val + 2)
+        assert cache.get(key) == val + 2
 
 
 @pytest.mark.asyncio
-async def test_cluster_set_active_async(start_ignite_server, start_async_client, with_persistence, cleanup):
+async def test_cluster_set_active_async(start_async_client, with_persistence):
     key = 42
     val = 42
-
-    server1 = start_ignite_server(idx=1, use_persistence=with_persistence)
-    server2 = start_ignite_server(idx=2, use_persistence=with_persistence)
-
     start_state = ClusterState.INACTIVE if with_persistence else ClusterState.ACTIVE
-    try:
-        client = start_async_client()
-        async with client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802)]):
-            cluster = client.get_cluster()
-            assert await cluster.get_state() == start_state
 
-            await cluster.set_state(ClusterState.ACTIVE)
-            assert await cluster.get_state() == ClusterState.ACTIVE
+    client = start_async_client()
+    async with client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802)]):
+        cluster = client.get_cluster()
+        assert await cluster.get_state() == start_state
 
-            cache = await client.get_or_create_cache("test_cache")
-            await cache.put(key, val)
-            assert await cache.get(key) == val
+        await cluster.set_state(ClusterState.ACTIVE)
+        assert await cluster.get_state() == ClusterState.ACTIVE
 
-            await cluster.set_state(ClusterState.ACTIVE_READ_ONLY)
-            assert await cluster.get_state() == ClusterState.ACTIVE_READ_ONLY
+        cache = await client.get_or_create_cache("test_cache")
+        await cache.put(key, val)
+        assert await cache.get(key) == val
 
-            assert await cache.get(key) == val
-            with pytest.raises(CacheError):
-                await cache.put(key, val + 1)
+        await cluster.set_state(ClusterState.ACTIVE_READ_ONLY)
+        assert await cluster.get_state() == ClusterState.ACTIVE_READ_ONLY
 
-            await cluster.set_state(ClusterState.INACTIVE)
-            assert await cluster.get_state() == ClusterState.INACTIVE
+        assert await cache.get(key) == val
+        with pytest.raises(CacheError):
+            await cache.put(key, val + 1)
 
-            with pytest.raises(CacheError):
-                await cache.get(key)
+        await cluster.set_state(ClusterState.INACTIVE)
+        assert await cluster.get_state() == ClusterState.INACTIVE
 
-            with pytest.raises(CacheError):
-                await cache.put(key, val + 1)
+        with pytest.raises(CacheError):
+            await cache.get(key)
 
-            await cluster.set_state(ClusterState.ACTIVE)
-            assert await cluster.get_state() == ClusterState.ACTIVE
+        with pytest.raises(CacheError):
+            await cache.put(key, val + 1)
 
-            await cache.put(key, val + 2)
-            assert await cache.get(key) == val + 2
-    finally:
-        kill_process_tree(server1.pid)
-        kill_process_tree(server2.pid)
+        await cluster.set_state(ClusterState.ACTIVE)
+        assert await cluster.get_state() == ClusterState.ACTIVE
+
+        await cache.put(key, val + 2)
+        assert await cache.get(key) == val + 2

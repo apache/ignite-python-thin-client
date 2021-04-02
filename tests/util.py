@@ -193,8 +193,8 @@ def start_ignite(idx=1, debug=False, use_ssl=False, use_auth=False, use_persiste
     raise Exception("Failed to start Ignite: timeout while trying to connect")
 
 
-def start_ignite_gen(idx=1, use_ssl=False, use_auth=False):
-    srv = start_ignite(idx, use_ssl=use_ssl, use_auth=use_auth)
+def start_ignite_gen(idx=1, use_ssl=False, use_auth=False, use_persistence=False):
+    srv = start_ignite(idx, use_ssl=use_ssl, use_auth=use_auth, use_persistence=use_persistence)
     try:
         yield srv
     finally:
