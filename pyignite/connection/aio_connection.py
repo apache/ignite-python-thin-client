@@ -122,7 +122,7 @@ class AioConnection(BaseConnection):
             result = await self._connect_version()
         except HandshakeError as e:
             if e.expected_version in PROTOCOLS:
-                self.client.protocol_context.set_version(e.expected_version)
+                self.client.protocol_context.version = e.expected_version
                 result = await self._connect_version()
             else:
                 raise e
@@ -134,7 +134,7 @@ class AioConnection(BaseConnection):
 
         # connection is ready for end user
         features = BitmaskFeature.from_array(result.get('features', None))
-        self.client.protocol_context.try_set_features(features)
+        self.client.protocol_context.features = features
         self.uuid = result.get('node_uuid', None)  # version-specific (1.4+)
         self.failed = False
         return result

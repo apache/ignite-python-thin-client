@@ -45,7 +45,8 @@ class ProtocolContext:
     def version(self):
         return getattr(self, '_version', None)
 
-    def set_version(self, version: Tuple[int, int, int]):
+    @version.setter
+    def version(self, version: Tuple[int, int, int]):
         """
         Set version.
 
@@ -54,14 +55,15 @@ class ProtocolContext:
 
         :param version: Version to set.
         """
-        self._version = version
+        setattr(self, '_version', version)
         self._ensure_consistency()
 
     @property
     def features(self):
         return getattr(self, '_features', None)
 
-    def try_set_features(self, features: BitmaskFeature):
+    @features.setter
+    def features(self, features: BitmaskFeature):
         """
         Try and set new feature set.
 
@@ -70,7 +72,7 @@ class ProtocolContext:
 
         :param features: Features to set.
         """
-        self._features = features
+        setattr(self, '_features', features)
         self._ensure_consistency()
 
     def is_partition_awareness_supported(self) -> bool:
