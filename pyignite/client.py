@@ -109,7 +109,7 @@ class BaseClient:
     @property
     def partition_awareness_supported_by_protocol(self):
         return self.protocol_context is not None \
-               and self.protocol_context.is_partition_awareness_supported()
+            and self.protocol_context.is_partition_awareness_supported()
 
     @property
     def compact_footer(self) -> bool:

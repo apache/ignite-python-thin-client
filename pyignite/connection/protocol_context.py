@@ -35,7 +35,7 @@ class ProtocolContext:
     def __eq__(self, other):
         if isinstance(other, ProtocolContext):
             return self.version == other.version and \
-                   self.features == other.features
+                self.features == other.features
         return NotImplemented
 
     def _ensure_consistency(self):
