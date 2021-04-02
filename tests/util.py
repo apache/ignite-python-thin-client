@@ -155,7 +155,7 @@ def create_config_file(tpl_name, file_name, **kwargs):
         f.write(template.render(**kwargs))
 
 
-def start_ignite(idx=1, debug=False, use_ssl=False, use_auth=False):
+def start_ignite(idx=1, debug=False, use_ssl=False, use_auth=False, use_persistence=False):
     clear_logs(idx)
 
     runner = get_ignite_runner()
@@ -166,8 +166,16 @@ def start_ignite(idx=1, debug=False, use_ssl=False, use_auth=False):
         env["JVM_OPTS"] = "-Djava.net.preferIPv4Stack=true -Xdebug -Xnoagent -Djava.compiler=NONE " \
                           "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005 "
 
-    params = {'ignite_instance_idx': str(idx), 'ignite_client_port': 10800 + idx, 'use_ssl': use_ssl,
-              'use_auth': use_auth}
+    if use_auth:
+        use_persistence = True
+
+    params = {
+        'ignite_instance_idx': str(idx),
+        'ignite_client_port': 10800 + idx,
+        'use_ssl': use_ssl,
+        'use_auth': use_auth,
+        'use_persistence': use_persistence,
+    }
 
     create_config_file('log4j.xml.jinja2', f'log4j-{idx}.xml', **params)
     create_config_file('ignite-config.xml.jinja2', f'ignite-config-{idx}.xml', **params)

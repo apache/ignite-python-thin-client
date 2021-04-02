@@ -21,12 +21,13 @@ from tests.util import start_ignite
 
 @pytest.fixture(scope='module')
 def start_ignite_server():
-    def start(idx=1, debug=False, use_ssl=False, use_auth=False):
+    def start(idx=1, debug=False, use_ssl=False, use_auth=False, use_persistence=False):
         return start_ignite(
             idx=idx,
             debug=debug,
             use_ssl=use_ssl,
-            use_auth=use_auth
+            use_auth=use_auth,
+            use_persistence=use_persistence,
         )
 
     return start

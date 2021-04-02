@@ -31,7 +31,7 @@
             <bean class="org.apache.ignite.configuration.DataStorageConfiguration">
                 <property name="defaultDataRegionConfiguration">
                     <bean class="org.apache.ignite.configuration.DataRegionConfiguration">
-                        {% if use_auth %}
+                        {% if use_persistence %}
                         <property name="persistenceEnabled" value="true"/>
                         {% endif %}
                     </bean>
@@ -51,9 +51,8 @@
         <property name="authenticationEnabled" value="true"/>
         {% endif %}
 
-
         {% if use_ssl %}
-            <property name="connectorConfiguration"><null/></property>
+        <property name="connectorConfiguration"><null/></property>
         {% endif %}
 
         <property name="clientConnectorConfiguration">

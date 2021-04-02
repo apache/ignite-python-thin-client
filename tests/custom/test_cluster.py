@@ -21,12 +21,16 @@ from tests.util import kill_process_tree
 from pyignite.datatypes.cluster_state import ClusterState
 
 
-def test_cluster_set_active(start_ignite_server, start_client):
+@pytest.fixture(params=['with-persistence', 'without-persistence'])
+def with_persistence(request):
+    yield request.param == 'with-persistence'
+
+
+def test_cluster_set_active(start_ignite_server, start_client, with_persistence):
     key = 42
     val = 42
-
-    server1 = start_ignite_server(idx=1)
-    server2 = start_ignite_server(idx=2)
+    server1 = start_ignite_server(idx=1, use_persistence=with_persistence)
+    server2 = start_ignite_server(idx=2, use_persistence=with_persistence)
     try:
         client = start_client()
         with client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802)]):
@@ -64,12 +68,11 @@ def test_cluster_set_active(start_ignite_server, start_client):
 
 
 @pytest.mark.asyncio
-async def test_cluster_set_active_async(start_ignite_server, start_async_client):
+async def test_cluster_set_active_async(start_ignite_server, start_async_client, with_persistence):
     key = 42
     val = 42
-
-    server1 = start_ignite_server(idx=1)
-    server2 = start_ignite_server(idx=2)
+    server1 = start_ignite_server(idx=1, use_persistence=with_persistence)
+    server2 = start_ignite_server(idx=2, use_persistence=with_persistence)
     try:
         client = start_async_client()
         async with client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802)]):
