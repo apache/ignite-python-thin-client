@@ -23,14 +23,14 @@ from pyignite.constants import PROTOCOL_BYTE_ORDER
 class BitmaskFeature(IntFlag):
     CLUSTER_API = 1 << 2
 
-    def to_bytearray(self) -> bytearray:
+    def to_bytearray(self) -> bytes:
         """
         Convert feature flags array to bytearray bitmask.
 
         :return: Bitmask as bytearray.
         """
         full_bytes = self.bit_length() // 8 + 1
-        return bytearray(self.to_bytes(full_bytes, byteorder=PROTOCOL_BYTE_ORDER))
+        return self.to_bytes(full_bytes, byteorder=PROTOCOL_BYTE_ORDER)
 
     @staticmethod
     def all_supported() -> 'BitmaskFeature':
@@ -45,7 +45,7 @@ class BitmaskFeature(IntFlag):
         return supported
 
     @staticmethod
-    def from_array(features_array: bytearray) -> Optional['BitmaskFeature']:
+    def from_array(features_array: bytes) -> Optional['BitmaskFeature']:
         """
         Get features from bytearray.
 
