@@ -14,36 +14,36 @@
 # limitations under the License.
 
 """
-This module contains `Cluster` that lets you get info and change state of the
-whole cluster.
+This module contains `AioCluster` that lets you get info and change state of the
+whole cluster asynchronously.
 """
-from pyignite.api.cluster import cluster_get_state, cluster_set_state
+from pyignite.api.cluster import cluster_get_state_async, cluster_set_state_async
 from pyignite.exceptions import ClusterError
 from pyignite.utils import status_to_exception
 
 
-class Cluster:
+class AioCluster:
     """
     Ignite cluster abstraction. Users should never use this class directly,
     but construct its instances with
-    :py:meth:`~pyignite.client.Client.get_cluster` method instead.
+    :py:meth:`~pyignite.aio_client.AioClient.get_cluster` method instead.
     """
 
-    def __init__(self, client: 'Client'):
+    def __init__(self, client: 'AioClient'):
         self._client = client
 
     @status_to_exception(ClusterError)
-    def get_state(self):
+    async def get_state(self):
         """
         Gets current cluster state.
 
         :return: Current cluster state. This is one of ClusterState.INACTIVE,
          ClusterState.ACTIVE or ClusterState.ACTIVE_READ_ONLY.
         """
-        return cluster_get_state(self._client.random_node)
+        return await cluster_get_state_async(self._client.random_node)
 
     @status_to_exception(ClusterError)
-    def set_state(self, state):
+    async def set_state(self, state):
         """
         Changes current cluster state to the given.
 
@@ -53,4 +53,4 @@ class Cluster:
         :param state: New cluster state. This is one of ClusterState.INACTIVE,
          ClusterState.ACTIVE or ClusterState.ACTIVE_READ_ONLY.
         """
-        return cluster_set_state(self._client.random_node, state)
+        return await cluster_set_state_async(self._client.random_node, state)

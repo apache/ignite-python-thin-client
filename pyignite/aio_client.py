@@ -17,6 +17,7 @@ import random
 from itertools import chain
 from typing import Iterable, Type, Union, Any, Dict
 
+from .aio_cluster import AioCluster
 from .api import cache_get_node_partitions_async
 from .api.binary import get_binary_type_async, put_binary_type_async
 from .api.cache_config import cache_get_names_async
