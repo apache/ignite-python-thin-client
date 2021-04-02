@@ -29,6 +29,15 @@ class ProtocolContext:
         self._features = features
         self._ensure_consistency()
 
+    def __hash__(self):
+        return hash((self._version, self._features))
+
+    def __eq__(self, other):
+        if isinstance(other, ProtocolContext):
+            return self.version == other.version and \
+                   self.features == other.features
+        return NotImplemented
+
     def _ensure_consistency(self):
         if not self.is_feature_flags_supported():
             self._features = None
