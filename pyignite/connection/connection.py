@@ -104,7 +104,7 @@ class Connection(BaseConnection):
      * binary protocol connector. Encapsulates handshake and failover reconnection.
     """
 
-    def __init__(self, client: 'Client', host: str, port: int, timeout: float = 2.0,
+    def __init__(self, client: 'Client', host: str, port: int, timeout: float = None,
                  username: str = None, password: str = None, **ssl_params):
         """
         Initialize connection.

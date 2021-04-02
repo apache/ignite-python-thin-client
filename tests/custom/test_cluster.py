@@ -26,7 +26,7 @@ def with_persistence(request):
     yield request.param == 'with-persistence'
 
 
-@pytest.fixture(scope='module', autouse=True)
+@pytest.fixture(autouse=True)
 def cleanup():
     clear_ignite_work_dir()
     yield None
