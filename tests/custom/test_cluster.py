@@ -15,9 +15,8 @@
 
 import pytest
 
-from pyignite import Client, AioClient
 from pyignite.exceptions import CacheError
-from tests.util import kill_process_tree, clear_ignite_work_dir, start_ignite_gen
+from tests.util import clear_ignite_work_dir, start_ignite_gen
 
 from pyignite.datatypes.cluster_state import ClusterState
 
