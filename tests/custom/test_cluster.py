@@ -36,12 +36,18 @@ def cleanup():
 def test_cluster_set_active(start_ignite_server, start_client, with_persistence, cleanup):
     key = 42
     val = 42
+
     server1 = start_ignite_server(idx=1, use_persistence=with_persistence)
     server2 = start_ignite_server(idx=2, use_persistence=with_persistence)
+
+    start_state = ClusterState.INACTIVE if with_persistence else ClusterState.ACTIVE
     try:
         client = start_client()
         with client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802)]):
             cluster = client.get_cluster()
+            assert cluster.get_state() == start_state
+
+            cluster.set_state(ClusterState.ACTIVE)
             assert cluster.get_state() == ClusterState.ACTIVE
 
             cache = client.get_or_create_cache("test_cache")
@@ -78,12 +84,18 @@ def test_cluster_set_active(start_ignite_server, start_client, with_persistence,
 async def test_cluster_set_active_async(start_ignite_server, start_async_client, with_persistence, cleanup):
     key = 42
     val = 42
+
     server1 = start_ignite_server(idx=1, use_persistence=with_persistence)
     server2 = start_ignite_server(idx=2, use_persistence=with_persistence)
+
+    start_state = ClusterState.INACTIVE if with_persistence else ClusterState.ACTIVE
     try:
         client = start_async_client()
         async with client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802)]):
             cluster = client.get_cluster()
+            assert await cluster.get_state() == start_state
+
+            await cluster.set_state(ClusterState.ACTIVE)
             assert await cluster.get_state() == ClusterState.ACTIVE
 
             cache = await client.get_or_create_cache("test_cache")
