@@ -23,7 +23,7 @@ from pyignite.constants import PROTOCOL_BYTE_ORDER
 class BitmaskFeature(IntFlag):
     CLUSTER_API = 1 << 2
 
-    def to_bytearray(self) -> bytes:
+    def __bytes__(self) -> bytes:
         """
         Convert feature flags array to bytearray bitmask.
 

@@ -73,7 +73,7 @@ class HandshakeRequest:
             'client_code': 2,  # fixed value defined by protocol
         }
         if self.protocol_context.is_feature_flags_supported():
-            features = self.protocol_context.features.to_bytearray()
+            features = bytes(self.protocol_context.features)
             handshake_data.update({
                 'features': features,
             })
