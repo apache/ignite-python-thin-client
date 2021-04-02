@@ -49,9 +49,9 @@ async def test_cluster_set_active_async(start_ignite_server, start_async_client)
     server1 = start_ignite_server(idx=1)
     server2 = start_ignite_server(idx=2)
     try:
-        client = await start_async_client()
-        with await client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802)]):
-            cluster = await client.get_cluster()
+        client = start_async_client()
+        async with client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802)]):
+            cluster = client.get_cluster()
 
             assert await cluster.get_state() == ClusterState.ACTIVE
 

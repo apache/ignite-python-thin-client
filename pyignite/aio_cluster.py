@@ -40,7 +40,7 @@ class AioCluster:
         :return: Current cluster state. This is one of ClusterState.INACTIVE,
          ClusterState.ACTIVE or ClusterState.ACTIVE_READ_ONLY.
         """
-        return await cluster_get_state_async(self._client.random_node)
+        return await cluster_get_state_async(await self._client.random_node())
 
     @status_to_exception(ClusterError)
     async def set_state(self, state):
@@ -53,4 +53,4 @@ class AioCluster:
         :param state: New cluster state. This is one of ClusterState.INACTIVE,
          ClusterState.ACTIVE or ClusterState.ACTIVE_READ_ONLY.
         """
-        return await cluster_set_state_async(self._client.random_node, state)
+        return await cluster_set_state_async(await self._client.random_node(), state)
