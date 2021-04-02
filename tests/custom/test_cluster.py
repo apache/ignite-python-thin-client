@@ -15,6 +15,7 @@
 
 import pytest
 
+from pyignite import Client, AioClient
 from pyignite.exceptions import CacheError
 from tests.util import clear_ignite_work_dir, start_ignite_gen
 
@@ -43,12 +44,12 @@ def server2(with_persistence, cleanup):
     yield from start_ignite_gen(idx=2, use_persistence=with_persistence)
 
 
-def test_cluster_set_active(start_client, with_persistence):
+def test_cluster_set_active(with_persistence):
     key = 42
     val = 42
     start_state = ClusterState.INACTIVE if with_persistence else ClusterState.ACTIVE
 
-    client = start_client()
+    client = Client()
     with client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802)]):
         cluster = client.get_cluster()
         assert cluster.get_state() == start_state
@@ -84,12 +85,12 @@ def test_cluster_set_active(start_client, with_persistence):
 
 
 @pytest.mark.asyncio
-async def test_cluster_set_active_async(start_async_client, with_persistence):
+async def test_cluster_set_active_async(with_persistence):
     key = 42
     val = 42
     start_state = ClusterState.INACTIVE if with_persistence else ClusterState.ACTIVE
 
-    client = start_async_client()
+    client = AioClient()
     async with client.connect([("127.0.0.1", 10801), ("127.0.0.1", 10802)]):
         cluster = client.get_cluster()
         assert await cluster.get_state() == start_state
