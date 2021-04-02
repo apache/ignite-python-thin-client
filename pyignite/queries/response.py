@@ -31,38 +31,46 @@ from pyignite.stream import READ_BACKWARD
 class Response:
     following = attr.ib(type=list, factory=list)
     protocol_context = attr.ib(type=type(ProtocolContext), default=None)
-    _response_header = None
+    _response_header = {}
     _response_class_name = 'Response'
 
     def __attrs_post_init__(self):
         # replace None with empty list
         self.following = self.following or []
 
-    def __build_header(self):
-        if self._response_header is None:
-            fields = [
-                ('length', ctypes.c_int),
-                ('query_id', ctypes.c_longlong),
-            ]
+    @classmethod
+    def __get_header(cls, protocol_version):
+        if protocol_version in cls._response_header:
+            return cls._response_header[protocol_version]
+        else:
+            header = cls.__build_header_class(protocol_version)
+            cls._response_header[protocol_version] = header
+            return header
 
-            if self.protocol_context.is_status_flags_supported():
-                fields.append(('flags', ctypes.c_short))
-            else:
-                fields.append(('status_code', ctypes.c_int),)
+    @staticmethod
+    def __build_header_class(protocol_context):
+        fields = [
+            ('length', ctypes.c_int),
+            ('query_id', ctypes.c_longlong),
+        ]
 
-            self._response_header = type(
-                'ResponseHeader',
-                (ctypes.LittleEndianStructure,),
-                {
-                    '_pack_': 1,
-                    '_fields_': fields,
-                },
-            )
-        return self._response_header
+        if protocol_context.is_status_flags_supported():
+            fields.append(('flags', ctypes.c_short))
+        else:
+            fields.append(('status_code', ctypes.c_int), )
+
+        return type(
+            'ResponseHeader',
+            (ctypes.LittleEndianStructure,),
+            {
+                '_pack_': 1,
+                '_fields_': fields,
+            },
+        )
 
     def __parse_header(self, stream):
         init_pos = stream.tell()
-        header_class = self.__build_header()
+        header_class = self.__get_header(self.protocol_context)
         header_len = ctypes.sizeof(header_class)
         header = stream.read_ctype(header_class)
         stream.seek(header_len, SEEK_CUR)
