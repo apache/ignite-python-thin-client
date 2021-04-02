@@ -183,7 +183,7 @@ class StructArray:
     def __parse_length(self, stream):
         counter_type_len = ctypes.sizeof(self.counter_type)
         length = int.from_bytes(
-            stream.mem_view(offset=counter_type_len),
+            stream.slice(offset=counter_type_len),
             byteorder=PROTOCOL_BYTE_ORDER
         )
         stream.seek(counter_type_len, SEEK_CUR)
@@ -391,7 +391,7 @@ class AnyDataObject:
 
     @classmethod
     def __data_class_parse(cls, stream):
-        type_code = bytes(stream.mem_view(offset=ctypes.sizeof(ctypes.c_byte)))
+        type_code = stream.slice(offset=ctypes.sizeof(ctypes.c_byte))
         try:
             return tc_map(type_code)
         except KeyError:

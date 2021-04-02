@@ -91,7 +91,7 @@ class String(Nullable):
     @classmethod
     def parse_not_null(cls, stream):
         length = int.from_bytes(
-            stream.mem_view(stream.tell() + ctypes.sizeof(ctypes.c_byte), ctypes.sizeof(ctypes.c_int)),
+            stream.slice(stream.tell() + ctypes.sizeof(ctypes.c_byte), ctypes.sizeof(ctypes.c_int)),
             byteorder=PROTOCOL_BYTE_ORDER
         )
 

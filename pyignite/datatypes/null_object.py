@@ -140,7 +140,7 @@ class Nullable(IgniteDataType):
     def __check_null_input(cls, stream):
         type_len = ctypes.sizeof(ctypes.c_byte)
 
-        if stream.mem_view(offset=type_len) == TC_NULL:
+        if stream.slice(offset=type_len) == TC_NULL:
             stream.seek(type_len, SEEK_CUR)
             return True, Null.build_c_type()
 

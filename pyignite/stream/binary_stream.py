@@ -50,8 +50,8 @@ class BinaryStreamBaseMixin:
         else:
             start, end = init_position - ctype_len, init_position
 
-        buf = self.stream.getbuffer()[start:end]
-        return ctype_class.from_buffer_copy(buf)
+        with self.stream.getbuffer()[start:end] as buf:
+            return ctype_class.from_buffer_copy(buf)
 
     def write(self, buf):
         return self.stream.write(buf)
@@ -65,24 +65,20 @@ class BinaryStreamBaseMixin:
     def getvalue(self):
         return self.stream.getvalue()
 
-    def getbuffer(self):
-        return self.stream.getbuffer()
-
-    def mem_view(self, start=-1, offset=0):
+    def slice(self, start=-1, offset=0):
         start = start if start >= 0 else self.tell()
-        return self.stream.getbuffer()[start:start + offset]
+        with self.stream.getbuffer()[start:start + offset] as buf:
+            return bytes(buf)
 
     def hashcode(self, start, bytes_len):
-        return ignite_utils.hashcode(self.stream.getbuffer()[start:start + bytes_len])
+        with self.stream.getbuffer()[start:start + bytes_len] as buf:
+            return ignite_utils.hashcode(buf)
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        try:
-            self.stream.close()
-        except BufferError:
-            pass
+        self.stream.close()
 
 
 class BinaryStream(BinaryStreamBaseMixin):

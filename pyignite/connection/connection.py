@@ -212,7 +212,7 @@ class Connection(BaseConnection):
 
         with BinaryStream(self.client) as stream:
             hs_request.from_python(stream)
-            self.send(stream.getbuffer(), reconnect=False)
+            self.send(stream.getvalue(), reconnect=False)
 
         with BinaryStream(self.client, self.recv(reconnect=False)) as stream:
             hs_response = HandshakeResponse.parse(stream, self.protocol_context)
@@ -235,7 +235,7 @@ class Connection(BaseConnection):
         except connection_errors:
             pass
 
-    def request(self, data: Union[bytes, bytearray, memoryview], flags=None) -> bytearray:
+    def request(self, data: Union[bytes, bytearray], flags=None) -> bytearray:
         """
         Perform request.
 
@@ -245,7 +245,7 @@ class Connection(BaseConnection):
         self.send(data, flags=flags)
         return self.recv()
 
-    def send(self, data: Union[bytes, bytearray, memoryview], flags=None, reconnect=True):
+    def send(self, data: Union[bytes, bytearray], flags=None, reconnect=True):
         """
         Send data down the socket.
 
@@ -275,22 +275,6 @@ class Connection(BaseConnection):
         :param flags: (optional) OS-specific flags.
         :param reconnect: (optional) reconnect on failure, default True.
         """
-        def _recv(buffer, num_bytes):
-            bytes_to_receive = num_bytes
-            while bytes_to_receive > 0:
-                try:
-                    bytes_rcvd = self._socket.recv_into(buffer, bytes_to_receive, **kwargs)
-                    if bytes_rcvd == 0:
-                        raise SocketError('Connection broken.')
-                except connection_errors:
-                    self.failed = True
-                    if reconnect:
-                        self.reconnect()
-                    raise
-
-                buffer = buffer[bytes_rcvd:]
-                bytes_to_receive -= bytes_rcvd
-
         if self.closed:
             raise SocketError('Attempt to use closed connection.')
 
@@ -298,12 +282,38 @@ class Connection(BaseConnection):
         if flags is not None:
             kwargs['flags'] = flags
 
-        data = bytearray(4)
-        _recv(memoryview(data), 4)
-        response_len = int.from_bytes(data, PROTOCOL_BYTE_ORDER)
+        data = bytearray(1024)
+        buffer = memoryview(data)
+        bytes_total_received, bytes_to_receive = 0, 0
+        while True:
+            try:
+                bytes_received = self._socket.recv_into(buffer, len(buffer), **kwargs)
+                if bytes_received == 0:
+                    raise SocketError(f'Connection broken. len of buffer {len(buffer)}')
+                bytes_total_received += bytes_received
+            except connection_errors:
+                self.failed = True
+                if reconnect:
+                    self.reconnect()
+                raise
 
-        data.extend(bytearray(response_len))
-        _recv(memoryview(data)[4:], response_len)
+            if bytes_total_received < 4:
+                continue
+            elif bytes_to_receive == 0:
+                response_len = int.from_bytes(data[0:4], PROTOCOL_BYTE_ORDER)
+                bytes_to_receive = response_len
+
+                if response_len + 4 > len(data):
+                    buffer.release()
+                    data.extend(bytearray(response_len + 4 - len(data)))
+                    buffer = memoryview(data)[bytes_total_received:]
+                    continue
+
+            if bytes_total_received >= bytes_to_receive:
+                break
+
+            buffer = buffer[bytes_received:]
+
         return data
 
     def close(self):

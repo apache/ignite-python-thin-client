@@ -201,7 +201,7 @@ class GenericObjectMeta(GenericObjectPropsMeta):
             stream.write(schema)
 
             if save_to_buf:
-                obj._buffer = bytes(stream.mem_view(initial_pos, stream.tell() - initial_pos))
+                obj._buffer = stream.slice(initial_pos, stream.tell() - initial_pos)
             obj._hashcode = header.hash_code
 
         def _setattr(self, attr_name: str, attr_value: Any):

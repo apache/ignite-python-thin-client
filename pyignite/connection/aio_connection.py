@@ -158,7 +158,7 @@ class AioConnection(BaseConnection):
 
         with AioBinaryStream(self.client) as stream:
             await hs_request.from_python_async(stream)
-            await self._send(stream.getbuffer(), reconnect=False)
+            await self._send(stream.getvalue(), reconnect=False)
 
         with AioBinaryStream(self.client, await self._recv(reconnect=False)) as stream:
             hs_response = await HandshakeResponse.parse_async(stream, self.protocol_context)
@@ -185,7 +185,7 @@ class AioConnection(BaseConnection):
         except connection_errors:
             pass
 
-    async def request(self, data: Union[bytes, bytearray, memoryview]) -> bytearray:
+    async def request(self, data: Union[bytes, bytearray]) -> bytearray:
         """
         Perform request.
 
@@ -195,7 +195,7 @@ class AioConnection(BaseConnection):
             await self._send(data)
             return await self._recv()
 
-    async def _send(self, data: Union[bytes, bytearray, memoryview], reconnect=True):
+    async def _send(self, data: Union[bytes, bytearray], reconnect=True):
         if self.closed:
             raise SocketError('Attempt to use closed connection.')
 
