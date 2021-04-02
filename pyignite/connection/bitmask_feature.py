@@ -34,7 +34,7 @@ def feature_flags_as_bytes(features: [int]) -> bytearray:
     for feature in features:
         value |= (1 << feature)
 
-    bytes_num = max(features) / 8 + 1
+    bytes_num = max(features) // 8 + 1
 
     return bytearray(value.to_bytes(bytes_num, byteorder=PROTOCOL_BYTE_ORDER))
 

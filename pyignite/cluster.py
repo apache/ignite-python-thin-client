@@ -17,7 +17,6 @@
 This module contains `Cluster` that lets you get info and change state of the
 whole cluster.
 """
-from pyignite import Client
 from pyignite.api.cluster import cluster_get_state, cluster_set_state
 
 

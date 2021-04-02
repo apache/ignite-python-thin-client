@@ -74,10 +74,14 @@ class HandshakeRequest:
             'client_code': 2,  # fixed value defined by protocol
         }
         if self.protocol_context.is_feature_flags_supported():
+            features = feature_flags_as_bytes(self.protocol_context.features)
             handshake_data.update({
-                'features': feature_flags_as_bytes(self.protocol_context.features),
+                'features': features,
             })
-            handshake_data['length'] += 1
+            handshake_data['length'] += sum([
+                5,
+                len(features)
+            ])
         if self.username and self.password:
             handshake_data.update({
                 'username': self.username,
