@@ -16,7 +16,7 @@
 import pytest
 
 from pyignite.exceptions import CacheError
-from tests.util import kill_process_tree
+from tests.util import kill_process_tree, clear_ignite_work_dir
 
 from pyignite.datatypes.cluster_state import ClusterState
 
@@ -26,7 +26,14 @@ def with_persistence(request):
     yield request.param == 'with-persistence'
 
 
-def test_cluster_set_active(start_ignite_server, start_client, with_persistence):
+@pytest.fixture(scope='module', autouse=True)
+def cleanup():
+    clear_ignite_work_dir()
+    yield None
+    clear_ignite_work_dir()
+
+
+def test_cluster_set_active(start_ignite_server, start_client, with_persistence, cleanup):
     key = 42
     val = 42
     server1 = start_ignite_server(idx=1, use_persistence=with_persistence)
@@ -68,7 +75,7 @@ def test_cluster_set_active(start_ignite_server, start_client, with_persistence)
 
 
 @pytest.mark.asyncio
-async def test_cluster_set_active_async(start_ignite_server, start_async_client, with_persistence):
+async def test_cluster_set_active_async(start_ignite_server, start_async_client, with_persistence, cleanup):
     key = 42
     val = 42
     server1 = start_ignite_server(idx=1, use_persistence=with_persistence)
