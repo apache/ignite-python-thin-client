@@ -48,7 +48,7 @@ def __post_process_get_state(result):
 
 
 def __cluster_get_state(connection, query_id):
-    if not connection.protocol_context.if_cluster_api_supported():
+    if not connection.protocol_context.is_cluster_api_supported():
         raise NotSupportedByClusterError('Cluster API is not supported by the cluster')
 
     query_struct = Query(OP_CLUSTER_GET_STATE, query_id=query_id)
@@ -88,7 +88,7 @@ def __post_process_set_state(result):
 
 
 def __cluster_set_state(connection, state, query_id):
-    if not connection.protocol_context.if_cluster_api_supported():
+    if not connection.protocol_context.is_cluster_api_supported():
         raise NotSupportedByClusterError('Cluster API is not supported by the cluster')
 
     query_struct = Query(

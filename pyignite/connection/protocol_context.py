@@ -91,7 +91,7 @@ class ProtocolContext:
         """
         return self.version >= (1, 7, 0)
 
-    def if_cluster_api_supported(self) -> bool:
+    def is_cluster_api_supported(self) -> bool:
         """
         Check whether cluster API supported by the current protocol.
         """
