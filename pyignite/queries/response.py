@@ -19,6 +19,7 @@ import attr
 from collections import OrderedDict
 import ctypes
 
+from pyignite.connection.protocol_context import ProtocolContext
 from pyignite.constants import RHF_TOPOLOGY_CHANGED, RHF_ERROR
 from pyignite.datatypes import AnyDataObject, Bool, Int, Long, String, StringArray, Struct
 from pyignite.datatypes.binary import body_struct, enum_struct, schema_struct
@@ -29,7 +30,7 @@ from pyignite.stream import READ_BACKWARD
 @attr.s
 class Response:
     following = attr.ib(type=list, factory=list)
-    protocol_version = attr.ib(type=tuple, factory=tuple)
+    protocol_context = attr.ib(type=type(ProtocolContext), default=None)
     _response_header = None
     _response_class_name = 'Response'
 
@@ -44,7 +45,7 @@ class Response:
                 ('query_id', ctypes.c_longlong),
             ]
 
-            if self.protocol_version and self.protocol_version >= (1, 4, 0):
+            if self.protocol_context and self.protocol_context.is_status_flags_supported():
                 fields.append(('flags', ctypes.c_short))
             else:
                 fields.append(('status_code', ctypes.c_int),)
@@ -68,7 +69,7 @@ class Response:
 
         fields = []
         has_error = False
-        if self.protocol_version and self.protocol_version >= (1, 4, 0):
+        if self.protocol_context and self.protocol_context.is_status_flags_supported():
             if header.flags & RHF_TOPOLOGY_CHANGED:
                 fields = [
                     ('affinity_version', ctypes.c_longlong),

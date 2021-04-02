@@ -13,29 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Licensed to the Apache Software Foundation (ASF) under one or more
-# contributor license agreements.  See the NOTICE file distributed with
-# this work for additional information regarding copyright ownership.
-# The ASF licenses this file to You under the Apache License, Version 2.0
-# (the "License"); you may not use this file except in compliance with
-# the License.  You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from collections import OrderedDict
 import socket
 from typing import Union
 
 from pyignite.constants import PROTOCOLS, IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT, PROTOCOL_BYTE_ORDER
 from pyignite.exceptions import HandshakeError, SocketError, connection_errors, AuthenticationError
+from .bitmask_feature import all_supported_features
 
 from .handshake import HandshakeRequest, HandshakeResponse
+from .protocol_context import ProtocolContext
 from .ssl import wrap, check_ssl_params
 from ..stream import BinaryStream
 
@@ -83,19 +70,18 @@ class BaseConnection:
         return '{}:{}'.format(self.host or '?', self.port or '?')
 
     @property
-    def protocol_version(self):
+    def protocol_context(self):
         """
-        Returns the tuple of major, minor, and revision numbers of the used
-        thin protocol version, or None, if no connection to the Ignite cluster
-        was yet established.
+        Returns protocol context, or None, if no connection to the Ignite
+        cluster was yet established.
         """
-        return self.client.protocol_version
+        return self.client.protocol_context
 
     def _process_handshake_error(self, response):
         error_text = f'Handshake error: {response.message}'
         # if handshake fails for any reason other than protocol mismatch
         # (i.e. authentication error), server version is 0.0.0
-        protocol_version = self.client.protocol_version
+        protocol_version = self.client.protocol_context.version
         server_version = (response.version_major, response.version_minor, response.version_patch)
 
         if any(server_version):
@@ -180,22 +166,22 @@ class Connection(BaseConnection):
         detecting_protocol = False
 
         # choose highest version first
-        if self.client.protocol_version is None:
+        if self.client.protocol_context is None:
             detecting_protocol = True
-            self.client.protocol_version = max(PROTOCOLS)
+            self.client.protocol_context = ProtocolContext(max(PROTOCOLS), all_supported_features())
 
         try:
             result = self._connect_version()
         except HandshakeError as e:
             if e.expected_version in PROTOCOLS:
-                self.client.protocol_version = e.expected_version
+                self.client.protocol_context.version = e.expected_version
                 result = self._connect_version()
             else:
                 raise e
         except connection_errors:
             # restore undefined protocol version
             if detecting_protocol:
-                self.client.protocol_version = None
+                self.client.protocol_context = None
             raise
 
         # connection is ready for end user
@@ -214,10 +200,10 @@ class Connection(BaseConnection):
         self._socket = wrap(self._socket, self.ssl_params)
         self._socket.connect((self.host, self.port))
 
-        protocol_version = self.client.protocol_version
+        protocol_context = self.client.protocol_context
 
         hs_request = HandshakeRequest(
-            protocol_version,
+            protocol_context,
             self.username,
             self.password
         )
@@ -227,7 +213,7 @@ class Connection(BaseConnection):
             self.send(stream.getbuffer(), reconnect=False)
 
         with BinaryStream(self.client, self.recv(reconnect=False)) as stream:
-            hs_response = HandshakeResponse.parse(stream, self.protocol_version)
+            hs_response = HandshakeResponse.parse(stream, self.protocol_context)
 
             if hs_response.op_code == 0:
                 self.close()

@@ -92,7 +92,7 @@ class AioClient(BaseClient):
 
             if not self.partition_aware:
                 try:
-                    if self.protocol_version is None:
+                    if self.protocol_context is None:
                         # open connection before adding to the pool
                         await conn.connect()
 
@@ -120,7 +120,7 @@ class AioClient(BaseClient):
 
             await asyncio.gather(*reconnect_coro, return_exceptions=True)
 
-        if self.protocol_version is None:
+        if self.protocol_context is None:
             raise ReconnectError('Can not connect.')
 
     async def close(self):
