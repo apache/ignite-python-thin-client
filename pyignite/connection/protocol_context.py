@@ -24,9 +24,46 @@ class ProtocolContext:
     protocol features.
     """
 
-    def __init__(self, version: Tuple[int, int, int], features: [int] = None):
-        self.version = version
-        self.features = features
+    def __init__(self, version: Tuple[int, int, int], features: BitmaskFeature = None):
+        self._version = version
+        self._features = features
+        self._ensure_consistency()
+
+    def _ensure_consistency(self):
+        if not self.is_feature_flags_supported():
+            self._features = None
+
+    @property
+    def version(self):
+        return getattr(self, '_version', None)
+
+    def set_version(self, version: Tuple[int, int, int]):
+        """
+        Set version.
+
+        This call may result in features being reset to None if the protocol
+        version does not support feature masks.
+
+        :param version: Version to set.
+        """
+        self._version = version
+        self._ensure_consistency()
+
+    @property
+    def features(self):
+        return getattr(self, '_features', None)
+
+    def try_set_features(self, features: BitmaskFeature):
+        """
+        Try and set new feature set.
+
+        If features are not supported by the protocol, None is set as features
+        instead.
+
+        :param features: Features to set.
+        """
+        self._features = features
+        self._ensure_consistency()
 
     def is_partition_awareness_supported(self) -> bool:
         """
@@ -50,6 +87,4 @@ class ProtocolContext:
         """
         Check whether cluster API supported by the current protocol.
         """
-        return self.is_feature_flags_supported() and \
-            self.features and \
-            BitmaskFeature.CLUSTER_API in self.features
+        return self.features and BitmaskFeature.CLUSTER_API in self.features
