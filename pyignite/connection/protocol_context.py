@@ -33,10 +33,9 @@ class ProtocolContext:
         return hash((self._version, self._features))
 
     def __eq__(self, other):
-        if isinstance(other, ProtocolContext):
-            return self.version == other.version and \
-                self.features == other.features
-        return NotImplemented
+        return isinstance(other, ProtocolContext) and \
+            self.version == other.version and \
+            self.features == other.features
 
     def _ensure_consistency(self):
         if not self.is_feature_flags_supported():
