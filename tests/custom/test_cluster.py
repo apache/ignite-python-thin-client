@@ -35,12 +35,12 @@ def cleanup():
 
 
 @pytest.fixture(autouse=True)
-def server1(with_persistence):
+def server1(with_persistence, cleanup):
     yield from start_ignite_gen(idx=1, use_persistence=with_persistence)
 
 
 @pytest.fixture(autouse=True)
-def server2(with_persistence):
+def server2(with_persistence, cleanup):
     yield from start_ignite_gen(idx=2, use_persistence=with_persistence)
 
 
