@@ -50,4 +50,6 @@ class ProtocolContext:
         """
         Check whether cluster API supported by the current protocol.
         """
-        return BitmaskFeature.CLUSTER_API in self.features
+        return self.is_feature_flags_supported() and \
+            self.features and \
+            BitmaskFeature.CLUSTER_API in self.features

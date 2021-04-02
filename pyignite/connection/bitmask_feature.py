@@ -15,6 +15,7 @@
 
 
 from enum import IntFlag
+from typing import Optional
 
 from pyignite.constants import PROTOCOL_BYTE_ORDER
 
@@ -42,3 +43,15 @@ class BitmaskFeature(IntFlag):
         for feature in BitmaskFeature:
             supported |= feature
         return supported
+
+    @staticmethod
+    def from_array(features_array: bytearray) -> Optional['BitmaskFeature']:
+        """
+        Get features from bytearray.
+
+        :param features_array: Feature bitmask as array,
+        :return: Return features.
+        """
+        if features_array is None:
+            return None
+        return BitmaskFeature.from_bytes(features_array, byteorder=PROTOCOL_BYTE_ORDER)

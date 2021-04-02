@@ -185,6 +185,7 @@ class Connection(BaseConnection):
             raise
 
         # connection is ready for end user
+        self.client.protocol_context.features = BitmaskFeature.from_array(result.get('features', None))
         self.uuid = result.get('node_uuid', None)  # version-specific (1.4+)
         self.failed = False
         return result
