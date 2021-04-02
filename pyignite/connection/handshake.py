@@ -44,9 +44,7 @@ class HandshakeRequest:
         ]
         self.protocol_context = protocol_context
         if self.protocol_context.is_feature_flags_supported():
-            fields.extend([
-                ('features', ByteArrayObject),
-            ])
+            fields.append(('features', ByteArrayObject))
         if username and password:
             self.username = username
             self.password = password
@@ -74,13 +72,8 @@ class HandshakeRequest:
         }
         if self.protocol_context.is_feature_flags_supported():
             features = bytes(self.protocol_context.features)
-            handshake_data.update({
-                'features': features,
-            })
-            handshake_data['length'] += sum([
-                5,
-                len(features)
-            ])
+            handshake_data['features'] = features
+            handshake_data['length'] += 5 + len(features)
         if self.username and self.password:
             handshake_data.update({
                 'username': self.username,
