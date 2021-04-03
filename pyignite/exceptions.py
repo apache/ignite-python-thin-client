@@ -65,7 +65,7 @@ class ParameterError(Exception):
 
 class CacheError(Exception):
     """
-    This exception is raised, whenever any remote Thin client operation
+    This exception is raised, whenever any remote Thin client cache operation
     returns an error.
     """
     pass
@@ -89,6 +89,22 @@ class CacheCreationError(CacheError):
 class SQLError(CacheError):
     """
     An error in SQL query.
+    """
+    pass
+
+
+class ClusterError(Exception):
+    """
+    This exception is raised, whenever any remote Thin client cluster operation
+    returns an error.
+    """
+    pass
+
+
+class NotSupportedByClusterError(Exception):
+    """
+    This exception is raised, whenever cluster is not supported specific
+    operation probably because it is outdated.
     """
     pass
 

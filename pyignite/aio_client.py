@@ -17,6 +17,7 @@ import random
 from itertools import chain
 from typing import Iterable, Type, Union, Any, Dict
 
+from .aio_cluster import AioCluster
 from .api import cache_get_node_partitions_async
 from .api.binary import get_binary_type_async, put_binary_type_async
 from .api.cache_config import cache_get_names_async
@@ -92,7 +93,7 @@ class AioClient(BaseClient):
 
             if not self.partition_aware:
                 try:
-                    if self.protocol_version is None:
+                    if self.protocol_context is None:
                         # open connection before adding to the pool
                         await conn.connect()
 
@@ -120,7 +121,7 @@ class AioClient(BaseClient):
 
             await asyncio.gather(*reconnect_coro, return_exceptions=True)
 
-        if self.protocol_version is None:
+        if self.protocol_context is None:
             raise ReconnectError('Can not connect.')
 
     async def close(self):
@@ -460,3 +461,11 @@ class AioClient(BaseClient):
         return AioSqlFieldsCursor(self, c_id, query_str, page_size, query_args, schema, statement_type,
                                   distributed_joins, local, replicated_only, enforce_join_order, collocated,
                                   lazy, include_field_names, max_rows, timeout)
+
+    def get_cluster(self) -> 'AioCluster':
+        """
+        Gets client cluster facade.
+
+        :return: AioClient cluster facade.
+        """
+        return AioCluster(self)

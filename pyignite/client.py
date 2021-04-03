@@ -49,6 +49,7 @@ from typing import Iterable, Type, Union, Any, Dict
 from .api import cache_get_node_partitions
 from .api.binary import get_binary_type, put_binary_type
 from .api.cache_config import cache_get_names
+from .cluster import Cluster
 from .cursors import SqlFieldsCursor
 from .cache import Cache, create_cache, get_cache, get_or_create_cache, BaseCache
 from .connection import Connection
@@ -83,24 +84,23 @@ class BaseClient:
         self._partition_aware = partition_aware
         self.affinity_version = (0, 0)
         self._affinity = {'version': self.affinity_version, 'partition_mapping': defaultdict(dict)}
-        self._protocol_version = None
+        self._protocol_context = None
 
     @property
-    def protocol_version(self):
+    def protocol_context(self):
         """
-        Returns the tuple of major, minor, and revision numbers of the used
-        thin protocol version, or None, if no connection to the Ignite cluster
-        was not yet established.
+        Returns protocol context, or None, if no connection to the Ignite
+        cluster was not yet established.
 
         This method is not a part of the public API. Unless you wish to
         extend the `pyignite` capabilities (with additional testing, logging,
         examining connections, et c.) you probably should not use it.
         """
-        return self._protocol_version
+        return self._protocol_context
 
-    @protocol_version.setter
-    def protocol_version(self, value):
-        self._protocol_version = value
+    @protocol_context.setter
+    def protocol_context(self, value):
+        self._protocol_context = value
 
     @property
     def partition_aware(self):
@@ -108,7 +108,8 @@ class BaseClient:
 
     @property
     def partition_awareness_supported_by_protocol(self):
-        return self.protocol_version is not None and self.protocol_version >= (1, 4, 0)
+        return self.protocol_context is not None \
+            and self.protocol_context.is_partition_awareness_supported()
 
     @property
     def compact_footer(self) -> bool:
@@ -379,7 +380,7 @@ class Client(BaseClient):
             conn = Connection(self, host, port, **self._connection_args)
 
             try:
-                if self.protocol_version is None or self.partition_aware:
+                if self.protocol_context is None or self.partition_aware:
                     # open connection before adding to the pool
                     conn.connect()
 
@@ -396,7 +397,7 @@ class Client(BaseClient):
 
             self._nodes.append(conn)
 
-        if self.protocol_version is None:
+        if self.protocol_context is None:
             raise ReconnectError('Can not connect.')
 
     def close(self):
@@ -727,3 +728,11 @@ class Client(BaseClient):
         return SqlFieldsCursor(self, c_id, query_str, page_size, query_args, schema, statement_type, distributed_joins,
                                local, replicated_only, enforce_join_order, collocated, lazy, include_field_names,
                                max_rows, timeout)
+
+    def get_cluster(self) -> 'Cluster':
+        """
+        Gets client cluster facade.
+
+        :return: Client cluster facade.
+        """
+        return Cluster(self)

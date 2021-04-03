@@ -124,7 +124,7 @@ class Query:
             self.from_python(stream, query_params)
             response_data = conn.request(stream.getbuffer())
 
-        response_struct = self.response_type(protocol_version=conn.protocol_version,
+        response_struct = self.response_type(protocol_context=conn.protocol_context,
                                              following=response_config, **kwargs)
 
         with BinaryStream(conn.client, response_data) as stream:
@@ -156,7 +156,7 @@ class Query:
             await self.from_python_async(stream, query_params)
             data = await conn.request(stream.getbuffer())
 
-        response_struct = self.response_type(protocol_version=conn.protocol_version,
+        response_struct = self.response_type(protocol_context=conn.protocol_context,
                                              following=response_config, **kwargs)
 
         with AioBinaryStream(conn.client, data) as stream:
