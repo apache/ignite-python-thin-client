@@ -55,7 +55,7 @@ class BinaryStreamBase:
         else:
             start, end = init_position - ctype_len, init_position
 
-        with self._getbuffer()[start:end] as buf:
+        with self.getbuffer()[start:end] as buf:
             return ctype_class.from_buffer_copy(buf)
 
     def write(self, buf):
@@ -68,7 +68,7 @@ class BinaryStreamBase:
     def seek(self, *args, **kwargs):
         return self.stream.seek(*args, **kwargs)
 
-    def _getbuffer(self):
+    def getbuffer(self):
         if self._buffer:
             return self._buffer
 
@@ -80,11 +80,11 @@ class BinaryStreamBase:
 
     def slice(self, start=-1, offset=0):
         start = start if start >= 0 else self.tell()
-        with self._getbuffer()[start:start + offset] as buf:
+        with self.getbuffer()[start:start + offset] as buf:
             return bytes(buf)
 
     def hashcode(self, start, bytes_len):
-        with self._getbuffer()[start:start + bytes_len] as buf:
+        with self.getbuffer()[start:start + bytes_len] as buf:
             return ignite_utils.hashcode(buf)
 
     def _release_buffer(self):

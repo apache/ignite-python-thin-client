@@ -212,7 +212,7 @@ class Connection(BaseConnection):
 
         with BinaryStream(self.client) as stream:
             hs_request.from_python(stream)
-            self.send(stream.getvalue(), reconnect=False)
+            self.send(stream.getbuffer(), reconnect=False)
 
         with BinaryStream(self.client, self.recv(reconnect=False)) as stream:
             hs_response = HandshakeResponse.parse(stream, self.protocol_context)
@@ -289,7 +289,7 @@ class Connection(BaseConnection):
             try:
                 bytes_received = self._socket.recv_into(buffer, len(buffer), **kwargs)
                 if bytes_received == 0:
-                    raise SocketError(f'Connection broken. len of buffer {len(buffer)}')
+                    raise SocketError('Connection broken.')
                 bytes_total_received += bytes_received
             except connection_errors:
                 self.failed = True
