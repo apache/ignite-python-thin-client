@@ -23,7 +23,12 @@ READ_FORWARD = 0
 READ_BACKWARD = 1
 
 
-class BinaryStreamBaseMixin:
+class BinaryStreamBase:
+    def __init__(self, client, buf=None):
+        self.client = client
+        self.stream = BytesIO(buf) if buf else BytesIO()
+        self._buffer = None
+
     @property
     def compact_footer(self) -> bool:
         return self.client.compact_footer
@@ -50,7 +55,7 @@ class BinaryStreamBaseMixin:
         else:
             start, end = init_position - ctype_len, init_position
 
-        with self.getbuffer()[start:end] as buf:
+        with self._getbuffer()[start:end] as buf:
             return ctype_class.from_buffer_copy(buf)
 
     def write(self, buf):
@@ -63,10 +68,9 @@ class BinaryStreamBaseMixin:
     def seek(self, *args, **kwargs):
         return self.stream.seek(*args, **kwargs)
 
-    def getbuffer(self):
-        buf = getattr(self, '_buffer', None)
-        if buf:
-            return buf
+    def _getbuffer(self):
+        if self._buffer:
+            return self._buffer
 
         self._buffer = self.stream.getbuffer()
         return self._buffer
@@ -76,17 +80,16 @@ class BinaryStreamBaseMixin:
 
     def slice(self, start=-1, offset=0):
         start = start if start >= 0 else self.tell()
-        with self.getbuffer()[start:start + offset] as buf:
+        with self._getbuffer()[start:start + offset] as buf:
             return bytes(buf)
 
     def hashcode(self, start, bytes_len):
-        with self.getbuffer()[start:start + bytes_len] as buf:
+        with self._getbuffer()[start:start + bytes_len] as buf:
             return ignite_utils.hashcode(buf)
 
     def _release_buffer(self):
-        _buffer = getattr(self, '_buffer', None)
-        if _buffer:
-            _buffer.release()
+        if self._buffer:
+            self._buffer.release()
             self._buffer = None
 
     def __enter__(self):
@@ -97,7 +100,7 @@ class BinaryStreamBaseMixin:
         self.stream.close()
 
 
-class BinaryStream(BinaryStreamBaseMixin):
+class BinaryStream(BinaryStreamBase):
     """
     Synchronous binary stream.
     """
@@ -106,8 +109,7 @@ class BinaryStream(BinaryStreamBaseMixin):
         :param client: Client instance, required.
         :param buf: Buffer, optional parameter. If not passed, creates empty BytesIO.
         """
-        self.client = client
-        self.stream = BytesIO(buf) if buf else BytesIO()
+        super().__init__(client, buf)
 
     def get_dataclass(self, header):
         result = self.client.query_binary_type(header.type_id, header.schema_id)
@@ -119,7 +121,7 @@ class BinaryStream(BinaryStreamBaseMixin):
         self.client.register_binary_type(*args, **kwargs)
 
 
-class AioBinaryStream(BinaryStreamBaseMixin):
+class AioBinaryStream(BinaryStreamBase):
     """
     Asyncio binary stream.
     """
@@ -130,8 +132,7 @@ class AioBinaryStream(BinaryStreamBaseMixin):
         :param client: AioClient instance, required.
         :param buf: Buffer, optional parameter. If not passed, creates empty BytesIO.
         """
-        self.client = client
-        self.stream = BytesIO(buf) if buf else BytesIO()
+        super().__init__(client, buf)
 
     async def get_dataclass(self, header):
         result = await self.client.query_binary_type(header.type_id, header.schema_id)
