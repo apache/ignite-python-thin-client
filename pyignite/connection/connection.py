@@ -310,6 +310,7 @@ class Connection(BaseConnection):
                     continue
 
             if bytes_total_received >= bytes_to_receive:
+                buffer.release()
                 break
 
             buffer = buffer[bytes_received:]

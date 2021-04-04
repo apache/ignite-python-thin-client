@@ -36,7 +36,10 @@ __all__ = [
 from ..stream import READ_BACKWARD
 
 
-def tc_map(key: bytes, _memo_map: dict = {}):
+_tc_map = {}
+
+
+def tc_map(key: bytes):
     """
     Returns a default parser/generator class for the given type code.
 
@@ -49,7 +52,8 @@ def tc_map(key: bytes, _memo_map: dict = {}):
      of the “type code-type class” mapping,
     :return: parser/generator class for the type code.
     """
-    if not _memo_map:
+    global _tc_map
+    if not _tc_map:
         from pyignite.datatypes import (
             Null, ByteObject, ShortObject, IntObject, LongObject, FloatObject,
             DoubleObject, CharObject, BoolObject, UUIDObject, DateObject,
@@ -64,7 +68,7 @@ def tc_map(key: bytes, _memo_map: dict = {}):
             MapObject, BinaryObject, WrappedDataObject,
         )
 
-        _memo_map = {
+        _tc_map = {
             TC_NULL: Null,
 
             TC_BYTE: ByteObject,
@@ -110,7 +114,7 @@ def tc_map(key: bytes, _memo_map: dict = {}):
             TC_COMPLEX_OBJECT: BinaryObject,
             TC_ARRAY_WRAPPED_OBJECTS: WrappedDataObject,
         }
-    return _memo_map[key]
+    return _tc_map[key]
 
 
 class Conditional:

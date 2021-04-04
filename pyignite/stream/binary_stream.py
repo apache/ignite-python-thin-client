@@ -50,10 +50,11 @@ class BinaryStreamBaseMixin:
         else:
             start, end = init_position - ctype_len, init_position
 
-        with self.stream.getbuffer()[start:end] as buf:
+        with self.getbuffer()[start:end] as buf:
             return ctype_class.from_buffer_copy(buf)
 
     def write(self, buf):
+        self._release_buffer()
         return self.stream.write(buf)
 
     def tell(self):
@@ -62,22 +63,37 @@ class BinaryStreamBaseMixin:
     def seek(self, *args, **kwargs):
         return self.stream.seek(*args, **kwargs)
 
+    def getbuffer(self):
+        buf = getattr(self, '_buffer', None)
+        if buf:
+            return buf
+
+        self._buffer = self.stream.getbuffer()
+        return self._buffer
+
     def getvalue(self):
         return self.stream.getvalue()
 
     def slice(self, start=-1, offset=0):
         start = start if start >= 0 else self.tell()
-        with self.stream.getbuffer()[start:start + offset] as buf:
+        with self.getbuffer()[start:start + offset] as buf:
             return bytes(buf)
 
     def hashcode(self, start, bytes_len):
-        with self.stream.getbuffer()[start:start + bytes_len] as buf:
+        with self.getbuffer()[start:start + bytes_len] as buf:
             return ignite_utils.hashcode(buf)
+
+    def _release_buffer(self):
+        _buffer = getattr(self, '_buffer', None)
+        if _buffer:
+            _buffer.release()
+            self._buffer = None
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        self._release_buffer()
         self.stream.close()
 
 
