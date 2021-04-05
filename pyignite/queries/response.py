@@ -27,42 +27,42 @@ from pyignite.queries.op_codes import OP_SUCCESS
 from pyignite.stream import READ_BACKWARD
 
 
+class StatusFlagResponseHeader(ctypes.LittleEndianStructure):
+    _pack_ = 1
+    _fields_ = [
+        ('length', ctypes.c_int),
+        ('query_id', ctypes.c_longlong),
+        ('flags', ctypes.c_short)
+    ]
+
+
+class ResponseHeader(ctypes.LittleEndianStructure):
+    _pack_ = 1
+    _fields_ = [
+        ('length', ctypes.c_int),
+        ('query_id', ctypes.c_longlong),
+        ('status_code', ctypes.c_int)
+    ]
+
+
 @attr.s
 class Response:
     following = attr.ib(type=list, factory=list)
     protocol_context = attr.ib(type=type(ProtocolContext), default=None)
-    _response_header = None
     _response_class_name = 'Response'
 
     def __attrs_post_init__(self):
         # replace None with empty list
         self.following = self.following or []
 
-    def __build_header(self):
-        if self._response_header is None:
-            fields = [
-                ('length', ctypes.c_int),
-                ('query_id', ctypes.c_longlong),
-            ]
-
-            if self.protocol_context.is_status_flags_supported():
-                fields.append(('flags', ctypes.c_short))
-            else:
-                fields.append(('status_code', ctypes.c_int),)
-
-            self._response_header = type(
-                'ResponseHeader',
-                (ctypes.LittleEndianStructure,),
-                {
-                    '_pack_': 1,
-                    '_fields_': fields,
-                },
-            )
-        return self._response_header
-
     def __parse_header(self, stream):
         init_pos = stream.tell()
-        header_class = self.__build_header()
+
+        if self.protocol_context.is_status_flags_supported():
+            header_class = StatusFlagResponseHeader
+        else:
+            header_class = ResponseHeader
+
         header_len = ctypes.sizeof(header_class)
         header = stream.read_ctype(header_class)
         stream.seek(header_len, SEEK_CUR)

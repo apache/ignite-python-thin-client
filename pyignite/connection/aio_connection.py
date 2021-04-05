@@ -158,7 +158,7 @@ class AioConnection(BaseConnection):
 
         with AioBinaryStream(self.client) as stream:
             await hs_request.from_python_async(stream)
-            await self._send(stream.getbuffer(), reconnect=False)
+            await self._send(stream.getvalue(), reconnect=False)
 
         with AioBinaryStream(self.client, await self._recv(reconnect=False)) as stream:
             hs_response = await HandshakeResponse.parse_async(stream, self.protocol_context)
@@ -185,7 +185,7 @@ class AioConnection(BaseConnection):
         except connection_errors:
             pass
 
-    async def request(self, data: Union[bytes, bytearray, memoryview]) -> bytearray:
+    async def request(self, data: Union[bytes, bytearray]) -> bytearray:
         """
         Perform request.
 
@@ -195,7 +195,7 @@ class AioConnection(BaseConnection):
             await self._send(data)
             return await self._recv()
 
-    async def _send(self, data: Union[bytes, bytearray, memoryview], reconnect=True):
+    async def _send(self, data: Union[bytes, bytearray], reconnect=True):
         if self.closed:
             raise SocketError('Attempt to use closed connection.')
 
@@ -212,21 +212,43 @@ class AioConnection(BaseConnection):
         if self.closed:
             raise SocketError('Attempt to use closed connection.')
 
-        with BytesIO() as stream:
+        data = bytearray(1024)
+        buffer = memoryview(data)
+        bytes_total_received, bytes_to_receive = 0, 0
+        while True:
             try:
-                buf = await self._reader.readexactly(4)
-                response_len = int.from_bytes(buf, PROTOCOL_BYTE_ORDER)
+                chunk = await self._reader.read(len(buffer))
+                bytes_received = len(chunk)
+                if bytes_received == 0:
+                    raise SocketError('Connection broken.')
 
-                stream.write(buf)
-
-                stream.write(await self._reader.readexactly(response_len))
+                buffer[0:bytes_received] = chunk
+                bytes_total_received += bytes_received
             except connection_errors:
                 self.failed = True
                 if reconnect:
                     await self._reconnect()
                 raise
 
-            return bytearray(stream.getbuffer())
+            if bytes_total_received < 4:
+                continue
+            elif bytes_to_receive == 0:
+                response_len = int.from_bytes(data[0:4], PROTOCOL_BYTE_ORDER)
+                bytes_to_receive = response_len
+
+                if response_len + 4 > len(data):
+                    buffer.release()
+                    data.extend(bytearray(response_len + 4 - len(data)))
+                    buffer = memoryview(data)[bytes_total_received:]
+                    continue
+
+            if bytes_total_received >= bytes_to_receive:
+                buffer.release()
+                break
+
+            buffer = buffer[bytes_received:]
+
+        return data
 
     async def close(self):
         async with self._mux:
