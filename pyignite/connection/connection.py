@@ -212,7 +212,7 @@ class Connection(BaseConnection):
 
         with BinaryStream(self.client) as stream:
             hs_request.from_python(stream)
-            self.send(stream.getbuffer(), reconnect=False)
+            self.send(stream.getvalue(), reconnect=False)
 
         with BinaryStream(self.client, self.recv(reconnect=False)) as stream:
             hs_response = HandshakeResponse.parse(stream, self.protocol_context)

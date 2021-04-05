@@ -122,7 +122,7 @@ class Query:
         """
         with BinaryStream(conn.client) as stream:
             self.from_python(stream, query_params)
-            response_data = conn.request(stream.getbuffer())
+            response_data = conn.request(stream.getvalue())
 
         response_struct = self.response_type(protocol_context=conn.protocol_context,
                                              following=response_config, **kwargs)
