@@ -60,7 +60,6 @@ the whole repository:
 ::
 
 $ git clone git@github.com:apache/ignite-python-thin-client.git
-$ cd ignite/modules/platforms/python
 $ pip install -e .
 
 This will install the repository version of `pyignite` into your environment

@@ -26,10 +26,8 @@ Subpackages
 
 .. toctree::
 
-    pyignite.api
-    pyignite.connection
     pyignite.datatypes
-    pyignite.queries
+    pyignite.connection
 
 Submodules
 ----------
@@ -44,6 +42,4 @@ Submodules
     pyignite.constants
     pyignite.cursors
     pyignite.exceptions
-    pyignite.stream
-    pyignite.utils
 

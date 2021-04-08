@@ -37,8 +37,6 @@ Submodules
    pyignite.datatypes.primitive
    pyignite.datatypes.primitive_arrays
    pyignite.datatypes.primitive_objects
-   pyignite.datatypes.prop_codes
    pyignite.datatypes.sql
    pyignite.datatypes.standard
-   pyignite.datatypes.type_codes
 

@@ -20,12 +20,3 @@ pyignite.connection package
     :members:
     :undoc-members:
     :show-inheritance:
-
-Submodules
-----------
-
-.. toctree::
-
-   pyignite.connection.handshake
-   pyignite.connection.ssl
-
