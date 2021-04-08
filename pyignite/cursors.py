@@ -32,6 +32,9 @@ __all__ = ['ScanCursor', 'SqlCursor', 'SqlFieldsCursor', 'AioScanCursor', 'AioSq
 class BaseCursorMixin:
     @property
     def connection(self):
+        """
+        Ignite cluster connection.
+        """
         return getattr(self, '_conn', None)
 
     @connection.setter
@@ -40,6 +43,9 @@ class BaseCursorMixin:
 
     @property
     def cursor_id(self):
+        """
+        Cursor id.
+        """
         return getattr(self, '_cursor_id', None)
 
     @cursor_id.setter
@@ -48,6 +54,9 @@ class BaseCursorMixin:
 
     @property
     def more(self):
+        """
+        Whether cursor has more values.
+        """
         return getattr(self, '_more', None)
 
     @more.setter
@@ -56,6 +65,9 @@ class BaseCursorMixin:
 
     @property
     def cache_id(self):
+        """
+        Cache id.
+        """
         return getattr(self, '_cache_id', None)
 
     @cache_id.setter
@@ -64,6 +76,9 @@ class BaseCursorMixin:
 
     @property
     def client(self):
+        """
+        Apache Ignite client.
+        """
         return getattr(self, '_client', None)
 
     @client.setter
@@ -72,6 +87,9 @@ class BaseCursorMixin:
 
     @property
     def data(self):
+        """
+        Current fetched data.
+        """
         return getattr(self, '_data', None)
 
     @data.setter
@@ -90,6 +108,9 @@ class CursorMixin(BaseCursorMixin):
         self.close()
 
     def close(self):
+        """
+        Close cursor.
+        """
         if self.connection and self.cursor_id and self.more:
             resource_close(self.connection, self.cursor_id)
 
@@ -105,6 +126,9 @@ class AioCursorMixin(BaseCursorMixin):
         await self.close()
 
     async def close(self):
+        """
+        Close cursor.
+        """
         if self.connection and self.cursor_id and self.more:
             await resource_close_async(self.connection, self.cursor_id)
 
@@ -132,7 +156,17 @@ class AbstractScanCursor:
 
 
 class ScanCursor(AbstractScanCursor, CursorMixin):
+    """
+    Synchronous scan cursor.
+    """
     def __init__(self, client, cache_id, page_size, partitions, local):
+        """
+        :param client: Synchronous Apache Ignite client.
+        :param cache_id: Cache id.
+        :param page_size: page size.
+        :param partitions: number of partitions to query (negative to query entire cache).
+        :param local: pass True if this query should be executed on local node only.
+        """
         super().__init__(client, cache_id, page_size, partitions, local)
 
         self.connection = self.client.random_node
@@ -156,7 +190,17 @@ class ScanCursor(AbstractScanCursor, CursorMixin):
 
 
 class AioScanCursor(AbstractScanCursor, AioCursorMixin):
+    """
+    Asynchronous scan query cursor.
+    """
     def __init__(self, client, cache_id, page_size, partitions, local):
+        """
+        :param client: Asynchronous Apache Ignite client.
+        :param cache_id: Cache id.
+        :param page_size: page size.
+        :param partitions: number of partitions to query (negative to query entire cache).
+        :param local: pass True if this query should be executed on local node only.
+        """
         super().__init__(client, cache_id, page_size, partitions, local)
 
     async def __aenter__(self):
@@ -191,7 +235,14 @@ class AioScanCursor(AbstractScanCursor, AioCursorMixin):
 
 
 class SqlCursor(CursorMixin):
+    """
+    Synchronous SQL query cursor.
+    """
     def __init__(self, client, cache_id, *args, **kwargs):
+        """
+        :param client: Synchronous Apache Ignite client.
+        :param cache_id: Cache id.
+        """
         self.client = client
         self.cache_id = cache_id
         self.connection = self.client.random_node
@@ -241,7 +292,14 @@ class AbstractSqlFieldsCursor:
 
 
 class SqlFieldsCursor(AbstractSqlFieldsCursor, CursorMixin):
+    """
+    Synchronous SQL fields query cursor.
+    """
     def __init__(self, client, cache_id, *args, **kwargs):
+        """
+        :param client: Synchronous Apache Ignite client.
+        :param cache_id: Cache id.
+        """
         super().__init__(client, cache_id)
         self.connection = self.client.random_node
         self._finalize_init(sql_fields(self.connection, self.cache_id, *args, **kwargs))
@@ -273,7 +331,14 @@ class SqlFieldsCursor(AbstractSqlFieldsCursor, CursorMixin):
 
 
 class AioSqlFieldsCursor(AbstractSqlFieldsCursor, AioCursorMixin):
+    """
+    Asynchronous SQL fields query cursor.
+    """
     def __init__(self, client, cache_id, *args, **kwargs):
+        """
+        :param client: Synchronous Apache Ignite client.
+        :param cache_id: Cache id.
+        """
         super().__init__(client, cache_id)
         self._params = (args, kwargs)
 

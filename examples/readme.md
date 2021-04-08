@@ -4,11 +4,11 @@ This directory contains the following example files:
 
 - `binary_basics.py` − basic operations with Complex objects,
 - `binary_types.py` - read SQL table as a key-value cache,
-- `create_binary.py` − create SQL row with key-value operation,
+- `create_binary.py` − create SQL row with key-value operation,
 - `failover.py` − fail-over connection to Ignite cluster,
-- `get_and_put.py` − basic key-value operations,
+- `get_and_put.py` − basic key-value operations,
 - `migrate_binary.py` − work with Complex object schemas,
-- `scans.py` − cache scan operation,
+- `scans.py` − cache scan operation,
 - `sql.py` − use Ignite SQL,
 - `type_hints.py` − type hints.
 

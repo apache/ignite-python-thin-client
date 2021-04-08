@@ -681,7 +681,7 @@ class Client(BaseClient):
         lazy: bool = False, include_field_names: bool = False,
         max_rows: int = -1, timeout: int = 0,
         cache: Union[int, str, Cache] = None
-    ):
+    ) -> SqlFieldsCursor:
         """
         Runs an SQL query and returns its result.
 
@@ -693,9 +693,9 @@ class Client(BaseClient):
         :param schema: (optional) schema for the query. Defaults to `PUBLIC`,
         :param statement_type: (optional) statement type. Can be:
 
-         * StatementType.ALL − any type (default),
+         * StatementType.ALL − any type (default),
          * StatementType.SELECT − select,
-         * StatementType.UPDATE − update.
+         * StatementType.UPDATE − update.
 
         :param distributed_joins: (optional) distributed joins. Defaults
          to False,
@@ -714,9 +714,9 @@ class Client(BaseClient):
          (all rows),
         :param timeout: (optional) non-negative timeout value in ms.
          Zero disables timeout (default),
-        :param cache (optional) Name or ID of the cache to use to infer schema.
+        :param cache: (optional) Name or ID of the cache to use to infer schema.
          If set, 'schema' argument is ignored,
-        :return: generator with result rows as a lists. If
+        :return: sql fields cursor with result rows as a lists. If
          `include_field_names` was set, the first row will hold field names.
         """
 

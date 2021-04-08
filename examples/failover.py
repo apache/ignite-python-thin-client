@@ -15,7 +15,7 @@
 
 from pyignite import Client
 from pyignite.datatypes.cache_config import CacheMode
-from pyignite.datatypes.prop_codes import *
+from pyignite.datatypes.prop_codes import PROP_NAME, PROP_CACHE_MODE, PROP_BACKUPS_NUMBER
 from pyignite.exceptions import SocketError
 
 
@@ -25,30 +25,32 @@ nodes = [
     ('127.0.0.1', 10802),
 ]
 
-client = Client(timeout=4.0)
-client.connect(nodes)
-print('Connected')
 
-my_cache = client.get_or_create_cache({
-    PROP_NAME: 'my_cache',
-    PROP_CACHE_MODE: CacheMode.PARTITIONED,
-    PROP_BACKUPS_NUMBER: 2,
-})
-my_cache.put('test_key', 0)
-test_value = 0
+def main():
+    client = Client(timeout=4.0)
+    with client.connect(nodes):
+        print('Connected')
 
-# abstract main loop
-while True:
-    try:
-        # do the work
-        test_value = my_cache.get('test_key') or 0
-        my_cache.put('test_key', test_value + 1)
-    except (OSError, SocketError) as e:
-        # recover from error (repeat last command, check data
-        # consistency or just continue − depends on the task)
-        print('Error: {}'.format(e))
-        print('Last value: {}'.format(test_value))
-        print('Reconnecting')
+        my_cache = client.get_or_create_cache({
+            PROP_NAME: 'my_cache',
+            PROP_CACHE_MODE: CacheMode.PARTITIONED,
+            PROP_BACKUPS_NUMBER: 2,
+        })
+        my_cache.put('test_key', 0)
+        test_value = 0
+
+        # abstract main loop
+        while True:
+            try:
+                # do the work
+                test_value = my_cache.get('test_key') or 0
+                my_cache.put('test_key', test_value + 1)
+            except (OSError, SocketError) as e:
+                # recover from error (repeat last command, check data
+                # consistency or just continue − depends on the task)
+                print(f'Error: {e}')
+                print(f'Last value: {test_value}')
+                print('Reconnecting')
 
 # Connected
 # Error: Connection broken.

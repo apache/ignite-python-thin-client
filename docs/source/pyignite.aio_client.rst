@@ -13,21 +13,10 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 
-=================
-API Specification
-=================
+pyignite.aio_client module
+==========================
 
-The modules and subpackages listed here are the basis of a stable API
-of `pyignite`, intended for end users.
-
-.. toctree::
-    :maxdepth: 1
-    :caption: Modules:
-
-    Client <source/pyignite.client>
-    AioClient <source/pyignite.aio_client>
-    Cache <source/pyignite.cache>
-    AioCache <source/pyignite.aio_cache>
-    datatypes/parsers
-    datatypes/cache_props
-    Exceptions <source/pyignite.exceptions>
+.. automodule:: pyignite.aio_client
+    :members:
+    :undoc-members:
+    :show-inheritance:

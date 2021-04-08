@@ -99,8 +99,8 @@ Do not forget to install test requirements:
 $ pip install -r requirements/install.txt -r requirements/tests.txt
 ```
 
-Also, you'll need to have a binary release of Ignite with lib4j2 enabled and
-`IGNITE_HOME` properly set: 
+Also, you'll need to have a binary release of Ignite with `log4j2` enabled and to set
+`IGNITE_HOME` environment variable: 
 ```bash
 $ cd <ignite_binary_release>
 $ export IGNITE_HOME=$(pwd)
@@ -113,14 +113,6 @@ $ pytest
 ### Run with examples
 ```bash
 $ pytest --examples 
-```
-### Run with ssl and not encrypted key
-```bash
-$ pytest --use-ssl=True --ssl-certfile=./tests/ssl/client_full.pem
-```
-### Run with ssl and password-protected key
-```bash
-$ pytest --use-ssl=True --ssl-certfile=./tests/config/ssl/client_with_pass_full.pem --ssl-keyfile-password=654321
 ```
 
 If you need to change the connection parameters, see the documentation on

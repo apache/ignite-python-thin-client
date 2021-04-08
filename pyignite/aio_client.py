@@ -282,7 +282,7 @@ class AioClient(BaseClient):
         of an intermittent error (most probably “Getting affinity for topology
         version earlier than affinity is calculated”).
 
-        :param conn: connection to Igneite server,
+        :param conn: connection to Ignite server,
         :param caches: Ids of caches,
         :return: OP_CACHE_PARTITIONS operation result value.
         """
@@ -414,7 +414,7 @@ class AioClient(BaseClient):
         lazy: bool = False, include_field_names: bool = False,
         max_rows: int = -1, timeout: int = 0,
         cache: Union[int, str, 'AioCache'] = None
-    ):
+    ) -> AioSqlFieldsCursor:
         """
         Runs an SQL query and returns its result.
 
@@ -447,9 +447,9 @@ class AioClient(BaseClient):
          (all rows),
         :param timeout: (optional) non-negative timeout value in ms.
          Zero disables timeout (default),
-        :param cache (optional) Name or ID of the cache to use to infer schema.
+        :param cache: (optional) Name or ID of the cache to use to infer schema.
          If set, 'schema' argument is ignored,
-        :return: generator with result rows as a lists. If
+        :return: async sql fields cursor with result rows as a lists. If
          `include_field_names` was set, the first row will hold field names.
         """
 

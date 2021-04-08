@@ -106,18 +106,18 @@ class ExpenseVoucher(
 
 
 client = Client()
-client.connect('127.0.0.1', 10800)
 
-accounting = client.get_or_create_cache('accounting')
+with client.connect('127.0.0.1', 10800):
+    accounting = client.get_or_create_cache('accounting')
 
-for key, value in old_data:
-    accounting.put(key, ExpenseVoucher(**value))
+    for key, value in old_data:
+        accounting.put(key, ExpenseVoucher(**value))
 
-data_classes = client.query_binary_type('ExpenseVoucher')
-print(data_classes)
-# {
-#     -231598180: <class '__main__.ExpenseVoucher'>
-# }
+    data_classes = client.query_binary_type('ExpenseVoucher')
+    print(data_classes)
+    # {
+    #     -231598180: <class '__main__.ExpenseVoucher'>
+    # }
 
 s_id, data_class = data_classes.popitem()
 schema = data_class.schema
@@ -182,9 +182,11 @@ def migrate(cache, data, new_class):
 
 
 # migrate data
-result = accounting.scan()
-migrate(accounting, result, ExpenseVoucherV2)
+with client.connect('127.0.0.1', 10800):
+    accounting = client.get_or_create_cache('accounting')
 
-# cleanup
-accounting.destroy()
-client.close()
+    with accounting.scan() as cursor:
+        migrate(accounting, cursor, ExpenseVoucherV2)
+
+    # cleanup
+    accounting.destroy()

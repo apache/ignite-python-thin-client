@@ -577,7 +577,7 @@ class Cache(BaseCache):
             self._get_best_node(), self._cache_id, peek_modes
         )
 
-    def scan(self, page_size: int = 1, partitions: int = -1, local: bool = False):
+    def scan(self, page_size: int = 1, partitions: int = -1, local: bool = False) -> ScanCursor:
         """
         Returns all key-value pairs from the cache, similar to `get_all`, but
         with internal pagination, which is slower, but safer.
@@ -596,7 +596,7 @@ class Cache(BaseCache):
             self, query_str: str, page_size: int = 1,
             query_args: Optional[list] = None, distributed_joins: bool = False,
             replicated_only: bool = False, local: bool = False, timeout: int = 0
-    ):
+    ) -> SqlCursor:
         """
         Executes a simplified SQL SELECT query over data stored in the cache.
         The query returns the whole record (key and value).
