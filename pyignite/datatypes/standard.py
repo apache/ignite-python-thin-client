@@ -23,6 +23,7 @@ import uuid
 
 from pyignite.constants import *
 from pyignite.utils import datetime_hashcode, decimal_hashcode, hashcode
+from .base import IgniteDataType
 from .type_codes import *
 from .type_ids import *
 from .type_names import *
@@ -100,14 +101,14 @@ class String(Nullable):
         return data_type
 
     @classmethod
-    def to_python_not_null(cls, ctype_object, *args, **kwargs):
-        if ctype_object.length > 0:
-            return ctype_object.data.decode(PROTOCOL_STRING_ENCODING)
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+        if ctypes_object.length > 0:
+            return ctypes_object.data.decode(PROTOCOL_STRING_ENCODING)
 
         return ''
 
     @classmethod
-    def from_python_not_null(cls, stream, value):
+    def from_python_not_null(cls, stream, value, **kwargs):
         if isinstance(value, str):
             value = value.encode(PROTOCOL_STRING_ENCODING)
         length = len(value)
@@ -135,7 +136,7 @@ class DecimalObject(Nullable):
         return decimal_hashcode(value)
 
     @classmethod
-    def build_c_header(cls):
+    def build_c_type(cls, length):
         return type(
             cls.__name__,
             (ctypes.LittleEndianStructure,),
@@ -145,48 +146,41 @@ class DecimalObject(Nullable):
                     ('type_code', ctypes.c_byte),
                     ('scale', ctypes.c_int),
                     ('length', ctypes.c_int),
-                ],
+                    ('data', ctypes.c_ubyte * length)
+                ]
             }
         )
 
     @classmethod
     def parse_not_null(cls, stream):
-        header_class = cls.build_c_header()
-        header = stream.read_ctype(header_class)
-
-        data_type = type(
-            cls.__name__,
-            (header_class,),
-            {
-                '_pack_': 1,
-                '_fields_': [
-                    ('data', ctypes.c_ubyte * header.length),
-                ],
-            }
+        int_sz, b_sz = ctypes.sizeof(ctypes.c_int), ctypes.sizeof(ctypes.c_byte)
+        length = int.from_bytes(
+            stream.slice(stream.tell() + int_sz + b_sz, int_sz),
+            byteorder=PROTOCOL_BYTE_ORDER
         )
-
+        data_type = cls.build_c_type(length)
         stream.seek(ctypes.sizeof(data_type), SEEK_CUR)
         return data_type
 
     @classmethod
-    def to_python_not_null(cls, ctype_object, *args, **kwargs):
-        sign = 1 if ctype_object.data[0] & 0x80 else 0
-        data = ctype_object.data[1:]
-        data.insert(0, ctype_object.data[0] & 0x7f)
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+        sign = 1 if ctypes_object.data[0] & 0x80 else 0
+        data = ctypes_object.data[1:]
+        data.insert(0, ctypes_object.data[0] & 0x7f)
         # decode n-byte integer
         result = sum([
             [x for x in reversed(data)][i] * 0x100 ** i for i in
             range(len(data))
         ])
         # apply scale
-        result = result / decimal.Decimal('10') ** decimal.Decimal(ctype_object.scale)
+        result = result / decimal.Decimal('10') ** decimal.Decimal(ctypes_object.scale)
         if sign:
             # apply sign
             result = -result
         return result
 
     @classmethod
-    def from_python_not_null(cls, stream, value: decimal.Decimal):
+    def from_python_not_null(cls, stream, value: decimal.Decimal, **kwargs):
         sign, digits, scale = value.normalize().as_tuple()
         integer = int(''.join([str(d) for d in digits]))
         # calculate number of bytes (at least one, and not forget the sign bit)
@@ -202,17 +196,7 @@ class DecimalObject(Nullable):
             data[0] |= 0x80
         else:
             data[0] &= 0x7f
-        header_class = cls.build_c_header()
-        data_class = type(
-            cls.__name__,
-            (header_class,),
-            {
-                '_pack_': 1,
-                '_fields_': [
-                    ('data', ctypes.c_ubyte * length),
-                ],
-            }
-        )
+        data_class = cls.build_c_type(length)
         data_object = data_class()
         data_object.type_code = int.from_bytes(
             cls.type_code,
@@ -266,7 +250,7 @@ class UUIDObject(StandardObject):
         return cls._object_c_type
 
     @classmethod
-    def from_python_not_null(cls, stream, value: uuid.UUID):
+    def from_python_not_null(cls, stream, value: uuid.UUID, **kwargs):
         data_type = cls.build_c_type()
         data_object = data_type()
         data_object.type_code = int.from_bytes(
@@ -381,7 +365,7 @@ class DateObject(StandardObject):
         return cls._object_c_type
 
     @classmethod
-    def from_python_not_null(cls, stream, value: [date, datetime]):
+    def from_python_not_null(cls, stream, value: [date, datetime], **kwargs):
         if type(value) is date:
             value = datetime.combine(value, time())
         data_type = cls.build_c_type()
@@ -433,7 +417,7 @@ class TimeObject(StandardObject):
         return cls._object_c_type
 
     @classmethod
-    def from_python_not_null(cls, stream, value: timedelta):
+    def from_python_not_null(cls, stream, value: timedelta, **kwargs):
         data_type = cls.build_c_type()
         data_object = data_type()
         data_object.type_code = int.from_bytes(
@@ -480,7 +464,7 @@ class EnumObject(StandardObject):
         return cls._object_c_type
 
     @classmethod
-    def from_python_not_null(cls, stream, value: tuple):
+    def from_python_not_null(cls, stream, value: tuple, **kwargs):
         data_type = cls.build_c_type()
         data_object = data_type()
         data_object.type_code = int.from_bytes(
@@ -505,84 +489,89 @@ class BinaryEnumObject(EnumObject):
     type_code = TC_BINARY_ENUM
 
 
-class StandardArray(Nullable):
-    """
-    Base class for array of primitives. Payload-only.
-    """
-    _type_name = None
-    _type_id = None
+class _StandardArrayBase:
     standard_type = None
-    type_code = None
 
     @classmethod
-    def build_header_class(cls):
-        return type(
-            cls.__name__ + 'Header',
-            (ctypes.LittleEndianStructure,),
-            {
-                '_pack_': 1,
-                '_fields_': [
-                    ('length', ctypes.c_int),
-                ],
-            }
-        )
+    def _parse_header(cls, stream):
+        raise NotImplementedError
 
     @classmethod
-    def parse_not_null(cls, stream):
-        header_class = cls.build_header_class()
-        header = stream.read_ctype(header_class)
-        stream.seek(ctypes.sizeof(header_class), SEEK_CUR)
+    def _parse(cls, stream):
+        fields, length = cls._parse_header(stream)
 
-        fields = []
-        for i in range(header.length):
+        for i in range(length):
             c_type = cls.standard_type.parse(stream)
-            fields.append(('element_{}'.format(i), c_type))
+            fields.append((f'element_{i}', c_type))
 
-        final_class = type(
+        return type(
             cls.__name__,
-            (header_class,),
+            (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
                 '_fields_': fields,
             }
         )
-        return final_class
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
-        length = getattr(ctype_object, "length", None)
-        if length is None:
-            return None
-
-        result = []
-        for i in range(length):
-            result.append(
-                cls.standard_type.to_python(
-                    getattr(ctype_object, 'element_{}'.format(i)),
-                    *args, **kwargs
-                )
-            )
-        return result
+    def _write_header(cls, stream, value, **kwargs):
+        raise NotImplementedError
 
     @classmethod
-    async def to_python_async(cls, ctypes_object, *args, **kwargs):
-        return cls.to_python(ctypes_object, *args, **kwargs)
-
-    @classmethod
-    def from_python_not_null(cls, stream, value, **kwargs):
-        header_class = cls.build_header_class()
-        header = header_class()
-        if hasattr(header, 'type_code'):
-            header.type_code = int.from_bytes(
-                cls.type_code,
-                byteorder=PROTOCOL_BYTE_ORDER
-            )
-        length = len(value)
-        header.length = length
-
-        stream.write(header)
+    def _from_python(cls, stream, value, **kwargs):
+        cls._write_header(stream, value, **kwargs)
         for x in value:
             cls.standard_type.from_python(stream, x)
+
+    @classmethod
+    def _to_python(cls, ctypes_object, *args, **kwargs):
+        length = ctypes_object.length
+        return [
+            cls.standard_type.to_python(
+                getattr(ctypes_object, f'element_{i}'), *args, **kwargs
+            ) for i in range(length)
+        ]
+
+
+class StandardArray(IgniteDataType, _StandardArrayBase):
+    """
+    Base class for array of primitives. Payload-only.
+    """
+    _type_name = None
+    _type_id = None
+    type_code = None
+
+    @classmethod
+    def _parse_header(cls, stream):
+        int_sz = ctypes.sizeof(ctypes.c_int)
+        length = int.from_bytes(
+            stream.slice(stream.tell(), int_sz),
+            byteorder=PROTOCOL_BYTE_ORDER
+        )
+        stream.seek(int_sz, SEEK_CUR)
+
+        return [('length', ctypes.c_int)], length
+
+    @classmethod
+    def parse(cls, stream):
+        return cls._parse(stream)
+
+    @classmethod
+    def _write_header(cls, stream, value, **kwargs):
+        stream.write(
+            len(value).to_bytes(
+                length=ctypes.sizeof(ctypes.c_int),
+                byteorder=PROTOCOL_BYTE_ORDER
+            )
+        )
+
+    @classmethod
+    def from_python(cls, stream, value, **kwargs):
+        cls._from_python(stream, value, **kwargs)
+
+    @classmethod
+    def to_python(cls, ctypes_object, *args, **kwargs):
+        return cls._to_python(ctypes_object, *args, **kwargs)
 
 
 class StringArray(StandardArray):
@@ -633,25 +622,46 @@ class EnumArray(StandardArray):
     standard_type = EnumObject
 
 
-class StandardArrayObject(StandardArray):
+class StandardArrayObject(Nullable, _StandardArrayBase):
     _type_name = None
     _type_id = None
+    standard_type = None
+    type_code = None
     pythonic = list
     default = []
 
     @classmethod
-    def build_header_class(cls):
-        return type(
-            cls.__name__ + 'Header',
-            (ctypes.LittleEndianStructure,),
-            {
-                '_pack_': 1,
-                '_fields_': [
-                    ('type_code', ctypes.c_byte),
-                    ('length', ctypes.c_int),
-                ],
-            }
+    def _parse_header(cls, stream):
+        int_sz, b_sz = ctypes.sizeof(ctypes.c_int), ctypes.sizeof(ctypes.c_byte)
+        length = int.from_bytes(
+            stream.slice(stream.tell() + b_sz, int_sz),
+            byteorder=PROTOCOL_BYTE_ORDER
         )
+        stream.seek(int_sz + b_sz, SEEK_CUR)
+
+        return [('type_code', ctypes.c_byte), ('length', ctypes.c_int)], length
+
+    @classmethod
+    def parse_not_null(cls, stream):
+        return cls._parse(stream)
+
+    @classmethod
+    def _write_header(cls, stream, value, **kwargs):
+        stream.write(cls.type_code)
+        stream.write(
+            len(value).to_bytes(
+                length=ctypes.sizeof(ctypes.c_int),
+                byteorder=PROTOCOL_BYTE_ORDER
+            )
+        )
+
+    @classmethod
+    def from_python_not_null(cls, stream, value, **kwargs):
+        cls._from_python(stream, value, **kwargs)
+
+    @classmethod
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+        return cls._to_python(ctypes_object, *args, **kwargs)
 
 
 class StringArrayObject(StandardArrayObject):
@@ -714,45 +724,43 @@ class EnumArrayObject(StandardArrayObject):
     standard_type = EnumObject
     type_code = TC_ENUM_ARRAY
 
+    OBJECT = -1
+
     @classmethod
-    def build_header_class(cls):
-        return type(
-            cls.__name__ + 'Header',
-            (ctypes.LittleEndianStructure,),
-            {
-                '_pack_': 1,
-                '_fields_': [
-                    ('type_code', ctypes.c_byte),
-                    ('type_id', ctypes.c_int),
-                    ('length', ctypes.c_int),
-                ],
-            }
+    def _parse_header(cls, stream):
+        int_sz, b_sz = ctypes.sizeof(ctypes.c_int), ctypes.sizeof(ctypes.c_byte)
+        length = int.from_bytes(
+            stream.slice(stream.tell() + b_sz + int_sz, int_sz),
+            byteorder=PROTOCOL_BYTE_ORDER
+        )
+        stream.seek(2 * int_sz + b_sz, SEEK_CUR)
+        return [('type_code', ctypes.c_byte), ('type_id', ctypes.c_int), ('length', ctypes.c_int)], length
+
+    @classmethod
+    def _write_header(cls, stream, value, type_id=-1):
+        stream.write(cls.type_code)
+        stream.write(
+            type_id.to_bytes(
+                length=ctypes.sizeof(ctypes.c_int),
+                byteorder=PROTOCOL_BYTE_ORDER,
+                signed=True
+            )
+        )
+        stream.write(
+            len(value).to_bytes(
+                length=ctypes.sizeof(ctypes.c_int),
+                byteorder=PROTOCOL_BYTE_ORDER
+            )
         )
 
     @classmethod
     def from_python_not_null(cls, stream, value, **kwargs):
         type_id, value = value
-        header_class = cls.build_header_class()
-        header = header_class()
-        if hasattr(header, 'type_code'):
-            header.type_code = int.from_bytes(
-                cls.type_code,
-                byteorder=PROTOCOL_BYTE_ORDER
-            )
-        length = len(value)
-        header.length = length
-        header.type_id = type_id
-
-        stream.write(header)
-        for x in value:
-            cls.standard_type.from_python(stream, x)
+        super().from_python_not_null(stream, value, type_id=type_id)
 
     @classmethod
-    def to_python_not_null(cls, ctype_object, *args, **kwargs):
-        type_id = getattr(ctype_object, "type_id", None)
-        if type_id is None:
-            return None
-        return type_id, super().to_python(ctype_object, *args, **kwargs)
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+        return ctypes_object.type_id, cls._to_python(ctypes_object, *args, **kwargs)
 
 
 class BinaryEnumArrayObject(EnumArrayObject):

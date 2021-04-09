@@ -50,6 +50,7 @@ put_get_data_params = [
 
     # arrays of integers
     ([1, 2, 3, 5], None),
+    (b'buzz', None),
     (b'buzz', ByteArrayObject),
     (bytearray([7, 8, 8, 11]), None),
     (bytearray([7, 8, 8, 11]), ByteArrayObject),
@@ -122,7 +123,7 @@ put_get_data_params = [
     ((-1, [(6001, 1), (6002, 2), (6003, 3)]), BinaryEnumArrayObject),
 
     # object array
-    ((ObjectArrayObject.OBJECT, [1, 2, decimal.Decimal('3')]), ObjectArrayObject),
+    ((ObjectArrayObject.OBJECT, [1, 2, decimal.Decimal('3'), bytearray(b'\x10\x20')]), ObjectArrayObject),
 
     # collection
     ((CollectionObject.LINKED_LIST, [1, 2, 3]), None),
@@ -153,42 +154,47 @@ async def test_put_get_data_async(async_cache, value, value_hint):
 
 
 bytearray_params = [
-    [1, 2, 3, 5],
-    (7, 8, 13, 18),
-    (-128, -1, 0, 1, 127, 255),
+    ([1, 2, 3, 5], ByteArrayObject),
+    ((7, 8, 13, 18), ByteArrayObject),
+    ((-128, -1, 0, 1, 127, 255), ByteArrayObject),
+    (b'\x01\x03\x10', None),
+    (bytearray(b'\x01\x30'), None)
 ]
 
 
 @pytest.mark.parametrize(
-    'value',
+    'value,type_hint',
     bytearray_params
 )
-def test_bytearray_from_list_or_tuple(cache, value):
+def test_bytearray_from_different_input(cache, value, type_hint):
     """
     ByteArrayObject's pythonic type is `bytearray`, but it should also accept
     lists or tuples as a content.
     """
-
-    cache.put('my_key', value, value_hint=ByteArrayObject)
-
-    assert cache.get('my_key') == bytearray([unsigned(ch, ctypes.c_ubyte) for ch in value])
+    cache.put('my_key', value, value_hint=type_hint)
+    __check_bytearray_from_different_input(cache.get('my_key'), value)
 
 
 @pytest.mark.parametrize(
-    'value',
+    'value,type_hint',
     bytearray_params
 )
 @pytest.mark.asyncio
-async def test_bytearray_from_list_or_tuple_async(async_cache, value):
+async def test_bytearray_from_different_input_async(async_cache, value, type_hint):
     """
     ByteArrayObject's pythonic type is `bytearray`, but it should also accept
     lists or tuples as a content.
     """
-
     await async_cache.put('my_key', value, value_hint=ByteArrayObject)
+    __check_bytearray_from_different_input(await async_cache.get('my_key'), value)
 
-    result = await async_cache.get('my_key')
-    assert result == bytearray([unsigned(ch, ctypes.c_ubyte) for ch in value])
+
+def __check_bytearray_from_different_input(result, value):
+    if isinstance(value, (bytes, bytearray)):
+        assert isinstance(result, bytes)
+        assert value == result
+    else:
+        assert result == bytearray([unsigned(ch, ctypes.c_ubyte) for ch in value])
 
 
 uuid_params = [

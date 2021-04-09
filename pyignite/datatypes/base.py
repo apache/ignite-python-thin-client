@@ -72,9 +72,9 @@ class IgniteDataType(metaclass=IgniteDataTypeMeta):
         cls.from_python(stream, value, **kwargs)
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
+    def to_python(cls, ctypes_object, *args, **kwargs):
         raise NotImplementedError
 
     @classmethod
-    async def to_python_async(cls, ctype_object, *args, **kwargs):
-        return cls.to_python(ctype_object, *args, **kwargs)
+    async def to_python_async(cls, ctypes_object, *args, **kwargs):
+        return cls.to_python(ctypes_object, *args, **kwargs)

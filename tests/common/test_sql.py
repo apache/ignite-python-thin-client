@@ -325,3 +325,131 @@ def __check_query_with_cache(client, cache_fixture):
                 assert test_value == received
 
     return async_inner() if isinstance(cache, AioCache) else inner()
+
+
+VARBIN_CREATE_QUERY = 'CREATE TABLE VarbinTable(id int primary key, varbin VARBINARY)'
+VARBIN_DROP_QUERY = 'DROP TABLE VarbinTable'
+VARBIN_MERGE_QUERY = 'MERGE INTO VarbinTable(id, varbin) VALUES (?, ?)'
+VARBIN_SELECT_QUERY = 'SELECT * FROM VarbinTable'
+
+VARBIN_TEST_PARAMS = [
+    bytearray('Test message', 'UTF-8'),
+    bytes('Test message', 'UTF-8')
+]
+
+
+@pytest.fixture
+def varbin_table(client):
+    client.sql(VARBIN_CREATE_QUERY)
+    yield None
+    client.sql(VARBIN_DROP_QUERY)
+
+
+@pytest.mark.parametrize(
+    'value', VARBIN_TEST_PARAMS
+)
+def test_sql_cache_varbinary_handling(client, varbin_table, value):
+    client.sql(VARBIN_MERGE_QUERY, query_args=(1, value))
+    with client.sql(VARBIN_SELECT_QUERY) as cursor:
+        for row in cursor:
+            assert isinstance(row[1], bytes)
+            assert row[1] == value
+            break
+
+
+@pytest.fixture
+async def varbin_table_async(async_client):
+    await async_client.sql(VARBIN_CREATE_QUERY)
+    yield None
+    await async_client.sql(VARBIN_DROP_QUERY)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    'value', VARBIN_TEST_PARAMS
+)
+async def test_sql_cache_varbinary_handling_async(async_client, varbin_table_async, value):
+    await async_client.sql(VARBIN_MERGE_QUERY, query_args=(1, value))
+    async with async_client.sql(VARBIN_SELECT_QUERY) as cursor:
+        async for row in cursor:
+            assert isinstance(row[1], bytes)
+            assert row[1] == value
+            break
+
+
+@pytest.fixture
+def varbin_cache_settings():
+    cache_name = 'varbin_cache'
+    table_name = f'{cache_name}_table'.upper()
+
+    yield {
+        PROP_NAME: cache_name,
+        PROP_SQL_SCHEMA: 'PUBLIC',
+        PROP_CACHE_MODE: CacheMode.PARTITIONED,
+        PROP_QUERY_ENTITIES: [
+            {
+                'table_name': table_name,
+                'key_field_name': 'ID',
+                'value_field_name': 'VALUE',
+                'key_type_name': 'java.lang.Long',
+                'value_type_name': 'byte[]',
+                'query_indexes': [],
+                'field_name_aliases': [],
+                'query_fields': [
+                    {
+                        'name': 'ID',
+                        'type_name': 'java.lang.Long',
+                        'is_key_field': True,
+                        'is_notnull_constraint_field': True,
+                    },
+                    {
+                        'name': 'VALUE',
+                        'type_name': 'byte[]',
+                    },
+                ],
+            },
+        ],
+    }
+
+
+VARBIN_CACHE_TABLE_NAME = 'varbin_cache_table'.upper()
+VARBIN_CACHE_SELECT_QUERY = f'SELECT * FROM {VARBIN_CACHE_TABLE_NAME}'
+
+
+@pytest.fixture
+def varbin_cache(client, varbin_cache_settings):
+    cache = client.get_or_create_cache(varbin_cache_settings)
+    yield cache
+    cache.destroy()
+
+
+@pytest.mark.parametrize(
+    'value', VARBIN_TEST_PARAMS
+)
+def test_cache_varbinary_handling(client, varbin_cache, value):
+    varbin_cache.put(1, value)
+    with client.sql(VARBIN_CACHE_SELECT_QUERY) as cursor:
+        for row in cursor:
+            assert isinstance(row[1], bytes)
+            assert row[1] == value
+            break
+
+
+@pytest.fixture
+async def varbin_cache_async(async_client, varbin_cache_settings):
+    cache = await async_client.get_or_create_cache(varbin_cache_settings)
+    yield cache
+    await cache.destroy()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    'value', VARBIN_TEST_PARAMS
+)
+async def test_cache_varbinary_handling_async(async_client, varbin_cache_async, value):
+    await varbin_cache_async.put(1, value)
+    async with async_client.sql(VARBIN_CACHE_SELECT_QUERY) as cursor:
+        async for row in cursor:
+            assert isinstance(row[1], bytes)
+            assert row[1] == value
+            break
