@@ -86,7 +86,6 @@ for section in requirement_sections:
 with open('README.md', 'r', encoding='utf-8') as readme_file:
     long_description = readme_file.read()
 
-version = ''
 with open('pyignite/__init__.py', 'r') as fd:
     version = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]',
                         fd.read(), re.MULTILINE).group(1)
@@ -111,6 +110,8 @@ def run_setup(with_binary=True):
         author='The Apache Software Foundation',
         author_email='dev@ignite.apache.org',
         description='Apache Ignite binary client Python API',
+        long_description=long_description,
+        long_description_content_type='text/markdown',
         url='https://github.com/apache/ignite-python-thin-client',
         packages=setuptools.find_packages(),
         install_requires=requirements['install'],
@@ -119,6 +120,7 @@ def run_setup(with_binary=True):
         extras_require={
             'docs': requirements['docs'],
         },
+        license="Apache License 2.0",
         classifiers=[
             'Programming Language :: Python',
             'Programming Language :: Python :: 3',
