@@ -136,15 +136,15 @@ class Conditional:
             return await self.var1.parse_async(stream)
         return await self.var2.parse_async(stream)
 
-    def to_python(self, ctype_object, context, *args, **kwargs):
+    def to_python(self, ctypes_object, context, *args, **kwargs):
         if self.predicate2(context):
-            return self.var1.to_python(ctype_object, *args, **kwargs)
-        return self.var2.to_python(ctype_object, *args, **kwargs)
+            return self.var1.to_python(ctypes_object, *args, **kwargs)
+        return self.var2.to_python(ctypes_object, *args, **kwargs)
 
-    async def to_python_async(self, ctype_object, context, *args, **kwargs):
+    async def to_python_async(self, ctypes_object, context, *args, **kwargs):
         if self.predicate2(context):
-            return await self.var1.to_python_async(ctype_object, *args, **kwargs)
-        return await self.var2.to_python_async(ctype_object, *args, **kwargs)
+            return await self.var1.to_python_async(ctypes_object, *args, **kwargs)
+        return await self.var2.to_python_async(ctypes_object, *args, **kwargs)
 
 
 @attr.s
@@ -154,67 +154,56 @@ class StructArray:
     counter_type = attr.ib(default=ctypes.c_int)
     defaults = attr.ib(type=dict, default={})
 
-    def build_header_class(self):
-        return type(
-            self.__class__.__name__ + 'Header',
-            (ctypes.LittleEndianStructure,),
-            {
-                '_pack_': 1,
-                '_fields_': [
-                    ('length', self.counter_type),
-                ],
-            },
-        )
-
     def parse(self, stream):
-        fields, length = [], self.__parse_length(stream)
+        fields, length = self.__parse_header(stream)
 
         for i in range(length):
             c_type = Struct(self.following).parse(stream)
-            fields.append(('element_{}'.format(i), c_type))
+            fields.append((f'element_{i}', c_type))
 
-        return self.__build_final_class(fields)
+        return self.build_c_type(fields)
 
     async def parse_async(self, stream):
-        fields, length = [], self.__parse_length(stream)
+        fields, length = self.__parse_header(stream)
 
         for i in range(length):
             c_type = await Struct(self.following).parse_async(stream)
-            fields.append(('element_{}'.format(i), c_type))
+            fields.append((f'element_{i}', c_type))
 
-        return self.__build_final_class(fields)
+        return self.build_c_type(fields)
 
-    def __parse_length(self, stream):
-        counter_type_len = ctypes.sizeof(self.counter_type)
+    def __parse_header(self, stream):
+        counter_sz = ctypes.sizeof(self.counter_type)
         length = int.from_bytes(
-            stream.slice(offset=counter_type_len),
+            stream.slice(offset=counter_sz),
             byteorder=PROTOCOL_BYTE_ORDER
         )
-        stream.seek(counter_type_len, SEEK_CUR)
-        return length
+        stream.seek(counter_sz, SEEK_CUR)
+        return [('length', self.counter_type)], length
 
-    def __build_final_class(self, fields):
+    @staticmethod
+    def build_c_type(fields):
         return type(
             'StructArray',
-            (self.build_header_class(),),
+            (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
                 '_fields_': fields,
             },
         )
 
-    def to_python(self, ctype_object, *args, **kwargs):
-        length = getattr(ctype_object, 'length', 0)
+    def to_python(self, ctypes_object, *args, **kwargs):
+        length = getattr(ctypes_object, 'length', 0)
         return [
-            Struct(self.following, dict_type=dict).to_python(getattr(ctype_object, 'element_{}'.format(i)),
+            Struct(self.following, dict_type=dict).to_python(getattr(ctypes_object, f'element_{i}'),
                                                              *args, **kwargs)
             for i in range(length)
         ]
 
-    async def to_python_async(self, ctype_object, *args, **kwargs):
-        length = getattr(ctype_object, 'length', 0)
+    async def to_python_async(self, ctypes_object, *args, **kwargs):
+        length = getattr(ctypes_object, 'length', 0)
         result_coro = [
-            Struct(self.following, dict_type=dict).to_python_async(getattr(ctype_object, 'element_{}'.format(i)),
+            Struct(self.following, dict_type=dict).to_python_async(getattr(ctypes_object, f'element_{i}'),
                                                                    *args, **kwargs)
             for i in range(length)
         ]
@@ -239,10 +228,10 @@ class StructArray:
                 await el_class.from_python_async(stream, v[name])
 
     def __write_header(self, stream, length):
-        header_class = self.build_header_class()
-        header = header_class()
-        header.length = length
-        stream.write(header)
+        stream.write(
+            length.to_bytes(ctypes.sizeof(self.counter_type),
+                            byteorder=PROTOCOL_BYTE_ORDER)
+        )
 
 
 @attr.s
@@ -262,7 +251,7 @@ class Struct:
             if name in ctx:
                 ctx[name] = stream.read_ctype(c_type, direction=READ_BACKWARD)
 
-        return self.__build_final_class(fields)
+        return self.build_c_type(fields)
 
     async def parse_async(self, stream):
         fields, ctx = [], self.__prepare_conditional_ctx()
@@ -274,7 +263,7 @@ class Struct:
             if name in ctx:
                 ctx[name] = stream.read_ctype(c_type, direction=READ_BACKWARD)
 
-        return self.__build_final_class(fields)
+        return self.build_c_type(fields)
 
     def __prepare_conditional_ctx(self):
         ctx = {}
@@ -285,7 +274,7 @@ class Struct:
         return ctx
 
     @staticmethod
-    def __build_final_class(fields):
+    def build_c_type(fields):
         return type(
             'Struct',
             (ctypes.LittleEndianStructure,),
@@ -295,34 +284,34 @@ class Struct:
             },
         )
 
-    def to_python(self, ctype_object, *args, **kwargs) -> Union[dict, OrderedDict]:
+    def to_python(self, ctypes_object, *args, **kwargs) -> Union[dict, OrderedDict]:
         result = self.dict_type()
         for name, c_type in self.fields:
             is_cond = isinstance(c_type, Conditional)
             result[name] = c_type.to_python(
-                getattr(ctype_object, name),
+                getattr(ctypes_object, name),
                 result,
                 *args, **kwargs
             ) if is_cond else c_type.to_python(
-                getattr(ctype_object, name),
+                getattr(ctypes_object, name),
                 *args, **kwargs
             )
         return result
 
-    async def to_python_async(self, ctype_object, *args, **kwargs) -> Union[dict, OrderedDict]:
+    async def to_python_async(self, ctypes_object, *args, **kwargs) -> Union[dict, OrderedDict]:
         result = self.dict_type()
         for name, c_type in self.fields:
             is_cond = isinstance(c_type, Conditional)
 
             if is_cond:
                 value = await c_type.to_python_async(
-                    getattr(ctype_object, name),
+                    getattr(ctypes_object, name),
                     result,
                     *args, **kwargs
                 )
             else:
                 value = await c_type.to_python_async(
-                    getattr(ctype_object, name),
+                    getattr(ctypes_object, name),
                     *args, **kwargs
                 )
             result[name] = value
@@ -405,18 +394,18 @@ class AnyDataObject:
             raise ParseError('Unknown type code: `{}`'.format(type_code))
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
-        data_class = cls.__data_class_from_ctype(ctype_object)
-        return data_class.to_python(ctype_object)
+    def to_python(cls, ctypes_object, *args, **kwargs):
+        data_class = cls.__data_class_from_ctype(ctypes_object)
+        return data_class.to_python(ctypes_object)
 
     @classmethod
-    async def to_python_async(cls, ctype_object, *args, **kwargs):
-        data_class = cls.__data_class_from_ctype(ctype_object)
-        return await data_class.to_python_async(ctype_object)
+    async def to_python_async(cls, ctypes_object, *args, **kwargs):
+        data_class = cls.__data_class_from_ctype(ctypes_object)
+        return await data_class.to_python_async(ctypes_object)
 
     @classmethod
-    def __data_class_from_ctype(cls, ctype_object):
-        type_code = ctype_object.type_code.to_bytes(
+    def __data_class_from_ctype(cls, ctypes_object):
+        type_code = ctypes_object.type_code.to_bytes(
             ctypes.sizeof(ctypes.c_byte),
             byteorder=PROTOCOL_BYTE_ORDER
         )
@@ -440,7 +429,7 @@ class AnyDataObject:
             int: LongObject,
             float: DoubleObject,
             str: String,
-            bytes: String,
+            bytes: ByteArrayObject,
             bytearray: ByteArrayObject,
             bool: BoolObject,
             type(None): Null,
@@ -455,7 +444,6 @@ class AnyDataObject:
             int: LongArrayObject,
             float: DoubleArrayObject,
             str: StringArrayObject,
-            bytes: StringArrayObject,
             bool: BoolArrayObject,
             uuid.UUID: UUIDArrayObject,
             datetime: DateArrayObject,
@@ -558,48 +546,33 @@ class AnyDataArray(AnyDataObject):
     """
     counter_type = attr.ib(default=ctypes.c_int)
 
-    def build_header(self):
-        return type(
-            self.__class__.__name__ + 'Header',
-            (ctypes.LittleEndianStructure,),
-            {
-                '_pack_': 1,
-                '_fields_': [
-                    ('length', self.counter_type),
-                ],
-            }
-        )
-
     def parse(self, stream):
-        header, header_class = self.__parse_header(stream)
-
-        fields = []
-        for i in range(header.length):
+        fields, length = self.__parse_header(stream)
+        for i in range(length):
             c_type = super().parse(stream)
-            fields.append(('element_{}'.format(i), c_type))
-
-        return self.__build_final_class(header_class, fields)
+            fields.append((f'element_{i}', c_type))
+        return self.build_c_type(fields)
 
     async def parse_async(self, stream):
-        header, header_class = self.__parse_header(stream)
-
-        fields = []
-        for i in range(header.length):
+        fields, length = self.__parse_header(stream)
+        for i in range(length):
             c_type = await super().parse_async(stream)
-            fields.append(('element_{}'.format(i), c_type))
-
-        return self.__build_final_class(header_class, fields)
+            fields.append((f'element_{i}', c_type))
+        return self.build_c_type(fields)
 
     def __parse_header(self, stream):
-        header_class = self.build_header()
-        header = stream.read_ctype(header_class)
-        stream.seek(ctypes.sizeof(header_class), SEEK_CUR)
-        return header, header_class
+        cnt_sz = ctypes.sizeof(self.counter_type)
+        length = int.from_bytes(
+            stream.slice(stream.tell(), cnt_sz),
+            byteorder=PROTOCOL_BYTE_ORDER
+        )
+        stream.seek(cnt_sz, SEEK_CUR)
+        return [('length', self.counter_type)], length
 
-    def __build_final_class(self, header_class, fields):
+    def build_c_type(self, fields):
         return type(
             self.__class__.__name__,
-            (header_class,),
+            (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
                 '_fields_': fields,
@@ -607,56 +580,50 @@ class AnyDataArray(AnyDataObject):
         )
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
-        length = cls.__get_length(ctype_object)
+    def to_python(cls, ctypes_object, *args, **kwargs):
+        length = getattr(ctypes_object, "length", 0)
 
         return [
-            super().to_python(getattr(ctype_object, 'element_{}'.format(i)), *args, **kwargs)
+            super().to_python(getattr(ctypes_object, f'element_{i}'), *args, **kwargs)
             for i in range(length)
         ]
 
     @classmethod
-    async def to_python_async(cls, ctype_object, *args, **kwargs):
-        length = cls.__get_length(ctype_object)
+    async def to_python_async(cls, ctypes_object, *args, **kwargs):
+        length = getattr(ctypes_object, "length", 0)
 
         values = asyncio.gather(
             *[
                 super().to_python(
-                    getattr(ctype_object, 'element_{}'.format(i)),
+                    getattr(ctypes_object, f'element_{i}'),
                     *args, **kwargs
                 ) for i in range(length)
             ]
         )
         return await values
 
-    @staticmethod
-    def __get_length(ctype_object):
-        return getattr(ctype_object, "length", None)
-
     def from_python(self, stream, value):
-        try:
-            length = len(value)
-        except TypeError:
-            value = [value]
-            length = 1
-        self.__write_header(stream, length)
+        value = self.__write_header_and_process_value(stream, value)
 
         for x in value:
             infer_from_python(stream, x)
 
     async def from_python_async(self, stream, value):
+        value = self.__write_header_and_process_value(stream, value)
+
+        for x in value:
+            await infer_from_python_async(stream, x)
+
+    def __write_header_and_process_value(self, stream, value):
         try:
             length = len(value)
         except TypeError:
             value = [value]
             length = 1
-        self.__write_header(stream, length)
 
-        for x in value:
-            await infer_from_python_async(stream, x)
+        stream.write(length.to_bytes(
+            ctypes.sizeof(self.counter_type),
+            byteorder=PROTOCOL_BYTE_ORDER
+        ))
 
-    def __write_header(self, stream, length):
-        header_class = self.build_header()
-        header = header_class()
-        header.length = length
-        stream.write(header)
+        return value

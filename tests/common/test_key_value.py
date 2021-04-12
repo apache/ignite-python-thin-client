@@ -422,10 +422,13 @@ async def test_put_get_collection_async(async_cache, key, hinted_value, value):
 @pytest.fixture
 def complex_map():
     return {"test" + str(i): ((MapObject.HASH_MAP,
-                               {"key_1": ((1, ["value_1", 1.0]), CollectionObject),
-                                "key_2": ((1, [["value_2_1", "1.0"], ["value_2_2", "0.25"]]), CollectionObject),
-                                "key_3": ((1, [["value_3_1", "1.0"], ["value_3_2", "0.25"]]), CollectionObject),
-                                "key_4": ((1, [["value_4_1", "1.0"], ["value_4_2", "0.25"]]), CollectionObject),
+                               {"key_1": ((CollectionObject.ARR_LIST, ["value_1", 1.0]), CollectionObject),
+                                "key_2": ((CollectionObject.ARR_LIST, [["value_2_1", "1.0"], ["value_2_2", "0.25"]]),
+                                          CollectionObject),
+                                "key_3": ((CollectionObject.ARR_LIST, [["value_3_1", "1.0"], ["value_3_2", "0.25"]]),
+                                          CollectionObject),
+                                "key_4": ((CollectionObject.ARR_LIST, [["value_4_1", "1.0"], ["value_4_2", "0.25"]]),
+                                          CollectionObject),
                                 'key_5': False,
                                 "key_6": "value_6"}), MapObject) for i in range(10000)}
 

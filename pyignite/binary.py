@@ -151,7 +151,7 @@ class GenericObjectMeta(GenericObjectPropsMeta):
             write_footer(self, stream, header, header_class, schema_items, offsets, initial_pos, save_to_buf)
 
         def write_header(obj, stream):
-            header_class = BinaryObject.build_header()
+            header_class = BinaryObject.get_header_class()
             header = header_class()
             header.type_code = int.from_bytes(
                 BinaryObject.type_code,

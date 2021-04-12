@@ -17,6 +17,7 @@ import ctypes
 from io import SEEK_CUR
 
 from pyignite.constants import *
+from .base import IgniteDataType
 from .null_object import Nullable
 from .primitive import *
 from .type_codes import *
@@ -32,70 +33,50 @@ __all__ = [
 ]
 
 
-class PrimitiveArray(Nullable):
+class PrimitiveArray(IgniteDataType):
     """
     Base class for array of primitives. Payload-only.
     """
     _type_name = None
     _type_id = None
     primitive_type = None
-    type_code = None
 
     @classmethod
-    def build_header_class(cls):
+    def build_c_type(cls, stream):
+        length = int.from_bytes(
+            stream.slice(stream.tell(), ctypes.sizeof(ctypes.c_int)),
+            byteorder=PROTOCOL_BYTE_ORDER
+        )
+
         return type(
-            cls.__name__ + 'Header',
-            (ctypes.LittleEndianStructure,),
+            cls.__name__,
+            (ctypes.LittleEndianStructure, ),
             {
                 '_pack_': 1,
                 '_fields_': [
                     ('length', ctypes.c_int),
+                    ('data', cls.primitive_type.c_type * length),
                 ],
             }
         )
 
     @classmethod
-    def parse_not_null(cls, stream):
-        header_class = cls.build_header_class()
-        header = stream.read_ctype(header_class)
-
-        final_class = type(
-            cls.__name__,
-            (header_class,),
-            {
-                '_pack_': 1,
-                '_fields_': [
-                    ('data', cls.primitive_type.c_type * header.length),
-                ],
-            }
-        )
-        stream.seek(ctypes.sizeof(final_class), SEEK_CUR)
-        return final_class
+    def parse(cls, stream):
+        c_type = cls.build_c_type(stream)
+        stream.seek(ctypes.sizeof(c_type), SEEK_CUR)
+        return c_type
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
-        length = getattr(ctype_object, "length", None)
-        if length is None:
-            return None
-        return [ctype_object.data[i] for i in range(ctype_object.length)]
+    def to_python(cls, ctypes_object, *args, **kwargs):
+        return [ctypes_object.data[i] for i in range(ctypes_object.length)]
 
     @classmethod
-    async def to_python_async(cls, ctypes_object, *args, **kwargs):
-        return cls.to_python(ctypes_object, *args, **kwargs)
+    def _write_header(cls, stream, value):
+        stream.write(len(value).to_bytes(ctypes.sizeof(ctypes.c_int), byteorder=PROTOCOL_BYTE_ORDER))
 
     @classmethod
-    def from_python_not_null(cls, stream, value, **kwargs):
-        header_class = cls.build_header_class()
-        header = header_class()
-        if hasattr(header, 'type_code'):
-            header.type_code = int.from_bytes(
-                cls.type_code,
-                byteorder=PROTOCOL_BYTE_ORDER
-            )
-        length = len(value)
-        header.length = length
-
-        stream.write(header)
+    def from_python(cls, stream, value, **kwargs):
+        cls._write_header(stream, value)
         for x in value:
             cls.primitive_type.from_python(stream, x)
 
@@ -107,19 +88,12 @@ class ByteArray(PrimitiveArray):
     type_code = TC_BYTE_ARRAY
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
-        data = getattr(ctype_object, "data", None)
-        if data is None:
-            return None
-        return bytearray(data)
+    def to_python(cls, ctypes_object, *args, **kwargs):
+        return bytes(ctypes_object.data)
 
     @classmethod
-    def from_python(cls, stream, value):
-        header_class = cls.build_header_class()
-        header = header_class()
-        header.length = len(value)
-
-        stream.write(header)
+    def from_python(cls, stream, value, **kwargs):
+        cls._write_header(stream, value)
         stream.write(bytearray(value))
 
 
@@ -172,28 +146,57 @@ class BoolArray(PrimitiveArray):
     type_code = TC_BOOL_ARRAY
 
 
-class PrimitiveArrayObject(PrimitiveArray):
+class PrimitiveArrayObject(Nullable):
     """
     Base class for primitive array object. Type code plus payload.
     """
     _type_name = None
     _type_id = None
+    primitive_type = None
+    type_code = None
     pythonic = list
     default = []
 
     @classmethod
-    def build_header_class(cls):
+    def build_c_type(cls, stream):
+        length = int.from_bytes(
+            stream.slice(stream.tell() + ctypes.sizeof(ctypes.c_byte), ctypes.sizeof(ctypes.c_int)),
+            byteorder=PROTOCOL_BYTE_ORDER
+        )
+
         return type(
-            cls.__name__ + 'Header',
+            cls.__name__,
             (ctypes.LittleEndianStructure,),
             {
                 '_pack_': 1,
                 '_fields_': [
                     ('type_code', ctypes.c_byte),
                     ('length', ctypes.c_int),
+                    ('data', cls.primitive_type.c_type * length),
                 ],
             }
         )
+
+    @classmethod
+    def parse_not_null(cls, stream):
+        c_type = cls.build_c_type(stream)
+        stream.seek(ctypes.sizeof(c_type), SEEK_CUR)
+        return c_type
+
+    @classmethod
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+        return [ctypes_object.data[i] for i in range(ctypes_object.length)]
+
+    @classmethod
+    def from_python_not_null(cls, stream, value, **kwargs):
+        cls._write_header(stream, value)
+        for x in value:
+            cls.primitive_type.from_python(stream, x)
+
+    @classmethod
+    def _write_header(cls, stream, value):
+        stream.write(cls.type_code)
+        stream.write(len(value).to_bytes(ctypes.sizeof(ctypes.c_int), byteorder=PROTOCOL_BYTE_ORDER))
 
 
 class ByteArrayObject(PrimitiveArrayObject):
@@ -203,19 +206,12 @@ class ByteArrayObject(PrimitiveArrayObject):
     type_code = TC_BYTE_ARRAY
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
-        return ByteArray.to_python(ctype_object, *args, **kwargs)
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+        return bytes(ctypes_object.data)
 
     @classmethod
-    def from_python_not_null(cls, stream, value):
-        header_class = cls.build_header_class()
-        header = header_class()
-        header.type_code = int.from_bytes(
-            cls.type_code,
-            byteorder=PROTOCOL_BYTE_ORDER
-        )
-        header.length = len(value)
-        stream.write(header)
+    def from_python_not_null(cls, stream, value, **kwargs):
+        cls._write_header(stream, value)
 
         if isinstance(value, (bytes, bytearray)):
             stream.write(value)
@@ -281,10 +277,8 @@ class CharArrayObject(PrimitiveArrayObject):
     type_code = TC_CHAR_ARRAY
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
-        values = super().to_python(ctype_object, *args, **kwargs)
-        if values is None:
-            return None
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+        values = super().to_python_not_null(ctypes_object, *args, **kwargs)
         return [
             v.to_bytes(
                 ctypes.sizeof(cls.primitive_type.c_type),
@@ -302,11 +296,5 @@ class BoolArrayObject(PrimitiveArrayObject):
     type_code = TC_BOOL_ARRAY
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
-        if not ctype_object:
-            return None
-        length = getattr(ctype_object, "length", None)
-        if length is None:
-            return None
-
-        return [ctype_object.data[i] != 0 for i in range(length)]
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+        return [ctypes_object.data[i] != 0 for i in range(ctypes_object.length)]

@@ -65,12 +65,8 @@ class DataObject(Nullable):
         return data_type
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
-        return getattr(ctype_object, "value", None)
-
-    @classmethod
-    async def to_python_async(cls, ctype_object, *args, **kwargs):
-        return cls.to_python(ctype_object, *args, **kwargs)
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+        return ctypes_object.value
 
     @classmethod
     def from_python_not_null(cls, stream, value, **kwargs):
@@ -188,10 +184,8 @@ class CharObject(DataObject):
         return ord(value)
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
-        value = getattr(ctype_object, "value", None)
-        if value is None:
-            return None
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+        value = ctypes_object.value
         return value.to_bytes(
             ctypes.sizeof(cls.c_type),
             byteorder=PROTOCOL_BYTE_ORDER
@@ -224,8 +218,5 @@ class BoolObject(DataObject):
         return 1231 if value else 1237
 
     @classmethod
-    def to_python(cls, ctype_object, *args, **kwargs):
-        value = getattr(ctype_object, "value", None)
-        if value is None:
-            return None
-        return value != 0
+    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+        return ctypes_object.value != 0

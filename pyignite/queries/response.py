@@ -128,25 +128,25 @@ class Response:
             c_type = await ignite_type.parse_async(stream)
             fields.append((name, c_type))
 
-    def to_python(self, ctype_object, *args, **kwargs):
+    def to_python(self, ctypes_object, *args, **kwargs):
         if not self.following:
             return None
 
         result = OrderedDict()
         for name, c_type in self.following:
             result[name] = c_type.to_python(
-                getattr(ctype_object, name),
+                getattr(ctypes_object, name),
                 *args, **kwargs
             )
 
         return result
 
-    async def to_python_async(self, ctype_object, *args, **kwargs):
+    async def to_python_async(self, ctypes_object, *args, **kwargs):
         if not self.following:
             return None
 
         values = await asyncio.gather(
-            *[c_type.to_python_async(getattr(ctype_object, name), *args, **kwargs) for name, c_type in self.following]
+            *[c_type.to_python_async(getattr(ctypes_object, name), *args, **kwargs) for name, c_type in self.following]
         )
 
         return OrderedDict([(name, values[i]) for i, (name, _) in enumerate(self.following)])
@@ -239,13 +239,13 @@ class SQLResponse(Response):
             ('more', ctypes.c_byte),
         ]
 
-    def to_python(self, ctype_object, *args, **kwargs):
-        if getattr(ctype_object, 'status_code', 0) == 0:
-            result = self.__to_python_result_header(ctype_object, *args, **kwargs)
+    def to_python(self, ctypes_object, *args, **kwargs):
+        if getattr(ctypes_object, 'status_code', 0) == 0:
+            result = self.__to_python_result_header(ctypes_object, *args, **kwargs)
 
-            for row_item in ctype_object.data._fields_:
+            for row_item in ctypes_object.data._fields_:
                 row_name = row_item[0]
-                row_object = getattr(ctype_object.data, row_name)
+                row_object = getattr(ctypes_object.data, row_name)
                 row = []
                 for col_item in row_object._fields_:
                     col_name = col_item[0]
@@ -254,14 +254,14 @@ class SQLResponse(Response):
                 result['data'].append(row)
             return result
 
-    async def to_python_async(self, ctype_object, *args, **kwargs):
-        if getattr(ctype_object, 'status_code', 0) == 0:
-            result = self.__to_python_result_header(ctype_object, *args, **kwargs)
+    async def to_python_async(self, ctypes_object, *args, **kwargs):
+        if getattr(ctypes_object, 'status_code', 0) == 0:
+            result = self.__to_python_result_header(ctypes_object, *args, **kwargs)
 
             data_coro = []
-            for row_item in ctype_object.data._fields_:
+            for row_item in ctypes_object.data._fields_:
                 row_name = row_item[0]
-                row_object = getattr(ctype_object.data, row_name)
+                row_object = getattr(ctypes_object.data, row_name)
                 row_coro = []
                 for col_item in row_object._fields_:
                     col_name = col_item[0]
@@ -274,18 +274,18 @@ class SQLResponse(Response):
             return result
 
     @staticmethod
-    def __to_python_result_header(ctype_object, *args, **kwargs):
+    def __to_python_result_header(ctypes_object, *args, **kwargs):
         result = {
-            'more': Bool.to_python(ctype_object.more, *args, **kwargs),
+            'more': Bool.to_python(ctypes_object.more, *args, **kwargs),
             'data': [],
         }
-        if hasattr(ctype_object, 'fields'):
-            result['fields'] = StringArray.to_python(ctype_object.fields, *args, **kwargs)
+        if hasattr(ctypes_object, 'fields'):
+            result['fields'] = StringArray.to_python(ctypes_object.fields, *args, **kwargs)
         else:
-            result['field_count'] = Int.to_python(ctype_object.field_count, *args, **kwargs)
+            result['field_count'] = Int.to_python(ctypes_object.field_count, *args, **kwargs)
 
-        if hasattr(ctype_object, 'cursor'):
-            result['cursor'] = Long.to_python(ctype_object.cursor, *args, **kwargs)
+        if hasattr(ctypes_object, 'cursor'):
+            result['cursor'] = Long.to_python(ctypes_object.cursor, *args, **kwargs)
         return result
 
 
@@ -328,26 +328,26 @@ class BinaryTypeResponse(Response):
 
         return type_exists
 
-    def to_python(self, ctype_object, *args, **kwargs):
-        if getattr(ctype_object, 'status_code', 0) == 0:
+    def to_python(self, ctypes_object, *args, **kwargs):
+        if getattr(ctypes_object, 'status_code', 0) == 0:
             result = {
-                'type_exists': Bool.to_python(ctype_object.type_exists)
+                'type_exists': Bool.to_python(ctypes_object.type_exists)
             }
 
-            if hasattr(ctype_object, 'body'):
-                result.update(body_struct.to_python(ctype_object.body))
+            if hasattr(ctypes_object, 'body'):
+                result.update(body_struct.to_python(ctypes_object.body))
 
-            if hasattr(ctype_object, 'enums'):
-                result['enums'] = enum_struct.to_python(ctype_object.enums)
+            if hasattr(ctypes_object, 'enums'):
+                result['enums'] = enum_struct.to_python(ctypes_object.enums)
 
-            if hasattr(ctype_object, 'schema'):
+            if hasattr(ctypes_object, 'schema'):
                 result['schema'] = {
                     x['schema_id']: [
                         z['schema_field_id'] for z in x['schema_fields']
                     ]
-                    for x in schema_struct.to_python(ctype_object.schema)
+                    for x in schema_struct.to_python(ctypes_object.schema)
                 }
             return result
 
-    async def to_python_async(self, ctype_object, *args, **kwargs):
-        return self.to_python(ctype_object, *args, **kwargs)
+    async def to_python_async(self, ctypes_object, *args, **kwargs):
+        return self.to_python(ctypes_object, *args, **kwargs)
