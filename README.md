@@ -45,9 +45,13 @@ There is an optional C extension to speedup some computational intensive tasks. 
   
   ***NB!* Docker is required.**
   
-  Ready wheels for `x86` and `x86-64` for different python versions (3.6, 3.7, 3.8 and 3.9) will be
-  located in `./distr` directory.
+- On Windows MSVC 14.x required, and it should be in path, also python versions 3.6, 3.7, 3.8 and 3.9 both for x86 and 
+  x86-64 should be installed. You can disable some of these versions but you'd need to edit script for that.
+- For building `wheels` for Windows, invoke script `.\scripts\BuildWheels.ps1` using PowerShell. Just make sure that
+  your execution policy allows execution of scripts in your environment.
   
+  Ready wheels for `x86` and `x86-64` for different python versions (3.6, 3.7, 3.8 and 3.9) will be
+  located in `distr` directory.
 
 ### Updating from older version
 

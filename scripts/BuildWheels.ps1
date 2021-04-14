@@ -13,6 +13,6 @@ foreach ($Ver in $PyVersFull)
 	. ".\epy$Ver\Scripts\Activate.ps1"
 	pip install -e .
 	pip install wheel
-	pip wheel . --no-deps
+	pip wheel . --no-deps -w distr
 }
 
