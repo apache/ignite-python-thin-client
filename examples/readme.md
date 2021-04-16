@@ -15,3 +15,9 @@ This directory contains the following example files:
 For the explanation of the examples please refer to the
 [Examples of usage](https://apache-ignite-binary-protocol-client.readthedocs.io/en/latest/examples.html)
 section of the `pyignite` documentation.
+
+You can start Apache Ignite locally for running examples using `docker` and `docker-compose`
+```bash
+cd ./examples
+docker-compose up
+```
