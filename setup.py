@@ -121,6 +121,7 @@ def run_setup(with_binary=True):
             'docs': requirements['docs'],
         },
         license="Apache License 2.0",
+        license_files=('LICENSE', 'NOTICE'),
         classifiers=[
             'Programming Language :: Python',
             'Programming Language :: Python :: 3',
