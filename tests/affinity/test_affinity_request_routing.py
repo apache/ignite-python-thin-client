@@ -413,7 +413,7 @@ async def test_new_registered_cache_affinity_async(async_client):
     async with create_caches_async(async_client) as caches:
         key = 12
         test_cache = random.choice(caches)
-        test_cache.put(key, key)
+        await test_cache.put(key, key)
         await wait_for_affinity_distribution_async(test_cache, key, 3)
 
         caches.append(await async_client.create_cache('new_cache'))
