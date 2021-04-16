@@ -1,2 +1,6 @@
 recursive-include requirements *
+recursive-include examples *
+recursive-include docs *
 include README.md
+include LICENSE
+include NOTICE
