@@ -20,6 +20,7 @@ whole cluster.
 from pyignite.api.cluster import cluster_get_state, cluster_set_state
 from pyignite.exceptions import ClusterError
 from pyignite.utils import status_to_exception
+from pyignite.datatypes import ClusterState
 
 
 class Cluster:
@@ -33,7 +34,7 @@ class Cluster:
         self._client = client
 
     @status_to_exception(ClusterError)
-    def get_state(self):
+    def get_state(self) -> 'ClusterState':
         """
         Gets current cluster state.
 
@@ -43,7 +44,7 @@ class Cluster:
         return cluster_get_state(self._client.random_node)
 
     @status_to_exception(ClusterError)
-    def set_state(self, state):
+    def set_state(self, state: 'ClusterState'):
         """
         Changes current cluster state to the given.
 

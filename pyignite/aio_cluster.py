@@ -18,6 +18,7 @@ This module contains `AioCluster` that lets you get info and change state of the
 whole cluster asynchronously.
 """
 from pyignite.api.cluster import cluster_get_state_async, cluster_set_state_async
+from pyignite.datatypes import ClusterState
 from pyignite.exceptions import ClusterError
 from pyignite.utils import status_to_exception
 
@@ -33,7 +34,7 @@ class AioCluster:
         self._client = client
 
     @status_to_exception(ClusterError)
-    async def get_state(self):
+    async def get_state(self) -> 'ClusterState':
         """
         Gets current cluster state.
 
@@ -43,7 +44,7 @@ class AioCluster:
         return await cluster_get_state_async(await self._client.random_node())
 
     @status_to_exception(ClusterError)
-    async def set_state(self, state):
+    async def set_state(self, state: 'ClusterState'):
         """
         Changes current cluster state to the given.
 

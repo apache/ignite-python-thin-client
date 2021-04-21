@@ -29,6 +29,7 @@ from .connection import AioConnection
 from .constants import AFFINITY_RETRIES, AFFINITY_DELAY
 from .datatypes import BinaryObject
 from .exceptions import BinaryTypeError, CacheError, ReconnectError, connection_errors
+from .queries.query import CacheInfo
 from .stream import AioBinaryStream, READ_BACKWARD
 from .utils import cache_id, entity_id, status_to_exception, is_wrapped
 
@@ -452,13 +453,17 @@ class AioClient(BaseClient):
         :return: async sql fields cursor with result rows as a lists. If
          `include_field_names` was set, the first row will hold field names.
         """
+        if isinstance(cache, (int, str)):
+            c_info = CacheInfo(cache_id=cache_id(cache), protocol_context=self.protocol_context)
+        elif isinstance(cache, AioCache):
+            c_info = cache.cache_info
+        else:
+            c_info = None
 
-        c_id = cache.cache_id if isinstance(cache, AioCache) else cache_id(cache)
-
-        if c_id != 0:
+        if c_info:
             schema = None
 
-        return AioSqlFieldsCursor(self, c_id, query_str, page_size, query_args, schema, statement_type,
+        return AioSqlFieldsCursor(self, c_info, query_str, page_size, query_args, schema, statement_type,
                                   distributed_joins, local, replicated_only, enforce_join_order, collocated,
                                   lazy, include_field_names, max_rows, timeout)
 

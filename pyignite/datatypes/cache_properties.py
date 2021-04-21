@@ -15,6 +15,7 @@
 
 import ctypes
 
+from . import ExpiryPolicy
 from .prop_codes import *
 from .cache_config import (
     CacheMode, CacheAtomicityMode, PartitionLossPolicy, RebalanceMode,
@@ -34,7 +35,7 @@ __all__ = [
     'PropRebalanceOrder', 'PropRebalanceThrottle', 'PropGroupName',
     'PropCacheKeyConfiguration', 'PropDefaultLockTimeout',
     'PropMaxConcurrentAsyncOperation', 'PropPartitionLossPolicy',
-    'PropEagerTTL', 'PropStatisticsEnabled', 'prop_map', 'AnyProperty',
+    'PropEagerTTL', 'PropStatisticsEnabled', 'PropExpiryPolicy', 'prop_map', 'AnyProperty',
 ]
 
 
@@ -70,6 +71,7 @@ def prop_map(code: int):
         PROP_PARTITION_LOSS_POLICY: PropPartitionLossPolicy,
         PROP_EAGER_TTL: PropEagerTTL,
         PROP_STATISTICS_ENABLED: PropStatisticsEnabled,
+        PROP_EXPIRY_POLICY: PropExpiryPolicy,
     }[code]
 
 
@@ -283,6 +285,11 @@ class PropEagerTTL(PropBase):
 class PropStatisticsEnabled(PropBase):
     prop_code = PROP_STATISTICS_ENABLED
     prop_data_class = Bool
+
+
+class PropExpiryPolicy(PropBase):
+    prop_code = PROP_EXPIRY_POLICY
+    prop_data_class = ExpiryPolicy
 
 
 class AnyProperty(PropBase):

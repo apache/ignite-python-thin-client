@@ -312,7 +312,7 @@ def __check_best_node_calculation(client, cache, key, value, key_hint=None):
         best_node = client.get_best_node(cache, key, key_hint=key_hint)
 
         for node in filter(lambda n: n.alive, client._nodes):
-            result = cache_local_peek(node, cache.cache_id, key, key_hint=key_hint)
+            result = cache_local_peek(node, cache.cache_info, key, key_hint=key_hint)
 
             check_peek_value(node, best_node, result)
 
@@ -321,7 +321,7 @@ def __check_best_node_calculation(client, cache, key, value, key_hint=None):
         best_node = await client.get_best_node(cache, key, key_hint=key_hint)
 
         for node in filter(lambda n: n.alive, client._nodes):
-            result = await cache_local_peek_async(node, cache.cache_id, key, key_hint=key_hint)
+            result = await cache_local_peek_async(node, cache.cache_info, key, key_hint=key_hint)
 
             check_peek_value(node, best_node, result)
 
