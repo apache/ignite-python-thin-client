@@ -70,3 +70,14 @@ def cache(client):
         yield cache
     finally:
         cache.destroy()
+
+
+@pytest.fixture(autouse=True)
+def expiry_policy_supported(request, server1):
+    client = Client()
+    with client.connect('127.0.0.1', 10801):
+        result = client.protocol_context.is_expiry_policy_supported()
+        if not result and request.node.get_closest_marker('skip_if_no_expiry_policy'):
+            pytest.skip(f'skipped {request.node.name}, ExpiryPolicy APIis not supported.')
+
+        return result

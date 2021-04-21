@@ -28,7 +28,7 @@ from pyignite.datatypes.prop_codes import (
     PROP_PARTITION_LOSS_POLICY, PROP_EAGER_TTL, PROP_STATISTICS_ENABLED, PROP_REBALANCE_MODE, PROP_REBALANCE_DELAY,
     PROP_REBALANCE_TIMEOUT, PROP_REBALANCE_BATCH_SIZE, PROP_REBALANCE_BATCHES_PREFETCH_COUNT, PROP_REBALANCE_ORDER,
     PROP_REBALANCE_THROTTLE, PROP_QUERY_ENTITIES, PROP_QUERY_PARALLELISM, PROP_QUERY_DETAIL_METRIC_SIZE,
-    PROP_SQL_SCHEMA, PROP_SQL_INDEX_INLINE_MAX_SIZE, PROP_SQL_ESCAPE_ALL, PROP_MAX_QUERY_ITERATORS
+    PROP_SQL_SCHEMA, PROP_SQL_INDEX_INLINE_MAX_SIZE, PROP_SQL_ESCAPE_ALL, PROP_MAX_QUERY_ITERATORS, PROP_EXPIRY_POLICY
 )
 from pyignite.exceptions import CacheError
 
@@ -36,8 +36,8 @@ cache_name = 'config_cache'
 
 
 @pytest.fixture
-def test_cache_settings():
-    return {
+def test_cache_settings(expiry_policy_supported):
+    settings = {
         PROP_NAME: cache_name,
         PROP_CACHE_MODE: CacheMode.PARTITIONED,
         PROP_CACHE_ATOMICITY_MODE: CacheAtomicityMode.TRANSACTIONAL,
@@ -95,6 +95,13 @@ def test_cache_settings():
         PROP_EAGER_TTL: True,
         PROP_STATISTICS_ENABLED: True
     }
+
+    if expiry_policy_supported:
+        settings[PROP_EXPIRY_POLICY] = None
+    elif 'PROP_EXPIRY_POLICY' in ALL_PROPS:
+        del ALL_PROPS['PROP_EXPIRY_POLICY']
+
+    return settings
 
 
 @pytest.fixture

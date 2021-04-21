@@ -65,11 +65,19 @@ class ExpiryPolicy:
         return ctypes.c_byte
 
     @classmethod
+    async def parse_async(cls, stream):
+        return cls.parse(stream)
+
+    @classmethod
     def to_python(cls, ctypes_object):
         if ctypes_object == 0:
             return None
 
         return ExpiryPolicy(create=ctypes_object.create, update=ctypes_object.update, access=ctypes_object.access)
+
+    @classmethod
+    async def to_python_async(cls, ctypes_object):
+        return cls.to_python(ctypes_object)
 
     @classmethod
     def from_python(cls, stream, value):
@@ -79,6 +87,10 @@ class ExpiryPolicy:
 
         stream.write(b'\x01')
         cls.write_policy(stream, value)
+
+    @classmethod
+    async def from_python_async(cls, stream, value):
+        return cls.from_python(stream, value)
 
     @classmethod
     def write_policy(cls, stream, value):

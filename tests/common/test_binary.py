@@ -74,7 +74,7 @@ def table_cache_read(client):
 
     cache = client.get_cache(table_cache_name)
     yield cache
-    cache.destroy()
+    client.sql(drop_query)
 
 
 @pytest.fixture
@@ -87,7 +87,7 @@ async def table_cache_read_async(async_client):
 
     cache = await async_client.get_cache(table_cache_name)
     yield cache
-    await cache.destroy()
+    await async_client.sql(drop_query)
 
 
 def test_sql_read_as_binary(table_cache_read):

@@ -64,6 +64,7 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     marker_docs = [
         "skip_if_no_cext: mark test to run only if c extension is available",
+        "skip_if_no_expiry_policy: mark test to run only if expiry policy is supported by server",
         "examples: mark test to run only if --examples are set"
     ]
 
