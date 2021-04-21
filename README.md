@@ -3,9 +3,9 @@ Apache Ignite thin (binary protocol) client, written in Python 3.
 
 ## Prerequisites
 
-- Python 3.4 or above (3.6, 3.7 and 3.8 are tested),
+- Python 3.6 or above (3.6, 3.7, 3.8 and 3.9 are tested),
 - Access to Apache Ignite node, local or remote. The current thin client
-  version was tested on Apache Ignite 2.7.0 (binary client protocol 1.2.0).
+  version was tested on Apache Ignite 2.10 (binary client protocol 1.7.0).
 
 ## Installation
 
