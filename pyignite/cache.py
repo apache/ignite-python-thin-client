@@ -17,7 +17,7 @@ from typing import Any, Iterable, Optional, Tuple, Union
 
 from .datatypes import prop_codes, ExpiryPolicy
 from .datatypes.internal import AnyDataObject
-from .exceptions import CacheCreationError, CacheError, ParameterError, SQLError
+from .exceptions import CacheCreationError, CacheError, ParameterError, SQLError, NotSupportedByClusterError
 from .queries.query import CacheInfo
 from .utils import cache_id, status_to_exception
 from .api.cache_config import (
@@ -137,6 +137,9 @@ class BaseCache:
             self, expiry_policy: ExpiryPolicy = None, create: Union[int, float] = ExpiryPolicy.UNCHANGED,
             update: Union[int, float] = ExpiryPolicy.UNCHANGED, access: Union[int, float] = ExpiryPolicy.UNCHANGED
     ):
+        if not self.client.protocol_context.is_expiry_policy_supported():
+            raise NotSupportedByClusterError("'ExpiryPolicy' API is not supported by the cluster")
+
         cache_cls = type(self)
         if not expiry_policy:
             expiry_policy = ExpiryPolicy(create=create, update=update, access=access)
