@@ -18,6 +18,7 @@ import time
 from pyignite import Client, AioClient
 from pyignite.datatypes import ExpiryPolicy
 from pyignite.datatypes.prop_codes import PROP_NAME, PROP_EXPIRY_POLICY
+from pyignite.exceptions import NotSupportedByClusterError
 
 
 def main():
@@ -25,14 +26,15 @@ def main():
 
     client = Client()
     with client.connect('127.0.0.1', 10800):
-        if not client.protocol_context.is_expiry_policy_supported():
-            print("'ExpiryPolicy' is not supported by cluster.")
-
         print("Create cache with expiry policy.")
-        ttl_cache = client.create_cache({
-            PROP_NAME: 'test',
-            PROP_EXPIRY_POLICY: ExpiryPolicy(create=1.0)
-        })
+        try:
+            ttl_cache = client.create_cache({
+                PROP_NAME: 'test',
+                PROP_EXPIRY_POLICY: ExpiryPolicy(create=1.0)
+            })
+        except NotSupportedByClusterError:
+            print("'ExpiryPolicy' API is not supported by cluster. Finishing...")
+            return
 
         try:
             ttl_cache.put(1, 1)
@@ -65,14 +67,15 @@ async def async_main():
 
     client = AioClient()
     async with client.connect('127.0.0.1', 10800):
-        if not client.protocol_context.is_expiry_policy_supported():
-            print("'ExpiryPolicy' is not supported by cluster.")
-
         print("Create cache with expiry policy.")
-        ttl_cache = await client.create_cache({
-            PROP_NAME: 'test',
-            PROP_EXPIRY_POLICY: ExpiryPolicy(create=1.0)
-        })
+        try:
+            ttl_cache = await client.create_cache({
+                PROP_NAME: 'test',
+                PROP_EXPIRY_POLICY: ExpiryPolicy(create=1.0)
+            })
+        except NotSupportedByClusterError:
+            print("'ExpiryPolicy' API is not supported by cluster. Finishing...")
+            return
 
         try:
             await ttl_cache.put(1, 1)
