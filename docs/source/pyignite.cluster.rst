@@ -13,31 +13,10 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 
-pyignite.datatypes package
-==========================
+pyignite.cluster module
+=======================
 
-.. automodule:: pyignite.datatypes
+.. automodule:: pyignite.cluster
     :members:
     :undoc-members:
     :show-inheritance:
-
-Submodules
-----------
-
-.. toctree::
-
-   pyignite.datatypes.base
-   pyignite.datatypes.binary
-   pyignite.datatypes.cache_config
-   pyignite.datatypes.cache_properties
-   pyignite.datatypes.complex
-   pyignite.datatypes.cluster_state
-   pyignite.datatypes.expiry_policy
-   pyignite.datatypes.internal
-   pyignite.datatypes.key_value
-   pyignite.datatypes.null_object
-   pyignite.datatypes.primitive
-   pyignite.datatypes.primitive_arrays
-   pyignite.datatypes.primitive_objects
-   pyignite.datatypes.sql
-   pyignite.datatypes.standard

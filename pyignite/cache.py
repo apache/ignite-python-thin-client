@@ -134,9 +134,19 @@ class BaseCache:
         return self._cache_info.cache_id
 
     def with_expire_policy(
-            self, expiry_policy: ExpiryPolicy = None, create: Union[int, float] = ExpiryPolicy.UNCHANGED,
-            update: Union[int, float] = ExpiryPolicy.UNCHANGED, access: Union[int, float] = ExpiryPolicy.UNCHANGED
+            self, expiry_policy: Optional[ExpiryPolicy] = None,
+            create: Union[int, float] = ExpiryPolicy.UNCHANGED,
+            update: Union[int, float] = ExpiryPolicy.UNCHANGED,
+            access: Union[int, float] = ExpiryPolicy.UNCHANGED
     ):
+        """
+        :param expiry_policy: optional :class:`~pyignite.datatypes.expiry_policy.ExpiryPolicy`
+         object. If it is set, other params will be ignored.
+        :param create: create TTL in seconds (float) or milliseconds (int),
+        :param update: Create TTL in seconds (float) or milliseconds (int),
+        :param access: Create TTL in seconds (float) or milliseconds (int).
+        :return: cache decorator with expiry policy set.
+        """
         if not self.client.protocol_context.is_expiry_policy_supported():
             raise NotSupportedByClusterError("'ExpiryPolicy' API is not supported by the cluster")
 

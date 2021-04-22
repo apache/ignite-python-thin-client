@@ -31,6 +31,9 @@ class Cluster:
     """
 
     def __init__(self, client: 'Client'):
+        """
+        :param client: :py:class:`~pyignite.client.Client` instance.
+        """
         self._client = client
 
     @status_to_exception(ClusterError)
@@ -38,8 +41,10 @@ class Cluster:
         """
         Gets current cluster state.
 
-        :return: Current cluster state. This is one of ClusterState.INACTIVE,
-         ClusterState.ACTIVE or ClusterState.ACTIVE_READ_ONLY.
+        :return: Current cluster state. This is one of
+         :py:attr:`~pyignite.datatypes.cluster_state.ClusterState.INACTIVE`,
+         :py:attr:`~pyignite.datatypes.cluster_state.ClusterState.ACTIVE`,
+         :py:attr:`~pyignite.datatypes.cluster_state.ClusterState.ACTIVE_READ_ONLY`.
         """
         return cluster_get_state(self._client.random_node)
 
@@ -51,7 +56,9 @@ class Cluster:
         Note: Deactivation clears in-memory caches (without persistence)
          including the system caches.
 
-        :param state: New cluster state. This is one of ClusterState.INACTIVE,
-         ClusterState.ACTIVE or ClusterState.ACTIVE_READ_ONLY.
+        :param state: New cluster state. This is one of
+         :py:attr:`~pyignite.datatypes.cluster_state.ClusterState.INACTIVE`,
+         :py:attr:`~pyignite.datatypes.cluster_state.ClusterState.ACTIVE`,
+         :py:attr:`~pyignite.datatypes.cluster_state.ClusterState.ACTIVE_READ_ONLY`.
         """
         return cluster_set_state(self._client.random_node, state)

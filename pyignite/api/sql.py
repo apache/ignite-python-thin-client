@@ -27,13 +27,13 @@ from ..queries.query import CacheInfo
 from ..queries.response import SQLResponse
 
 
-def scan(conn: 'Connection', cache: CacheInfo, page_size: int, partitions: int = -1, local: bool = False,
+def scan(conn: 'Connection', cache_info: CacheInfo, page_size: int, partitions: int = -1, local: bool = False,
          query_id: int = None) -> APIResult:
     """
     Performs scan query.
 
     :param conn: connection to Ignite server,
-    :param cache: Cache meta info.
+    :param cache_info: cache meta info.
     :param page_size: cursor page size,
     :param partitions: (optional) number of partitions to query
      (negative to query entire cache),
@@ -53,15 +53,15 @@ def scan(conn: 'Connection', cache: CacheInfo, page_size: int, partitions: int =
      * `more`: bool, True if more data is available for subsequent
        ‘scan_cursor_get_page’ calls.
     """
-    return __scan(conn, cache, page_size, partitions, local, query_id)
+    return __scan(conn, cache_info, page_size, partitions, local, query_id)
 
 
-async def scan_async(conn: 'AioConnection', cache: CacheInfo, page_size: int, partitions: int = -1,
+async def scan_async(conn: 'AioConnection', cache_info: CacheInfo, page_size: int, partitions: int = -1,
                      local: bool = False, query_id: int = None) -> APIResult:
     """
     Async version of scan.
     """
-    return await __scan(conn, cache, page_size, partitions, local, query_id)
+    return await __scan(conn, cache_info, page_size, partitions, local, query_id)
 
 
 def __query_result_post_process(result):
@@ -70,7 +70,7 @@ def __query_result_post_process(result):
     return result
 
 
-def __scan(conn, cache, page_size, partitions, local, query_id):
+def __scan(conn, cache_info, page_size, partitions, local, query_id):
     query_struct = Query(
         OP_QUERY_SCAN,
         [
@@ -85,7 +85,7 @@ def __scan(conn, cache, page_size, partitions, local, query_id):
     return query_perform(
         query_struct, conn,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'filter': None,
             'page_size': page_size,
             'partitions': partitions,
@@ -151,7 +151,7 @@ def __scan_cursor_get_page(conn, cursor, query_id):
 @deprecated(version='1.2.0', reason="This API is deprecated and will be removed in the following major release. "
                                     "Use sql_fields instead")
 def sql(
-    conn: 'Connection', cache: CacheInfo,
+    conn: 'Connection', cache_info: CacheInfo,
     table_name: str, query_str: str, page_size: int, query_args=None,
     distributed_joins: bool = False, replicated_only: bool = False,
     local: bool = False, timeout: int = 0, query_id: int = None
@@ -161,7 +161,7 @@ def sql(
     the whole record (key and value).
 
     :param conn: connection to Ignite server,
-    :param cache: Cache meta info,
+    :param cache_info: Cache meta info,
     :param table_name: name of a type or SQL table,
     :param query_str: SQL query string,
     :param page_size: cursor page size,
@@ -209,7 +209,7 @@ def sql(
     result = query_struct.perform(
         conn,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'table_name': table_name,
             'query_str': query_str,
             'query_args': query_args,
@@ -277,7 +277,7 @@ def sql_cursor_get_page(
 
 
 def sql_fields(
-    conn: 'Connection', cache: CacheInfo,
+    conn: 'Connection', cache_info: CacheInfo,
     query_str: str, page_size: int, query_args=None, schema: str = None,
     statement_type: int = StatementType.ANY, distributed_joins: bool = False,
     local: bool = False, replicated_only: bool = False,
@@ -289,7 +289,7 @@ def sql_fields(
     Performs SQL fields query.
 
     :param conn: connection to Ignite server,
-    :param cache: Cache meta info.
+    :param cache_info: cache meta info.
     :param query_str: SQL query string,
     :param page_size: cursor page size,
     :param query_args: (optional) query arguments. List of values or
@@ -327,13 +327,13 @@ def sql_fields(
      * `more`: bool, True if more data is available for subsequent
        ‘sql_fields_cursor_get_page’ calls.
     """
-    return __sql_fields(conn, cache, query_str, page_size, query_args, schema, statement_type, distributed_joins,
+    return __sql_fields(conn, cache_info, query_str, page_size, query_args, schema, statement_type, distributed_joins,
                         local, replicated_only, enforce_join_order, collocated, lazy, include_field_names, max_rows,
                         timeout, query_id)
 
 
 async def sql_fields_async(
-        conn: 'AioConnection', cache: CacheInfo,
+        conn: 'AioConnection', cache_info: CacheInfo,
         query_str: str, page_size: int, query_args=None, schema: str = None,
         statement_type: int = StatementType.ANY, distributed_joins: bool = False,
         local: bool = False, replicated_only: bool = False,
@@ -344,13 +344,13 @@ async def sql_fields_async(
     """
     Async version of sql_fields.
     """
-    return await __sql_fields(conn, cache, query_str, page_size, query_args, schema, statement_type, distributed_joins,
-                              local, replicated_only, enforce_join_order, collocated, lazy, include_field_names,
-                              max_rows, timeout, query_id)
+    return await __sql_fields(conn, cache_info, query_str, page_size, query_args, schema, statement_type,
+                              distributed_joins, local, replicated_only, enforce_join_order, collocated, lazy,
+                              include_field_names, max_rows, timeout, query_id)
 
 
 def __sql_fields(
-        conn, cache, query_str, page_size, query_args, schema, statement_type, distributed_joins, local,
+        conn, cache_info, query_str, page_size, query_args, schema, statement_type, distributed_joins, local,
         replicated_only, enforce_join_order, collocated, lazy, include_field_names, max_rows, timeout, query_id
 ):
     if query_args is None:
@@ -382,7 +382,7 @@ def __sql_fields(
     return query_perform(
         query_struct, conn,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'schema': schema,
             'page_size': page_size,
             'max_rows': max_rows,

@@ -48,14 +48,39 @@ that yields the resulting rows.
 
 .. literalinclude:: ../examples/async_key_value.py
   :language: python
-  :dedent: 4
+  :dedent: 8
   :lines: 39-50
 
+ExpiryPolicy
+============
+File: `expiry_policy.py`_.
 
-File: `async_sql.py`_.
+You can enable expiry policy (TTL) by two approaches.
+
+Firstly, expiry policy can be set for entire cache by setting :py:attr:`~pyignite.datatypes.prop_codes.PROP_EXPIRY_POLICY`
+in cache settings dictionary on creation.
+
+.. literalinclude:: ../examples/expiry_policy.py
+  :language: python
+  :dedent: 8
+  :lines: 72-75
+
+.. literalinclude:: ../examples/expiry_policy.py
+  :language: python
+  :dedent: 12
+  :lines: 78-86
+
+Secondly, expiry policy can be set for all cache operations, which are done under decorator. To create it use
+:py:meth:`~pyignite.cache.BaseCache.with_expire_policy`
+
+.. literalinclude:: ../examples/expiry_policy.py
+  :language: python
+  :dedent: 12
+  :lines: 93-102
 
 SQL
 ---
+File: `async_sql.py`_.
 
 First let us establish a connection.
 
@@ -146,6 +171,6 @@ Finally, delete the tables used in this example with the following queries:
 
 
 
-
+.. _expiry_policy.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/expiry_policy.py
 .. _async_key_value.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/async_key_value.py
 .. _async_sql.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/async_sql.py

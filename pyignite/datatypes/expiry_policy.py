@@ -35,17 +35,28 @@ def _write_duration(stream, value):
 
 @attr.s
 class ExpiryPolicy:
+    """
+    Set expiry policy for the cache.
+    """
+    #: Set TTL unchanged.
     UNCHANGED = -2
+
+    #: Set TTL eternal.
     ETERNAL = -1
 
+    #: Set TTL for create in seconds(float) or millis(int)
     create = attr.ib(kw_only=True, default=UNCHANGED,
                      validator=[attr.validators.instance_of((int, float)), _positive])
+
+    #: Set TTL for update in seconds(float) or millis(int)
     update = attr.ib(kw_only=True, default=UNCHANGED, type=Union[int, float],
                      validator=[attr.validators.instance_of((int, float)), _positive])
+
+    #: Set TTL for access in seconds(float) or millis(int)
     access = attr.ib(kw_only=True, default=UNCHANGED, type=Union[int, float],
                      validator=[attr.validators.instance_of((int, float)), _positive])
 
-    class CType(ctypes.LittleEndianStructure):
+    class _CType(ctypes.LittleEndianStructure):
         _pack_ = 1
         _fields_ = [
             ('not_null', ctypes.c_byte),
@@ -59,8 +70,8 @@ class ExpiryPolicy:
         init = stream.tell()
         not_null = int.from_bytes(stream.slice(init, 1), byteorder=PROTOCOL_BYTE_ORDER)
         if not_null:
-            stream.seek(ctypes.sizeof(ExpiryPolicy.CType), SEEK_CUR)
-            return ExpiryPolicy.CType
+            stream.seek(ctypes.sizeof(ExpiryPolicy._CType), SEEK_CUR)
+            return ExpiryPolicy._CType
         stream.seek(ctypes.sizeof(ctypes.c_byte), SEEK_CUR)
         return ctypes.c_byte
 

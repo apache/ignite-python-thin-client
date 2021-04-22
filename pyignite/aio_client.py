@@ -469,8 +469,8 @@ class AioClient(BaseClient):
 
     def get_cluster(self) -> 'AioCluster':
         """
-        Gets client cluster facade.
+        Get client cluster facade.
 
-        :return: AioClient cluster facade.
+        :return: :py:class:`~pyignite.aio_cluster.AioCluster` instance.
         """
         return AioCluster(self)

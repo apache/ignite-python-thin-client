@@ -31,14 +31,14 @@ from .result import APIResult
 from ..queries.query import CacheInfo
 
 
-def cache_put(connection: 'Connection', cache: CacheInfo, key: Any, value: Any,
+def cache_put(connection: 'Connection', cache_info: CacheInfo, key: Any, value: Any,
               key_hint: 'IgniteDataType' = None, value_hint: 'IgniteDataType' = None,
               query_id: Optional[int] = None) -> 'APIResult':
     """
     Puts a value with a given key to cache (overwriting existing value if any).
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param key: key for the cache entry. Can be of any supported type,
     :param value: value for the key,
     :param key_hint: (optional) Ignite data type, for which the given key
@@ -51,19 +51,19 @@ def cache_put(connection: 'Connection', cache: CacheInfo, key: Any, value: Any,
     :return: API result data object. Contains zero status if a value
      is written, non-zero status and an error description otherwise.
     """
-    return __cache_put(connection, cache, key, value, key_hint, value_hint, query_id)
+    return __cache_put(connection, cache_info, key, value, key_hint, value_hint, query_id)
 
 
-async def cache_put_async(connection: 'AioConnection', cache: CacheInfo, key: Any, value: Any,
+async def cache_put_async(connection: 'AioConnection', cache_info: CacheInfo, key: Any, value: Any,
                           key_hint: 'IgniteDataType' = None, value_hint: 'IgniteDataType' = None,
                           query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_put
     """
-    return await __cache_put(connection, cache, key, value, key_hint, value_hint, query_id)
+    return await __cache_put(connection, cache_info, key, value, key_hint, value_hint, query_id)
 
 
-def __cache_put(connection, cache, key, value, key_hint, value_hint, query_id):
+def __cache_put(connection, cache_info, key, value, key_hint, value_hint, query_id):
     query_struct = Query(
         OP_CACHE_PUT,
         [
@@ -76,20 +76,20 @@ def __cache_put(connection, cache, key, value, key_hint, value_hint, query_id):
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'key': key,
             'value': value
         }
     )
 
 
-def cache_get(connection: 'Connection', cache: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
+def cache_get(connection: 'Connection', cache_info: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
               query_id: Optional[int] = None) -> 'APIResult':
     """
     Retrieves a value from cache by key.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param key: key for the cache entry. Can be of any supported type,
     :param key_hint: (optional) Ignite data type, for which the given key
      should be converted,
@@ -99,18 +99,18 @@ def cache_get(connection: 'Connection', cache: CacheInfo, key: Any, key_hint: 'I
     :return: API result data object. Contains zero status and a value
      retrieved on success, non-zero status and an error description on failure.
     """
-    return __cache_get(connection, cache, key, key_hint, query_id)
+    return __cache_get(connection, cache_info, key, key_hint, query_id)
 
 
-async def cache_get_async(connection: 'AioConnection', cache: CacheInfo, key: Any,
+async def cache_get_async(connection: 'AioConnection', cache_info: CacheInfo, key: Any,
                           key_hint: 'IgniteDataType' = None, query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_get
     """
-    return await __cache_get(connection, cache, key, key_hint, query_id)
+    return await __cache_get(connection, cache_info, key, key_hint, query_id)
 
 
-def __cache_get(connection, cache, key, key_hint, query_id):
+def __cache_get(connection, cache_info, key, key_hint, query_id):
     query_struct = Query(
         OP_CACHE_GET,
         [
@@ -122,7 +122,7 @@ def __cache_get(connection, cache, key, key_hint, query_id):
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'key': key,
         },
         response_config=[
@@ -132,13 +132,13 @@ def __cache_get(connection, cache, key, key_hint, query_id):
     )
 
 
-def cache_get_all(connection: 'Connection', cache: CacheInfo, keys: Iterable,
+def cache_get_all(connection: 'Connection', cache_info: CacheInfo, keys: Iterable,
                   query_id: Optional[int] = None) -> 'APIResult':
     """
     Retrieves multiple key-value pairs from cache.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param keys: list of keys or tuples of (key, key_hint),
     :param query_id: (optional) a value generated by client and returned as-is
      in response.query_id. When the parameter is omitted, a random value
@@ -147,18 +147,18 @@ def cache_get_all(connection: 'Connection', cache: CacheInfo, keys: Iterable,
      retrieved key-value pairs, non-zero status and an error description
      on failure.
     """
-    return __cache_get_all(connection, cache, keys, query_id)
+    return __cache_get_all(connection, cache_info, keys, query_id)
 
 
-async def cache_get_all_async(connection: 'AioConnection', cache: CacheInfo, keys: Iterable,
+async def cache_get_all_async(connection: 'AioConnection', cache_info: CacheInfo, keys: Iterable,
                               query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_get_all.
     """
-    return await __cache_get_all(connection, cache, keys, query_id)
+    return await __cache_get_all(connection, cache_info, keys, query_id)
 
 
-def __cache_get_all(connection, cache, keys, query_id):
+def __cache_get_all(connection, cache_info, keys, query_id):
     query_struct = Query(
         OP_CACHE_GET_ALL,
         [
@@ -170,7 +170,7 @@ def __cache_get_all(connection, cache, keys, query_id):
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'keys': keys,
         },
         response_config=[
@@ -180,14 +180,14 @@ def __cache_get_all(connection, cache, keys, query_id):
     )
 
 
-def cache_put_all(connection: 'Connection', cache: CacheInfo, pairs: dict,
+def cache_put_all(connection: 'Connection', cache_info: CacheInfo, pairs: dict,
                   query_id: Optional[int] = None) -> 'APIResult':
     """
     Puts multiple key-value pairs to cache (overwriting existing associations
     if any).
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param pairs: dictionary type parameters, contains key-value pairs to save.
      Each key or value can be an item of representable Python type or a tuple
      of (item, hint),
@@ -197,18 +197,18 @@ def cache_put_all(connection: 'Connection', cache: CacheInfo, pairs: dict,
     :return: API result data object. Contains zero status if key-value pairs
      are written, non-zero status and an error description otherwise.
     """
-    return __cache_put_all(connection, cache, pairs, query_id)
+    return __cache_put_all(connection, cache_info, pairs, query_id)
 
 
-async def cache_put_all_async(connection: 'AioConnection', cache: CacheInfo, pairs: dict,
+async def cache_put_all_async(connection: 'AioConnection', cache_info: CacheInfo, pairs: dict,
                               query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_put_all.
     """
-    return await __cache_put_all(connection, cache, pairs, query_id)
+    return await __cache_put_all(connection, cache_info, pairs, query_id)
 
 
-def __cache_put_all(connection, cache, pairs, query_id):
+def __cache_put_all(connection, cache_info, pairs, query_id):
     query_struct = Query(
         OP_CACHE_PUT_ALL,
         [
@@ -220,19 +220,19 @@ def __cache_put_all(connection, cache, pairs, query_id):
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'data': pairs,
         },
     )
 
 
-def cache_contains_key(connection: 'Connection', cache: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
+def cache_contains_key(connection: 'Connection', cache_info: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
                        query_id: Optional[int] = None) -> 'APIResult':
     """
     Returns a value indicating whether given key is present in cache.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param key: key for the cache entry. Can be of any supported type,
     :param key_hint: (optional) Ignite data type, for which the given key
      should be converted,
@@ -243,18 +243,18 @@ def cache_contains_key(connection: 'Connection', cache: CacheInfo, key: Any, key
      retrieved on success: `True` when key is present, `False` otherwise,
      non-zero status and an error description on failure.
     """
-    return __cache_contains_key(connection, cache, key, key_hint, query_id)
+    return __cache_contains_key(connection, cache_info, key, key_hint, query_id)
 
 
-async def cache_contains_key_async(connection: 'AioConnection', cache: CacheInfo, key: Any,
+async def cache_contains_key_async(connection: 'AioConnection', cache_info: CacheInfo, key: Any,
                                    key_hint: 'IgniteDataType' = None, query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_contains_key.
     """
-    return await __cache_contains_key(connection, cache, key, key_hint, query_id)
+    return await __cache_contains_key(connection, cache_info, key, key_hint, query_id)
 
 
-def __cache_contains_key(connection, cache, key, key_hint, query_id):
+def __cache_contains_key(connection, cache_info, key, key_hint, query_id):
     query_struct = Query(
         OP_CACHE_CONTAINS_KEY,
         [
@@ -266,7 +266,7 @@ def __cache_contains_key(connection, cache, key, key_hint, query_id):
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'key': key,
         },
         response_config=[
@@ -276,13 +276,13 @@ def __cache_contains_key(connection, cache, key, key_hint, query_id):
     )
 
 
-def cache_contains_keys(connection: 'Connection', cache: CacheInfo, keys: Iterable,
+def cache_contains_keys(connection: 'Connection', cache_info: CacheInfo, keys: Iterable,
                         query_id: Optional[int] = None) -> 'APIResult':
     """
     Returns a value indicating whether all given keys are present in cache.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param keys: a list of keys or (key, type hint) tuples,
     :param query_id: a value generated by client and returned as-is
      in response.query_id. When the parameter is omitted, a random value
@@ -291,18 +291,18 @@ def cache_contains_keys(connection: 'Connection', cache: CacheInfo, keys: Iterab
      retrieved on success: `True` when all keys are present, `False` otherwise,
      non-zero status and an error description on failure.
     """
-    return __cache_contains_keys(connection, cache, keys, query_id)
+    return __cache_contains_keys(connection, cache_info, keys, query_id)
 
 
-async def cache_contains_keys_async(connection: 'AioConnection', cache: CacheInfo, keys: Iterable,
+async def cache_contains_keys_async(connection: 'AioConnection', cache_info: CacheInfo, keys: Iterable,
                                     query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_contains_keys.
     """
-    return await __cache_contains_keys(connection, cache, keys, query_id)
+    return await __cache_contains_keys(connection, cache_info, keys, query_id)
 
 
-def __cache_contains_keys(connection, cache, keys, query_id):
+def __cache_contains_keys(connection, cache_info, keys, query_id):
     query_struct = Query(
         OP_CACHE_CONTAINS_KEYS,
         [
@@ -314,7 +314,7 @@ def __cache_contains_keys(connection, cache, keys, query_id):
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'keys': keys,
         },
         response_config=[
@@ -324,15 +324,15 @@ def __cache_contains_keys(connection, cache, keys, query_id):
     )
 
 
-def cache_get_and_put(connection: 'Connection', cache: CacheInfo, key: Any, value: Any,
+def cache_get_and_put(connection: 'Connection', cache_info: CacheInfo, key: Any, value: Any,
                       key_hint: 'IgniteDataType' = None, value_hint: 'IgniteDataType' = None,
                       query_id: Optional[int] = None) -> 'APIResult':
     """
-    Puts a value with a given key to cache, and returns the previous value
+    Puts a value with a given key to cache_info, and returns the previous value
     for that key, or null value if there was not such key.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param key: key for the cache entry. Can be of any supported type,
     :param value: value for the key,
     :param key_hint: (optional) Ignite data type, for which the given key
@@ -346,19 +346,19 @@ def cache_get_and_put(connection: 'Connection', cache: CacheInfo, key: Any, valu
      or None if a value is written, non-zero status and an error description
      in case of error.
     """
-    return __cache_get_and_put(connection, cache, key, value, key_hint, value_hint, query_id)
+    return __cache_get_and_put(connection, cache_info, key, value, key_hint, value_hint, query_id)
 
 
-async def cache_get_and_put_async(connection: 'AioConnection', cache: CacheInfo, key: Any, value: Any,
+async def cache_get_and_put_async(connection: 'AioConnection', cache_info: CacheInfo, key: Any, value: Any,
                                   key_hint: 'IgniteDataType' = None, value_hint: 'IgniteDataType' = None,
                                   query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_get_and_put.
     """
-    return await __cache_get_and_put(connection, cache, key, value, key_hint, value_hint, query_id)
+    return await __cache_get_and_put(connection, cache_info, key, value, key_hint, value_hint, query_id)
 
 
-def __cache_get_and_put(connection, cache, key, value, key_hint, value_hint, query_id):
+def __cache_get_and_put(connection, cache_info, key, value, key_hint, value_hint, query_id):
     query_struct = Query(
         OP_CACHE_GET_AND_PUT,
         [
@@ -371,7 +371,7 @@ def __cache_get_and_put(connection, cache, key, value, key_hint, value_hint, que
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'key': key,
             'value': value,
         },
@@ -382,7 +382,7 @@ def __cache_get_and_put(connection, cache, key, value, key_hint, value_hint, que
     )
 
 
-def cache_get_and_replace(connection: 'Connection', cache: CacheInfo, key: Any, value: Any,
+def cache_get_and_replace(connection: 'Connection', cache_info: CacheInfo, key: Any, value: Any,
                           key_hint: 'IgniteDataType' = None, value_hint: 'IgniteDataType' = None,
                           query_id: Optional[int] = None) -> 'APIResult':
     """
@@ -391,7 +391,7 @@ def cache_get_and_replace(connection: 'Connection', cache: CacheInfo, key: Any, 
     for that key.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param key: key for the cache entry. Can be of any supported type,
     :param value: value for the key,
     :param key_hint: (optional) Ignite data type, for which the given key
@@ -404,19 +404,19 @@ def cache_get_and_replace(connection: 'Connection', cache: CacheInfo, key: Any, 
     :return: API result data object. Contains zero status and an old value
      or None on success, non-zero status and an error description otherwise.
     """
-    return __cache_get_and_replace(connection, cache, key, key_hint, value, value_hint, query_id)
+    return __cache_get_and_replace(connection, cache_info, key, key_hint, value, value_hint, query_id)
 
 
-async def cache_get_and_replace_async(connection: 'AioConnection', cache: CacheInfo, key: Any, value: Any,
+async def cache_get_and_replace_async(connection: 'AioConnection', cache_info: CacheInfo, key: Any, value: Any,
                                       key_hint: 'IgniteDataType' = None, value_hint: 'IgniteDataType' = None,
                                       query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_get_and_replace.
     """
-    return await __cache_get_and_replace(connection, cache, key, key_hint, value, value_hint, query_id)
+    return await __cache_get_and_replace(connection, cache_info, key, key_hint, value, value_hint, query_id)
 
 
-def __cache_get_and_replace(connection, cache, key, key_hint, value, value_hint, query_id):
+def __cache_get_and_replace(connection, cache_info, key, key_hint, value, value_hint, query_id):
     query_struct = Query(
         OP_CACHE_GET_AND_REPLACE, [
             ('cache_info', CacheInfo),
@@ -428,7 +428,7 @@ def __cache_get_and_replace(connection, cache, key, key_hint, value, value_hint,
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'key': key,
             'value': value,
         },
@@ -439,13 +439,13 @@ def __cache_get_and_replace(connection, cache, key, key_hint, value, value_hint,
     )
 
 
-def cache_get_and_remove(connection: 'Connection', cache: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
+def cache_get_and_remove(connection: 'Connection', cache_info: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
                          query_id: Optional[int] = None) -> 'APIResult':
     """
     Removes the cache entry with specified key, returning the value.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param key: key for the cache entry. Can be of any supported type,
     :param key_hint: (optional) Ignite data type, for which the given key
      should be converted,
@@ -455,16 +455,16 @@ def cache_get_and_remove(connection: 'Connection', cache: CacheInfo, key: Any, k
     :return: API result data object. Contains zero status and an old value
      or None, non-zero status and an error description otherwise.
     """
-    return __cache_get_and_remove(connection, cache, key, key_hint, query_id)
+    return __cache_get_and_remove(connection, cache_info, key, key_hint, query_id)
 
 
 async def cache_get_and_remove_async(
-        connection: 'AioConnection', cache: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
+        connection: 'AioConnection', cache_info: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
         query_id: Optional[int] = None) -> 'APIResult':
-    return await __cache_get_and_remove(connection, cache, key, key_hint, query_id)
+    return await __cache_get_and_remove(connection, cache_info, key, key_hint, query_id)
 
 
-def __cache_get_and_remove(connection, cache, key, key_hint, query_id):
+def __cache_get_and_remove(connection, cache_info, key, key_hint, query_id):
     query_struct = Query(
         OP_CACHE_GET_AND_REMOVE, [
             ('cache_info', CacheInfo),
@@ -475,7 +475,7 @@ def __cache_get_and_remove(connection, cache, key, key_hint, query_id):
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'key': key,
         },
         response_config=[
@@ -485,7 +485,7 @@ def __cache_get_and_remove(connection, cache, key, key_hint, query_id):
     )
 
 
-def cache_put_if_absent(connection: 'Connection', cache: CacheInfo, key: Any, value: Any,
+def cache_put_if_absent(connection: 'Connection', cache_info: CacheInfo, key: Any, value: Any,
                         key_hint: 'IgniteDataType' = None, value_hint: 'IgniteDataType' = None,
                         query_id: Optional[int] = None) -> 'APIResult':
     """
@@ -493,7 +493,7 @@ def cache_put_if_absent(connection: 'Connection', cache: CacheInfo, key: Any, va
     does not already exist.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param key: key for the cache entry. Can be of any supported type,
     :param value: value for the key,
     :param key_hint: (optional) Ignite data type, for which the given key
@@ -506,19 +506,19 @@ def cache_put_if_absent(connection: 'Connection', cache: CacheInfo, key: Any, va
     :return: API result data object. Contains zero status on success,
      non-zero status and an error description otherwise.
     """
-    return __cache_put_if_absent(connection, cache, key, value, key_hint, value_hint, query_id)
+    return __cache_put_if_absent(connection, cache_info, key, value, key_hint, value_hint, query_id)
 
 
-async def cache_put_if_absent_async(connection: 'AioConnection', cache: CacheInfo, key: Any, value: Any,
+async def cache_put_if_absent_async(connection: 'AioConnection', cache_info: CacheInfo, key: Any, value: Any,
                                     key_hint: 'IgniteDataType' = None, value_hint: 'IgniteDataType' = None,
                                     query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_put_if_absent.
     """
-    return await __cache_put_if_absent(connection, cache, key, value, key_hint, value_hint, query_id)
+    return await __cache_put_if_absent(connection, cache_info, key, value, key_hint, value_hint, query_id)
 
 
-def __cache_put_if_absent(connection, cache, key, value, key_hint, value_hint, query_id):
+def __cache_put_if_absent(connection, cache_info, key, value, key_hint, value_hint, query_id):
     query_struct = Query(
         OP_CACHE_PUT_IF_ABSENT,
         [
@@ -531,7 +531,7 @@ def __cache_put_if_absent(connection, cache, key, value, key_hint, value_hint, q
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'key': key,
             'value': value,
         },
@@ -542,7 +542,7 @@ def __cache_put_if_absent(connection, cache, key, value, key_hint, value_hint, q
     )
 
 
-def cache_get_and_put_if_absent(connection: 'Connection', cache: CacheInfo, key: Any, value: Any,
+def cache_get_and_put_if_absent(connection: 'Connection', cache_info: CacheInfo, key: Any, value: Any,
                                 key_hint: 'IgniteDataType' = None, value_hint: 'IgniteDataType' = None,
                                 query_id: Optional[int] = None) -> 'APIResult':
     """
@@ -550,7 +550,7 @@ def cache_get_and_put_if_absent(connection: 'Connection', cache: CacheInfo, key:
     already exist.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param key: key for the cache entry. Can be of any supported type,
     :param value: value for the key,
     :param key_hint: (optional) Ignite data type, for which the given key
@@ -563,19 +563,19 @@ def cache_get_and_put_if_absent(connection: 'Connection', cache: CacheInfo, key:
     :return: API result data object. Contains zero status and an old value
      or None on success, non-zero status and an error description otherwise.
     """
-    return __cache_get_and_put_if_absent(connection, cache, key, value, key_hint, value_hint, query_id)
+    return __cache_get_and_put_if_absent(connection, cache_info, key, value, key_hint, value_hint, query_id)
 
 
-async def cache_get_and_put_if_absent_async(connection: 'AioConnection', cache: CacheInfo, key: Any, value: Any,
+async def cache_get_and_put_if_absent_async(connection: 'AioConnection', cache_info: CacheInfo, key: Any, value: Any,
                                             key_hint: 'IgniteDataType' = None, value_hint: 'IgniteDataType' = None,
                                             query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_get_and_put_if_absent.
     """
-    return await __cache_get_and_put_if_absent(connection, cache, key, value, key_hint, value_hint, query_id)
+    return await __cache_get_and_put_if_absent(connection, cache_info, key, value, key_hint, value_hint, query_id)
 
 
-def __cache_get_and_put_if_absent(connection, cache, key, value, key_hint, value_hint, query_id):
+def __cache_get_and_put_if_absent(connection, cache_info, key, value, key_hint, value_hint, query_id):
     query_struct = Query(
         OP_CACHE_GET_AND_PUT_IF_ABSENT,
         [
@@ -588,7 +588,7 @@ def __cache_get_and_put_if_absent(connection, cache, key, value, key_hint, value
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'key': key,
             'value': value,
         },
@@ -599,14 +599,14 @@ def __cache_get_and_put_if_absent(connection, cache, key, value, key_hint, value
     )
 
 
-def cache_replace(connection: 'Connection', cache: CacheInfo, key: Any, value: Any,
+def cache_replace(connection: 'Connection', cache_info: CacheInfo, key: Any, value: Any,
                   key_hint: 'IgniteDataType' = None, value_hint: 'IgniteDataType' = None,
                   query_id: Optional[int] = None) -> 'APIResult':
     """
     Puts a value with a given key to cache only if the key already exist.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param key: key for the cache entry. Can be of any supported type,
     :param value: value for the key,
     :param key_hint: (optional) Ignite data type, for which the given key
@@ -620,19 +620,19 @@ def cache_replace(connection: 'Connection', cache: CacheInfo, key: Any, value: A
      success code, or non-zero status and an error description if something
      has gone wrong.
     """
-    return __cache_replace(connection, cache, key, value, key_hint, value_hint, query_id)
+    return __cache_replace(connection, cache_info, key, value, key_hint, value_hint, query_id)
 
 
-async def cache_replace_async(connection: 'AioConnection', cache: CacheInfo, key: Any, value: Any,
+async def cache_replace_async(connection: 'AioConnection', cache_info: CacheInfo, key: Any, value: Any,
                               key_hint: 'IgniteDataType' = None, value_hint: 'IgniteDataType' = None,
                               query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_replace.
     """
-    return await __cache_replace(connection, cache, key, value, key_hint, value_hint, query_id)
+    return await __cache_replace(connection, cache_info, key, value, key_hint, value_hint, query_id)
 
 
-def __cache_replace(connection, cache, key, value, key_hint, value_hint, query_id):
+def __cache_replace(connection, cache_info, key, value, key_hint, value_hint, query_id):
     query_struct = Query(
         OP_CACHE_REPLACE,
         [
@@ -645,7 +645,7 @@ def __cache_replace(connection, cache, key, value, key_hint, value_hint, query_i
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'key': key,
             'value': value,
         },
@@ -656,7 +656,7 @@ def __cache_replace(connection, cache, key, value, key_hint, value_hint, query_i
     )
 
 
-def cache_replace_if_equals(connection: 'Connection', cache: CacheInfo, key: Any, sample: Any, value: Any,
+def cache_replace_if_equals(connection: 'Connection', cache_info: CacheInfo, key: Any, sample: Any, value: Any,
                             key_hint: 'IgniteDataType' = None, sample_hint: 'IgniteDataType' = None,
                             value_hint: 'IgniteDataType' = None, query_id: Optional[int] = None) -> 'APIResult':
     """
@@ -664,7 +664,7 @@ def cache_replace_if_equals(connection: 'Connection', cache: CacheInfo, key: Any
     and value equals provided sample.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param key:  key for the cache entry,
     :param sample: a sample to compare the stored value with,
     :param value: new value for the given key,
@@ -681,22 +681,22 @@ def cache_replace_if_equals(connection: 'Connection', cache: CacheInfo, key: Any
      success code, or non-zero status and an error description if something
      has gone wrong.
     """
-    return __cache_replace_if_equals(connection, cache, key, sample, value, key_hint,
+    return __cache_replace_if_equals(connection, cache_info, key, sample, value, key_hint,
                                      sample_hint, value_hint, query_id)
 
 
 async def cache_replace_if_equals_async(
-        connection: 'AioConnection', cache: CacheInfo, key: Any, sample: Any, value: Any,
+        connection: 'AioConnection', cache_info: CacheInfo, key: Any, sample: Any, value: Any,
         key_hint: 'IgniteDataType' = None, sample_hint: 'IgniteDataType' = None, value_hint: 'IgniteDataType' = None,
         query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_replace_if_equals.
     """
-    return await __cache_replace_if_equals(connection, cache, key, sample, value, key_hint,
+    return await __cache_replace_if_equals(connection, cache_info, key, sample, value, key_hint,
                                            sample_hint, value_hint, query_id)
 
 
-def __cache_replace_if_equals(connection, cache, key, sample, value, key_hint, sample_hint, value_hint, query_id):
+def __cache_replace_if_equals(connection, cache_info, key, sample, value, key_hint, sample_hint, value_hint, query_id):
     query_struct = Query(
         OP_CACHE_REPLACE_IF_EQUALS,
         [
@@ -710,7 +710,7 @@ def __cache_replace_if_equals(connection, cache, key, sample, value, key_hint, s
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'key': key,
             'sample': sample,
             'value': value,
@@ -722,30 +722,30 @@ def __cache_replace_if_equals(connection, cache, key, sample, value, key_hint, s
     )
 
 
-def cache_clear(connection: 'Connection', cache: CacheInfo, query_id: Optional[int] = None) -> 'APIResult':
+def cache_clear(connection: 'Connection', cache_info: CacheInfo, query_id: Optional[int] = None) -> 'APIResult':
     """
     Clears the cache without notifying listeners or cache writers.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param query_id: (optional) a value generated by client and returned
      as-is in response.query_id. When the parameter is omitted, a random
      value is generated,
     :return: API result data object. Contains zero status on success,
      non-zero status and an error description otherwise.
     """
-    return __cache_clear(connection, cache, query_id)
+    return __cache_clear(connection, cache_info, query_id)
 
 
 async def cache_clear_async(
-        connection: 'AioConnection', cache: CacheInfo, query_id: Optional[int] = None) -> 'APIResult':
+        connection: 'AioConnection', cache_info: CacheInfo, query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_clear.
     """
-    return await __cache_clear(connection, cache, query_id)
+    return await __cache_clear(connection, cache_info, query_id)
 
 
-def __cache_clear(connection, cache, query_id):
+def __cache_clear(connection, cache_info, query_id):
     query_struct = Query(
         OP_CACHE_CLEAR,
         [
@@ -756,18 +756,18 @@ def __cache_clear(connection, cache, query_id):
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
         },
     )
 
 
-def cache_clear_key(connection: 'Connection', cache: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
+def cache_clear_key(connection: 'Connection', cache_info: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
                     query_id: Optional[int] = None) -> 'APIResult':
     """
     Clears the cache key without notifying listeners or cache writers.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param key:  key for the cache entry,
     :param key_hint: (optional) Ignite data type, for which the given key
      should be converted,
@@ -777,18 +777,18 @@ def cache_clear_key(connection: 'Connection', cache: CacheInfo, key: Any, key_hi
     :return: API result data object. Contains zero status on success,
      non-zero status and an error description otherwise.
     """
-    return __cache_clear_key(connection, cache, key, key_hint, query_id)
+    return __cache_clear_key(connection, cache_info, key, key_hint, query_id)
 
 
-async def cache_clear_key_async(connection: 'AioConnection', cache: CacheInfo, key: Any,
+async def cache_clear_key_async(connection: 'AioConnection', cache_info: CacheInfo, key: Any,
                                 key_hint: 'IgniteDataType' = None, query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_clear_key.
     """
-    return await __cache_clear_key(connection, cache, key, key_hint, query_id)
+    return await __cache_clear_key(connection, cache_info, key, key_hint, query_id)
 
 
-def __cache_clear_key(connection, cache, key, key_hint, query_id):
+def __cache_clear_key(connection, cache_info, key, key_hint, query_id):
     query_struct = Query(
         OP_CACHE_CLEAR_KEY,
         [
@@ -800,19 +800,19 @@ def __cache_clear_key(connection, cache, key, key_hint, query_id):
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'key': key,
         },
     )
 
 
 def cache_clear_keys(
-        connection: 'Connection', cache: CacheInfo, keys: Iterable, query_id: Optional[int] = None) -> 'APIResult':
+        connection: 'Connection', cache_info: CacheInfo, keys: Iterable, query_id: Optional[int] = None) -> 'APIResult':
     """
     Clears the cache keys without notifying listeners or cache writers.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param keys: list of keys or tuples of (key, key_hint),
     :param query_id: (optional) a value generated by client and returned as-is
      in response.query_id. When the parameter is omitted, a random value
@@ -820,18 +820,19 @@ def cache_clear_keys(
     :return: API result data object. Contains zero status on success,
      non-zero status and an error description otherwise.
     """
-    return __cache_clear_keys(connection, cache, keys, query_id)
+    return __cache_clear_keys(connection, cache_info, keys, query_id)
 
 
 async def cache_clear_keys_async(
-        connection: 'AioConnection', cache: CacheInfo, keys: Iterable, query_id: Optional[int] = None) -> 'APIResult':
+        connection: 'AioConnection', cache_info: CacheInfo, keys: Iterable, query_id: Optional[int] = None
+) -> 'APIResult':
     """
     Async version of cache_clear_keys.
     """
-    return await __cache_clear_keys(connection, cache, keys, query_id)
+    return await __cache_clear_keys(connection, cache_info, keys, query_id)
 
 
-def __cache_clear_keys(connection, cache, keys, query_id):
+def __cache_clear_keys(connection, cache_info, keys, query_id):
     query_struct = Query(
         OP_CACHE_CLEAR_KEYS,
         [
@@ -843,19 +844,19 @@ def __cache_clear_keys(connection, cache, keys, query_id):
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'keys': keys,
         },
     )
 
 
-def cache_remove_key(connection: 'Connection', cache: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
+def cache_remove_key(connection: 'Connection', cache_info: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
                      query_id: Optional[int] = None) -> 'APIResult':
     """
     Clears the cache key without notifying listeners or cache writers.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param key:  key for the cache entry,
     :param key_hint: (optional) Ignite data type, for which the given key
      should be converted,
@@ -866,18 +867,18 @@ def cache_remove_key(connection: 'Connection', cache: CacheInfo, key: Any, key_h
      success code, or non-zero status and an error description if something
      has gone wrong.
     """
-    return __cache_remove_key(connection, cache, key, key_hint, query_id)
+    return __cache_remove_key(connection, cache_info, key, key_hint, query_id)
 
 
-async def cache_remove_key_async(connection: 'AioConnection', cache: CacheInfo, key: Any,
+async def cache_remove_key_async(connection: 'AioConnection', cache_info: CacheInfo, key: Any,
                                  key_hint: 'IgniteDataType' = None, query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_remove_key.
     """
-    return await __cache_remove_key(connection, cache, key, key_hint, query_id)
+    return await __cache_remove_key(connection, cache_info, key, key_hint, query_id)
 
 
-def __cache_remove_key(connection, cache, key, key_hint, query_id):
+def __cache_remove_key(connection, cache_info, key, key_hint, query_id):
     query_struct = Query(
         OP_CACHE_REMOVE_KEY,
         [
@@ -889,7 +890,7 @@ def __cache_remove_key(connection, cache, key, key_hint, query_id):
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'key': key,
         },
         response_config=[
@@ -899,7 +900,7 @@ def __cache_remove_key(connection, cache, key, key_hint, query_id):
     )
 
 
-def cache_remove_if_equals(connection: 'Connection', cache: CacheInfo, key: Any, sample: Any,
+def cache_remove_if_equals(connection: 'Connection', cache_info: CacheInfo, key: Any, sample: Any,
                            key_hint: 'IgniteDataType' = None, sample_hint: 'IgniteDataType' = None,
                            query_id: Optional[int] = None) -> 'APIResult':
     """
@@ -907,7 +908,7 @@ def cache_remove_if_equals(connection: 'Connection', cache: CacheInfo, key: Any,
     actual value, notifying listeners and cache writers.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param key:  key for the cache entry,
     :param sample: a sample to compare the stored value with,
     :param key_hint: (optional) Ignite data type, for which the given key
@@ -921,19 +922,19 @@ def cache_remove_if_equals(connection: 'Connection', cache: CacheInfo, key: Any,
      success code, or non-zero status and an error description if something
      has gone wrong.
     """
-    return __cache_remove_if_equals(connection, cache, key, sample, key_hint, sample_hint, query_id)
+    return __cache_remove_if_equals(connection, cache_info, key, sample, key_hint, sample_hint, query_id)
 
 
 async def cache_remove_if_equals_async(
-        connection: 'AioConnection', cache: CacheInfo, key: Any, sample: Any, key_hint: 'IgniteDataType' = None,
+        connection: 'AioConnection', cache_info: CacheInfo, key: Any, sample: Any, key_hint: 'IgniteDataType' = None,
         sample_hint: 'IgniteDataType' = None, query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_remove_if_equals.
     """
-    return await __cache_remove_if_equals(connection, cache, key, sample, key_hint, sample_hint, query_id)
+    return await __cache_remove_if_equals(connection, cache_info, key, sample, key_hint, sample_hint, query_id)
 
 
-def __cache_remove_if_equals(connection, cache, key, sample, key_hint, sample_hint, query_id):
+def __cache_remove_if_equals(connection, cache_info, key, sample, key_hint, sample_hint, query_id):
     query_struct = Query(
         OP_CACHE_REMOVE_IF_EQUALS,
         [
@@ -946,7 +947,7 @@ def __cache_remove_if_equals(connection, cache, key, sample, key_hint, sample_hi
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'key': key,
             'sample': sample,
         },
@@ -958,12 +959,12 @@ def __cache_remove_if_equals(connection, cache, key, sample, key_hint, sample_hi
 
 
 def cache_remove_keys(
-        connection: 'Connection', cache: CacheInfo, keys: Iterable, query_id: Optional[int] = None) -> 'APIResult':
+        connection: 'Connection', cache_info: CacheInfo, keys: Iterable, query_id: Optional[int] = None) -> 'APIResult':
     """
     Removes entries with given keys, notifying listeners and cache writers.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param keys: list of keys or tuples of (key, key_hint),
     :param query_id: (optional) a value generated by client and returned as-is
      in response.query_id. When the parameter is omitted, a random value
@@ -971,18 +972,19 @@ def cache_remove_keys(
     :return: API result data object. Contains zero status on success,
      non-zero status and an error description otherwise.
     """
-    return __cache_remove_keys(connection, cache, keys, query_id)
+    return __cache_remove_keys(connection, cache_info, keys, query_id)
 
 
 async def cache_remove_keys_async(
-        connection: 'AioConnection', cache: CacheInfo, keys: Iterable, query_id: Optional[int] = None) -> 'APIResult':
+        connection: 'AioConnection', cache_info: CacheInfo, keys: Iterable, query_id: Optional[int] = None
+) -> 'APIResult':
     """
     Async version of cache_remove_keys.
     """
-    return await __cache_remove_keys(connection, cache, keys, query_id)
+    return await __cache_remove_keys(connection, cache_info, keys, query_id)
 
 
-def __cache_remove_keys(connection, cache, keys, query_id):
+def __cache_remove_keys(connection, cache_info, keys, query_id):
     query_struct = Query(
         OP_CACHE_REMOVE_KEYS,
         [
@@ -994,36 +996,36 @@ def __cache_remove_keys(connection, cache, keys, query_id):
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'keys': keys,
         },
     )
 
 
-def cache_remove_all(connection: 'Connection', cache: CacheInfo, query_id: Optional[int] = None) -> 'APIResult':
+def cache_remove_all(connection: 'Connection', cache_info: CacheInfo, query_id: Optional[int] = None) -> 'APIResult':
     """
-    Removes all entries from cache, notifying listeners and cache writers.
+    Removes all entries from cache_info, notifying listeners and cache writers.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param query_id: (optional) a value generated by client and returned as-is
      in response.query_id. When the parameter is omitted, a random value
      is generated,
     :return: API result data object. Contains zero status on success,
      non-zero status and an error description otherwise.
     """
-    return __cache_remove_all(connection, cache, query_id)
+    return __cache_remove_all(connection, cache_info, query_id)
 
 
 async def cache_remove_all_async(
-        connection: 'AioConnection', cache: CacheInfo, query_id: Optional[int] = None) -> 'APIResult':
+        connection: 'AioConnection', cache_info: CacheInfo, query_id: Optional[int] = None) -> 'APIResult':
     """
     Async version of cache_remove_all.
     """
-    return await __cache_remove_all(connection, cache, query_id)
+    return await __cache_remove_all(connection, cache_info, query_id)
 
 
-def __cache_remove_all(connection, cache, query_id):
+def __cache_remove_all(connection, cache_info, query_id):
     query_struct = Query(
         OP_CACHE_REMOVE_ALL,
         [
@@ -1034,18 +1036,18 @@ def __cache_remove_all(connection, cache, query_id):
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
         },
     )
 
 
-def cache_get_size(connection: 'Connection', cache: CacheInfo, peek_modes: Union[int, list, tuple] = None,
+def cache_get_size(connection: 'Connection', cache_info: CacheInfo, peek_modes: Union[int, list, tuple] = None,
                    query_id: Optional[int] = None) -> 'APIResult':
     """
     Gets the number of entries in cache.
 
     :param connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param peek_modes: (optional) limit count to near cache partition
      (PeekModes.NEAR), primary cache (PeekModes.PRIMARY), or backup cache
      (PeekModes.BACKUP). Defaults to pimary cache partitions (PeekModes.PRIMARY),
@@ -1056,17 +1058,17 @@ def cache_get_size(connection: 'Connection', cache: CacheInfo, peek_modes: Union
      cache entries on success, non-zero status and an error description
      otherwise.
     """
-    return __cache_get_size(connection, cache, peek_modes, query_id)
+    return __cache_get_size(connection, cache_info, peek_modes, query_id)
 
 
 async def cache_get_size_async(
-        connection: 'AioConnection', cache: CacheInfo, peek_modes: Union[int, list, tuple] = None,
+        connection: 'AioConnection', cache_info: CacheInfo, peek_modes: Union[int, list, tuple] = None,
         query_id: Optional[int] = None
 ) -> 'APIResult':
-    return await __cache_get_size(connection, cache, peek_modes, query_id)
+    return await __cache_get_size(connection, cache_info, peek_modes, query_id)
 
 
-def __cache_get_size(connection, cache, peek_modes, query_id):
+def __cache_get_size(connection, cache_info, peek_modes, query_id):
     if peek_modes is None:
         peek_modes = []
     elif not isinstance(peek_modes, (list, tuple)):
@@ -1083,7 +1085,7 @@ def __cache_get_size(connection, cache, peek_modes, query_id):
     return query_perform(
         query_struct, connection,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'peek_modes': peek_modes,
         },
         response_config=[
@@ -1093,7 +1095,7 @@ def __cache_get_size(connection, cache, peek_modes, query_id):
     )
 
 
-def cache_local_peek(conn: 'Connection', cache: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
+def cache_local_peek(conn: 'Connection', cache_info: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
                      peek_modes: Union[int, list, tuple] = None, query_id: Optional[int] = None) -> 'APIResult':
     """
     Peeks at in-memory cached value using default optional peek mode.
@@ -1102,7 +1104,7 @@ def cache_local_peek(conn: 'Connection', cache: CacheInfo, key: Any, key_hint: '
     node.
 
     :param conn: connection: connection to Ignite server,
-    :param cache: name or ID of the cache,
+    :param cache_info: cache meta info,
     :param key: entry key,
     :param key_hint: (optional) Ignite data type, for which the given key
      should be converted,
@@ -1115,20 +1117,20 @@ def cache_local_peek(conn: 'Connection', cache: CacheInfo, key: Any, key_hint: '
     :return: API result data object. Contains zero status and a peeked value
      (null if not found).
     """
-    return __cache_local_peek(conn, cache, key, key_hint, peek_modes, query_id)
+    return __cache_local_peek(conn, cache_info, key, key_hint, peek_modes, query_id)
 
 
 async def cache_local_peek_async(
-        conn: 'AioConnection', cache: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
+        conn: 'AioConnection', cache_info: CacheInfo, key: Any, key_hint: 'IgniteDataType' = None,
         peek_modes: Union[int, list, tuple] = None, query_id: Optional[int] = None
 ) -> 'APIResult':
     """
     Async version of cache_local_peek.
     """
-    return await __cache_local_peek(conn, cache, key, key_hint, peek_modes, query_id)
+    return await __cache_local_peek(conn, cache_info, key, key_hint, peek_modes, query_id)
 
 
-def __cache_local_peek(conn, cache, key, key_hint, peek_modes, query_id):
+def __cache_local_peek(conn, cache_info, key, key_hint, peek_modes, query_id):
     if peek_modes is None:
         peek_modes = []
     elif not isinstance(peek_modes, (list, tuple)):
@@ -1146,7 +1148,7 @@ def __cache_local_peek(conn, cache, key, key_hint, peek_modes, query_id):
     return query_perform(
         query_struct, conn,
         query_params={
-            'cache_info': cache,
+            'cache_info': cache_info,
             'key': key,
             'peek_modes': peek_modes,
         },

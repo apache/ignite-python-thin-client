@@ -736,8 +736,8 @@ class Client(BaseClient):
 
     def get_cluster(self) -> 'Cluster':
         """
-        Gets client cluster facade.
+        Get client cluster facade.
 
-        :return: Client cluster facade.
+        :return: :py:class:`~pyignite.cluster.Cluster` instance.
         """
         return Cluster(self)
