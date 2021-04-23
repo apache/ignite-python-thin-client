@@ -15,9 +15,10 @@
 
 from typing import Any, Iterable, Optional, Tuple, Union
 
-from .datatypes import prop_codes
+from .datatypes import prop_codes, ExpiryPolicy
 from .datatypes.internal import AnyDataObject
-from .exceptions import CacheCreationError, CacheError, ParameterError, SQLError
+from .exceptions import CacheCreationError, CacheError, ParameterError, SQLError, NotSupportedByClusterError
+from .queries.query import CacheInfo
 from .utils import cache_id, status_to_exception
 from .api.cache_config import (
     cache_create, cache_create_with_config, cache_get_or_create, cache_get_or_create_with_config, cache_destroy,
@@ -93,12 +94,14 @@ def __parse_settings(settings: Union[str, dict]) -> Tuple[Optional[str], Optiona
 
 
 class BaseCache:
-    def __init__(self, client: 'BaseClient', name: str):
+    def __init__(self, client: 'BaseClient', name: str, expiry_policy: ExpiryPolicy = None):
         self._client = client
         self._name = name
         self._settings = None
-        self._cache_id = cache_id(self._name)
-        self._client.register_cache(self._cache_id)
+        self._cache_info = CacheInfo(cache_id=cache_id(self._name),
+                                     protocol_context=client.protocol_context,
+                                     expiry_policy=expiry_policy)
+        self._client.register_cache(self.cache_info.cache_id)
 
     @property
     def name(self) -> str:
@@ -115,13 +118,43 @@ class BaseCache:
         return self._client
 
     @property
+    def cache_info(self) -> CacheInfo:
+        """
+        Cache meta info.
+        """
+        return self._cache_info
+
+    @property
     def cache_id(self) -> int:
         """
         Cache ID.
 
         :return: integer value of the cache ID.
         """
-        return self._cache_id
+        return self._cache_info.cache_id
+
+    def with_expire_policy(
+            self, expiry_policy: Optional[ExpiryPolicy] = None,
+            create: Union[int, float] = ExpiryPolicy.UNCHANGED,
+            update: Union[int, float] = ExpiryPolicy.UNCHANGED,
+            access: Union[int, float] = ExpiryPolicy.UNCHANGED
+    ):
+        """
+        :param expiry_policy: optional :class:`~pyignite.datatypes.expiry_policy.ExpiryPolicy`
+         object. If it is set, other params will be ignored.
+        :param create: create TTL in seconds (float) or milliseconds (int),
+        :param update: Create TTL in seconds (float) or milliseconds (int),
+        :param access: Create TTL in seconds (float) or milliseconds (int).
+        :return: cache decorator with expiry policy set.
+        """
+        if not self.client.protocol_context.is_expiry_policy_supported():
+            raise NotSupportedByClusterError("'ExpiryPolicy' API is not supported by the cluster")
+
+        cache_cls = type(self)
+        if not expiry_policy:
+            expiry_policy = ExpiryPolicy(create=create, update=update, access=access)
+
+        return cache_cls(self.client, self.name, expiry_policy)
 
 
 class Cache(BaseCache):
@@ -134,17 +167,17 @@ class Cache(BaseCache):
     :ref:`this example <create_cache>` on how to do it.
     """
 
-    def __init__(self, client: 'Client', name: str):
+    def __init__(self, client: 'Client', name: str, expiry_policy: ExpiryPolicy = None):
         """
         Initialize cache object. For internal use.
 
         :param client: Ignite client,
         :param name: Cache name.
         """
-        super().__init__(client, name)
+        super().__init__(client, name, expiry_policy)
 
     def _get_best_node(self, key=None, key_hint=None):
-        return self.client.get_best_node(self._cache_id, key, key_hint)
+        return self.client.get_best_node(self, key, key_hint)
 
     @property
     def settings(self) -> Optional[dict]:
@@ -159,7 +192,7 @@ class Cache(BaseCache):
         if self._settings is None:
             config_result = cache_get_configuration(
                 self._get_best_node(),
-                self._cache_id
+                self.cache_info
             )
             if config_result.status == 0:
                 self._settings = config_result.value
@@ -173,7 +206,7 @@ class Cache(BaseCache):
         """
         Destroys cache with a given name.
         """
-        return cache_destroy(self._get_best_node(), self._cache_id)
+        return cache_destroy(self._get_best_node(), self.cache_id)
 
     @status_to_exception(CacheError)
     def get(self, key, key_hint: object = None) -> Any:
@@ -190,7 +223,7 @@ class Cache(BaseCache):
 
         result = cache_get(
             self._get_best_node(key, key_hint),
-            self._cache_id,
+            self.cache_info,
             key,
             key_hint=key_hint
         )
@@ -198,9 +231,7 @@ class Cache(BaseCache):
         return result
 
     @status_to_exception(CacheError)
-    def put(
-            self, key, value, key_hint: object = None, value_hint: object = None
-    ):
+    def put(self, key, value, key_hint: object = None, value_hint: object = None):
         """
         Puts a value with a given key to cache (overwriting existing value
         if any).
@@ -217,7 +248,7 @@ class Cache(BaseCache):
 
         return cache_put(
             self._get_best_node(key, key_hint),
-            self._cache_id, key, value,
+            self.cache_info, key, value,
             key_hint=key_hint, value_hint=value_hint
         )
 
@@ -229,7 +260,7 @@ class Cache(BaseCache):
         :param keys: list of keys or tuples of (key, key_hint),
         :return: a dict of key-value pairs.
         """
-        result = cache_get_all(self._get_best_node(), self._cache_id, keys)
+        result = cache_get_all(self._get_best_node(), self.cache_info, keys)
         if result.value:
             for key, value in result.value.items():
                 result.value[key] = self.client.unwrap_binary(value)
@@ -245,7 +276,7 @@ class Cache(BaseCache):
          to save. Each key or value can be an item of representable
          Python type or a tuple of (item, hint),
         """
-        return cache_put_all(self._get_best_node(), self._cache_id, pairs)
+        return cache_put_all(self._get_best_node(), self.cache_info, pairs)
 
     @status_to_exception(CacheError)
     def replace(
@@ -266,7 +297,7 @@ class Cache(BaseCache):
 
         result = cache_replace(
             self._get_best_node(key, key_hint),
-            self._cache_id, key, value,
+            self.cache_info, key, value,
             key_hint=key_hint, value_hint=value_hint
         )
         result.value = self.client.unwrap_binary(result.value)
@@ -282,9 +313,9 @@ class Cache(BaseCache):
         """
         conn = self._get_best_node()
         if keys:
-            return cache_clear_keys(conn, self._cache_id, keys)
+            return cache_clear_keys(conn, self.cache_info, keys)
         else:
-            return cache_clear(conn, self._cache_id)
+            return cache_clear(conn, self.cache_info)
 
     @status_to_exception(CacheError)
     def clear_key(self, key, key_hint: object = None):
@@ -300,7 +331,7 @@ class Cache(BaseCache):
 
         return cache_clear_key(
             self._get_best_node(key, key_hint),
-            self._cache_id,
+            self.cache_info,
             key,
             key_hint=key_hint
         )
@@ -313,7 +344,7 @@ class Cache(BaseCache):
         :param keys: a list of keys or (key, type hint) tuples
         """
 
-        return cache_clear_keys(self._get_best_node(), self._cache_id, keys)
+        return cache_clear_keys(self._get_best_node(), self.cache_info, keys)
 
     @status_to_exception(CacheError)
     def contains_key(self, key, key_hint=None) -> bool:
@@ -330,7 +361,7 @@ class Cache(BaseCache):
 
         return cache_contains_key(
             self._get_best_node(key, key_hint),
-            self._cache_id,
+            self.cache_info,
             key,
             key_hint=key_hint
         )
@@ -343,7 +374,7 @@ class Cache(BaseCache):
         :param keys: a list of keys or (key, type hint) tuples,
         :return: boolean `True` when all keys are present, `False` otherwise.
         """
-        return cache_contains_keys(self._get_best_node(), self._cache_id, keys)
+        return cache_contains_keys(self._get_best_node(), self.cache_info, keys)
 
     @status_to_exception(CacheError)
     def get_and_put(self, key, value, key_hint=None, value_hint=None) -> Any:
@@ -364,7 +395,7 @@ class Cache(BaseCache):
 
         result = cache_get_and_put(
             self._get_best_node(key, key_hint),
-            self._cache_id,
+            self.cache_info,
             key, value,
             key_hint, value_hint
         )
@@ -392,7 +423,7 @@ class Cache(BaseCache):
 
         result = cache_get_and_put_if_absent(
             self._get_best_node(key, key_hint),
-            self._cache_id,
+            self.cache_info,
             key, value,
             key_hint, value_hint
         )
@@ -417,7 +448,7 @@ class Cache(BaseCache):
 
         return cache_put_if_absent(
             self._get_best_node(key, key_hint),
-            self._cache_id,
+            self.cache_info,
             key, value,
             key_hint, value_hint
         )
@@ -437,7 +468,7 @@ class Cache(BaseCache):
 
         result = cache_get_and_remove(
             self._get_best_node(key, key_hint),
-            self._cache_id,
+            self.cache_info,
             key,
             key_hint
         )
@@ -466,7 +497,7 @@ class Cache(BaseCache):
 
         result = cache_get_and_replace(
             self._get_best_node(key, key_hint),
-            self._cache_id,
+            self.cache_info,
             key, value,
             key_hint, value_hint
         )
@@ -486,7 +517,7 @@ class Cache(BaseCache):
             key_hint = AnyDataObject.map_python_type(key)
 
         return cache_remove_key(
-            self._get_best_node(key, key_hint), self._cache_id, key, key_hint
+            self._get_best_node(key, key_hint), self.cache_info, key, key_hint
         )
 
     @status_to_exception(CacheError)
@@ -498,7 +529,7 @@ class Cache(BaseCache):
         :param keys: list of keys or tuples of (key, key_hint) to remove.
         """
         return cache_remove_keys(
-            self._get_best_node(), self._cache_id, keys
+            self._get_best_node(), self.cache_info, keys
         )
 
     @status_to_exception(CacheError)
@@ -506,7 +537,7 @@ class Cache(BaseCache):
         """
         Removes all cache entries, notifying listeners and cache writers.
         """
-        return cache_remove_all(self._get_best_node(), self._cache_id)
+        return cache_remove_all(self._get_best_node(), self.cache_info)
 
     @status_to_exception(CacheError)
     def remove_if_equals(self, key, sample, key_hint=None, sample_hint=None):
@@ -526,7 +557,7 @@ class Cache(BaseCache):
 
         return cache_remove_if_equals(
             self._get_best_node(key, key_hint),
-            self._cache_id,
+            self.cache_info,
             key, sample,
             key_hint, sample_hint
         )
@@ -556,7 +587,7 @@ class Cache(BaseCache):
 
         result = cache_replace_if_equals(
             self._get_best_node(key, key_hint),
-            self._cache_id,
+            self.cache_info,
             key, sample, value,
             key_hint, sample_hint, value_hint
         )
@@ -574,7 +605,7 @@ class Cache(BaseCache):
         :return: integer number of cache entries.
         """
         return cache_get_size(
-            self._get_best_node(), self._cache_id, peek_modes
+            self._get_best_node(), self.cache_info, peek_modes
         )
 
     def scan(self, page_size: int = 1, partitions: int = -1, local: bool = False) -> ScanCursor:
@@ -590,7 +621,7 @@ class Cache(BaseCache):
          on local node only. Defaults to False,
         :return: Scan query cursor.
         """
-        return ScanCursor(self.client, self._cache_id, page_size, partitions, local)
+        return ScanCursor(self.client, self.cache_info, page_size, partitions, local)
 
     def select_row(
             self, query_str: str, page_size: int = 1,
@@ -621,5 +652,5 @@ class Cache(BaseCache):
         if not type_name:
             raise SQLError('Value type is unknown')
 
-        return SqlCursor(self.client, self._cache_id, type_name, query_str, page_size, query_args,
+        return SqlCursor(self.client, self.cache_info, type_name, query_str, page_size, query_args,
                          distributed_joins, replicated_only, local, timeout)

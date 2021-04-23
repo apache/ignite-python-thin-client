@@ -26,31 +26,30 @@ nodes = [
 ]
 
 
-def main():
-    client = Client(timeout=4.0)
-    with client.connect(nodes):
-        print('Connected')
+client = Client(timeout=4.0)
+with client.connect(nodes):
+    print('Connected')
 
-        my_cache = client.get_or_create_cache({
-            PROP_NAME: 'my_cache',
-            PROP_CACHE_MODE: CacheMode.PARTITIONED,
-            PROP_BACKUPS_NUMBER: 2,
-        })
-        my_cache.put('test_key', 0)
-        test_value = 0
+    my_cache = client.get_or_create_cache({
+        PROP_NAME: 'my_cache',
+        PROP_CACHE_MODE: CacheMode.PARTITIONED,
+        PROP_BACKUPS_NUMBER: 2,
+    })
+    my_cache.put('test_key', 0)
+    test_value = 0
 
-        # abstract main loop
-        while True:
-            try:
-                # do the work
-                test_value = my_cache.get('test_key') or 0
-                my_cache.put('test_key', test_value + 1)
-            except (OSError, SocketError) as e:
-                # recover from error (repeat last command, check data
-                # consistency or just continue − depends on the task)
-                print(f'Error: {e}')
-                print(f'Last value: {test_value}')
-                print('Reconnecting')
+    # abstract main loop
+    while True:
+        try:
+            # do the work
+            test_value = my_cache.get('test_key') or 0
+            my_cache.put('test_key', test_value + 1)
+        except (OSError, SocketError) as e:
+            # recover from error (repeat last command, check data
+            # consistency or just continue − depends on the task)
+            print(f'Error: {e}')
+            print(f'Last value: {test_value}')
+            print('Reconnecting')
 
 # Connected
 # Error: Connection broken.

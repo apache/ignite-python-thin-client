@@ -39,7 +39,8 @@ Submodules
     pyignite.aio_cache
     pyignite.client
     pyignite.aio_client
-    pyignite.constants
+    pyignite.cluster
+    pyignite.aio_cluster
     pyignite.cursors
     pyignite.exceptions
 

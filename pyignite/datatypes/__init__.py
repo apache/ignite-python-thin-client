@@ -25,3 +25,5 @@ from .primitive import *
 from .primitive_arrays import *
 from .primitive_objects import *
 from .standard import *
+from .cluster_state import ClusterState
+from .expiry_policy import ExpiryPolicy

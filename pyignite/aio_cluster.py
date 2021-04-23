@@ -18,6 +18,7 @@ This module contains `AioCluster` that lets you get info and change state of the
 whole cluster asynchronously.
 """
 from pyignite.api.cluster import cluster_get_state_async, cluster_set_state_async
+from pyignite.datatypes import ClusterState
 from pyignite.exceptions import ClusterError
 from pyignite.utils import status_to_exception
 
@@ -30,27 +31,34 @@ class AioCluster:
     """
 
     def __init__(self, client: 'AioClient'):
+        """
+        :param client: :py:class:`~pyignite.aio_client.AioClient` instance.
+        """
         self._client = client
 
     @status_to_exception(ClusterError)
-    async def get_state(self):
+    async def get_state(self) -> 'ClusterState':
         """
         Gets current cluster state.
 
-        :return: Current cluster state. This is one of ClusterState.INACTIVE,
-         ClusterState.ACTIVE or ClusterState.ACTIVE_READ_ONLY.
+        :return: Current cluster state. This is one of
+         :py:attr:`~pyignite.datatypes.cluster_state.ClusterState.INACTIVE`,
+         :py:attr:`~pyignite.datatypes.cluster_state.ClusterState.ACTIVE`,
+         :py:attr:`~pyignite.datatypes.cluster_state.ClusterState.ACTIVE_READ_ONLY`.
         """
         return await cluster_get_state_async(await self._client.random_node())
 
     @status_to_exception(ClusterError)
-    async def set_state(self, state):
+    async def set_state(self, state: 'ClusterState'):
         """
         Changes current cluster state to the given.
 
         Note: Deactivation clears in-memory caches (without persistence)
          including the system caches.
 
-        :param state: New cluster state. This is one of ClusterState.INACTIVE,
-         ClusterState.ACTIVE or ClusterState.ACTIVE_READ_ONLY.
+        :param state: New cluster state. This is one of
+         :py:attr:`~pyignite.datatypes.cluster_state.ClusterState.INACTIVE`,
+         :py:attr:`~pyignite.datatypes.cluster_state.ClusterState.ACTIVE`,
+         :py:attr:`~pyignite.datatypes.cluster_state.ClusterState.ACTIVE_READ_ONLY`.
         """
         return await cluster_set_state_async(await self._client.random_node(), state)

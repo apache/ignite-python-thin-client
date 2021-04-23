@@ -12,14 +12,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+from . import ExpiryPolicy
 from .standard import String
 from .internal import AnyDataObject, Struct, StructArray
 from .primitive import *
 
 
 __all__ = [
-    'cache_config_struct', 'CacheMode', 'PartitionLossPolicy',
+    'get_cache_config_struct', 'CacheMode', 'PartitionLossPolicy',
     'RebalanceMode', 'WriteSynchronizationMode', 'IndexType',
 ]
 
@@ -118,36 +118,40 @@ CacheKeyConfiguration = StructArray([
 ])
 
 
-cache_config_struct = Struct([
-    ('length', Int),
-    ('cache_atomicity_mode', CacheAtomicityMode),
-    ('backups_number', Int),
-    ('cache_mode', CacheMode),
-    ('copy_on_read', Bool),
-    ('data_region_name', String),
-    ('eager_ttl', Bool),
-    ('statistics_enabled', Bool),
-    ('group_name', String),
-    ('default_lock_timeout', Long),
-    ('max_concurrent_async_operations', Int),
-    ('max_query_iterators', Int),
-    ('name', String),
-    ('is_onheap_cache_enabled', Bool),
-    ('partition_loss_policy', PartitionLossPolicy),
-    ('query_detail_metric_size', Int),
-    ('query_parallelism', Int),
-    ('read_from_backup', Bool),
-    ('rebalance_batch_size', Int),
-    ('rebalance_batches_prefetch_count', Long),
-    ('rebalance_delay', Long),
-    ('rebalance_mode', RebalanceMode),
-    ('rebalance_order', Int),
-    ('rebalance_throttle', Long),
-    ('rebalance_timeout', Long),
-    ('sql_escape_all', Bool),
-    ('sql_index_inline_max_size', Int),
-    ('sql_schema', String),
-    ('write_synchronization_mode', WriteSynchronizationMode),
-    ('cache_key_configuration', CacheKeyConfiguration),
-    ('query_entities', QueryEntities),
-])
+def get_cache_config_struct(protocol_context):
+    fields = [
+        ('length', Int),
+        ('cache_atomicity_mode', CacheAtomicityMode),
+        ('backups_number', Int),
+        ('cache_mode', CacheMode),
+        ('copy_on_read', Bool),
+        ('data_region_name', String),
+        ('eager_ttl', Bool),
+        ('statistics_enabled', Bool),
+        ('group_name', String),
+        ('default_lock_timeout', Long),
+        ('max_concurrent_async_operations', Int),
+        ('max_query_iterators', Int),
+        ('name', String),
+        ('is_onheap_cache_enabled', Bool),
+        ('partition_loss_policy', PartitionLossPolicy),
+        ('query_detail_metric_size', Int),
+        ('query_parallelism', Int),
+        ('read_from_backup', Bool),
+        ('rebalance_batch_size', Int),
+        ('rebalance_batches_prefetch_count', Long),
+        ('rebalance_delay', Long),
+        ('rebalance_mode', RebalanceMode),
+        ('rebalance_order', Int),
+        ('rebalance_throttle', Long),
+        ('rebalance_timeout', Long),
+        ('sql_escape_all', Bool),
+        ('sql_index_inline_max_size', Int),
+        ('sql_schema', String),
+        ('write_synchronization_mode', WriteSynchronizationMode),
+        ('cache_key_configuration', CacheKeyConfiguration),
+        ('query_entities', QueryEntities),
+    ]
+    if protocol_context.is_expiry_policy_supported():
+        fields.append(('expiry_policy', ExpiryPolicy))
+    return Struct(fields=fields)

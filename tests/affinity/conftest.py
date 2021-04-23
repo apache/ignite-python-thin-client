@@ -66,7 +66,6 @@ async def async_client(connection_param):
 @pytest.fixture(scope='module', autouse=True)
 def skip_if_no_affinity(request, server1):
     client = Client(partition_aware=True)
-    client.connect('127.0.0.1', 10801)
-
-    if not client.partition_awareness_supported_by_protocol:
-        pytest.skip(f'skipped {request.node.name}, partition awareness is not supported.')
+    with client.connect('127.0.0.1', 10801):
+        if not client.partition_awareness_supported_by_protocol:
+            pytest.skip(f'skipped {request.node.name}, partition awareness is not supported.')

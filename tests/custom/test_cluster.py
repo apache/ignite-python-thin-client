@@ -19,7 +19,7 @@ from pyignite import Client, AioClient
 from pyignite.exceptions import CacheError
 from tests.util import clear_ignite_work_dir, start_ignite_gen
 
-from pyignite.datatypes.cluster_state import ClusterState
+from pyignite.datatypes import ClusterState
 
 
 @pytest.fixture(params=['with-persistence', 'without-persistence'])
@@ -42,6 +42,15 @@ def server1(with_persistence, cleanup):
 @pytest.fixture(autouse=True)
 def server2(with_persistence, cleanup):
     yield from start_ignite_gen(idx=2, use_persistence=with_persistence)
+
+
+@pytest.fixture(autouse=True)
+def cluster_api_supported(request, server1):
+    client = Client()
+    client.connect('127.0.0.1', 10801)
+
+    if not client.protocol_context.is_cluster_api_supported():
+        pytest.skip(f'skipped {request.node.name}, ExpiryPolicy APIis not supported.')
 
 
 def test_cluster_set_active(with_persistence):
