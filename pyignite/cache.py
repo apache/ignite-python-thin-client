@@ -253,7 +253,7 @@ class Cache(BaseCache):
         )
 
     @status_to_exception(CacheError)
-    def get_all(self, keys: list) -> list:
+    def get_all(self, keys: list) -> dict:
         """
         Retrieves multiple key-value pairs from cache.
 
