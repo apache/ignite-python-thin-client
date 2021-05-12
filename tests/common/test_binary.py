@@ -451,13 +451,13 @@ def complex_objects():
 
 def test_complex_object_hash(client, complex_objects):
     for obj, hash in complex_objects:
-        assert hash == BinaryObject.hashcode(obj, client)
+        assert hash == BinaryObject.hashcode(obj, client=client)
 
 
 @pytest.mark.asyncio
 async def test_complex_object_hash_async(async_client, complex_objects):
     for obj, hash in complex_objects:
-        assert hash == await BinaryObject.hashcode_async(obj, async_client)
+        assert hash == await BinaryObject.hashcode_async(obj, client=async_client)
 
 
 def camel_to_snake(name):

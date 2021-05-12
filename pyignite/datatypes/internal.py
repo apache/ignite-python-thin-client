@@ -136,15 +136,15 @@ class Conditional:
             return await self.var1.parse_async(stream)
         return await self.var2.parse_async(stream)
 
-    def to_python(self, ctypes_object, context, *args, **kwargs):
+    def to_python(self, ctypes_object, context, **kwargs):
         if self.predicate2(context):
-            return self.var1.to_python(ctypes_object, *args, **kwargs)
-        return self.var2.to_python(ctypes_object, *args, **kwargs)
+            return self.var1.to_python(ctypes_object, **kwargs)
+        return self.var2.to_python(ctypes_object, **kwargs)
 
-    async def to_python_async(self, ctypes_object, context, *args, **kwargs):
+    async def to_python_async(self, ctypes_object, context, **kwargs):
         if self.predicate2(context):
-            return await self.var1.to_python_async(ctypes_object, *args, **kwargs)
-        return await self.var2.to_python_async(ctypes_object, *args, **kwargs)
+            return await self.var1.to_python_async(ctypes_object, **kwargs)
+        return await self.var2.to_python_async(ctypes_object, **kwargs)
 
 
 @attr.s
@@ -192,19 +192,17 @@ class StructArray:
             },
         )
 
-    def to_python(self, ctypes_object, *args, **kwargs):
+    def to_python(self, ctypes_object, **kwargs):
         length = getattr(ctypes_object, 'length', 0)
         return [
-            Struct(self.following, dict_type=dict).to_python(getattr(ctypes_object, f'element_{i}'),
-                                                             *args, **kwargs)
+            Struct(self.following, dict_type=dict).to_python(getattr(ctypes_object, f'element_{i}'), **kwargs)
             for i in range(length)
         ]
 
-    async def to_python_async(self, ctypes_object, *args, **kwargs):
+    async def to_python_async(self, ctypes_object, **kwargs):
         length = getattr(ctypes_object, 'length', 0)
         result_coro = [
-            Struct(self.following, dict_type=dict).to_python_async(getattr(ctypes_object, f'element_{i}'),
-                                                                   *args, **kwargs)
+            Struct(self.following, dict_type=dict).to_python_async(getattr(ctypes_object, f'element_{i}'), **kwargs)
             for i in range(length)
         ]
         return await asyncio.gather(*result_coro)
@@ -284,21 +282,21 @@ class Struct:
             },
         )
 
-    def to_python(self, ctypes_object, *args, **kwargs) -> Union[dict, OrderedDict]:
+    def to_python(self, ctypes_object, **kwargs) -> Union[dict, OrderedDict]:
         result = self.dict_type()
         for name, c_type in self.fields:
             is_cond = isinstance(c_type, Conditional)
             result[name] = c_type.to_python(
                 getattr(ctypes_object, name),
                 result,
-                *args, **kwargs
+                **kwargs
             ) if is_cond else c_type.to_python(
                 getattr(ctypes_object, name),
-                *args, **kwargs
+                **kwargs
             )
         return result
 
-    async def to_python_async(self, ctypes_object, *args, **kwargs) -> Union[dict, OrderedDict]:
+    async def to_python_async(self, ctypes_object, **kwargs) -> Union[dict, OrderedDict]:
         result = self.dict_type()
         for name, c_type in self.fields:
             is_cond = isinstance(c_type, Conditional)
@@ -307,12 +305,12 @@ class Struct:
                 value = await c_type.to_python_async(
                     getattr(ctypes_object, name),
                     result,
-                    *args, **kwargs
+                    **kwargs
                 )
             else:
                 value = await c_type.to_python_async(
                     getattr(ctypes_object, name),
-                    *args, **kwargs
+                    **kwargs
                 )
             result[name] = value
         return result
@@ -394,14 +392,14 @@ class AnyDataObject:
             raise ParseError('Unknown type code: `{}`'.format(type_code))
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
+    def to_python(cls, ctypes_object, **kwargs):
         data_class = cls.__data_class_from_ctype(ctypes_object)
-        return data_class.to_python(ctypes_object)
+        return data_class.to_python(ctypes_object, **kwargs)
 
     @classmethod
-    async def to_python_async(cls, ctypes_object, *args, **kwargs):
+    async def to_python_async(cls, ctypes_object, **kwargs):
         data_class = cls.__data_class_from_ctype(ctypes_object)
-        return await data_class.to_python_async(ctypes_object)
+        return await data_class.to_python_async(ctypes_object, **kwargs)
 
     @classmethod
     def __data_class_from_ctype(cls, ctypes_object):
@@ -580,16 +578,16 @@ class AnyDataArray(AnyDataObject):
         )
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
+    def to_python(cls, ctypes_object, **kwargs):
         length = getattr(ctypes_object, "length", 0)
 
         return [
-            super().to_python(getattr(ctypes_object, f'element_{i}'), *args, **kwargs)
+            super().to_python(getattr(ctypes_object, f'element_{i}'), **kwargs)
             for i in range(length)
         ]
 
     @classmethod
-    async def to_python_async(cls, ctypes_object, *args, **kwargs):
+    async def to_python_async(cls, ctypes_object, **kwargs):
         length = getattr(ctypes_object, "length", 0)
 
         values = asyncio.gather(

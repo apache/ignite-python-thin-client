@@ -67,7 +67,7 @@ class PrimitiveArray(IgniteDataType):
         return c_type
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
+    def to_python(cls, ctypes_object, **kwargs):
         return [ctypes_object.data[i] for i in range(ctypes_object.length)]
 
     @classmethod
@@ -88,7 +88,7 @@ class ByteArray(PrimitiveArray):
     type_code = TC_BYTE_ARRAY
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
+    def to_python(cls, ctypes_object, **kwargs):
         return bytes(ctypes_object.data)
 
     @classmethod
@@ -184,7 +184,7 @@ class PrimitiveArrayObject(Nullable):
         return c_type
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, **kwargs):
         return [ctypes_object.data[i] for i in range(ctypes_object.length)]
 
     @classmethod
@@ -206,7 +206,7 @@ class ByteArrayObject(PrimitiveArrayObject):
     type_code = TC_BYTE_ARRAY
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, **kwargs):
         return bytes(ctypes_object.data)
 
     @classmethod
@@ -277,8 +277,8 @@ class CharArrayObject(PrimitiveArrayObject):
     type_code = TC_CHAR_ARRAY
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
-        values = super().to_python_not_null(ctypes_object, *args, **kwargs)
+    def to_python_not_null(cls, ctypes_object, **kwargs):
+        values = super().to_python_not_null(ctypes_object, **kwargs)
         return [
             v.to_bytes(
                 ctypes.sizeof(cls.primitive_type.c_type),
@@ -296,5 +296,5 @@ class BoolArrayObject(PrimitiveArrayObject):
     type_code = TC_BOOL_ARRAY
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, **kwargs):
         return [ctypes_object.data[i] != 0 for i in range(ctypes_object.length)]

@@ -57,7 +57,7 @@ class Null(IgniteDataType):
         return cls.build_c_type()
 
     @classmethod
-    def to_python(cls, *args, **kwargs):
+    def to_python(cls, ctypes_object, **kwargs):
         return None
 
     @classmethod
@@ -105,7 +105,7 @@ class Nullable(IgniteDataType):
         if value is None:
             Null.from_python(stream)
         else:
-            cls.from_python_not_null(stream, value)
+            cls.from_python_not_null(stream, value, **kwargs)
 
     @classmethod
     async def from_python_async(cls, stream, value, **kwargs):
@@ -115,26 +115,26 @@ class Nullable(IgniteDataType):
             await cls.from_python_not_null_async(stream, value, **kwargs)
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, **kwargs):
         raise NotImplementedError
 
     @classmethod
-    async def to_python_not_null_async(cls, ctypes_object, *args, **kwargs):
-        return cls.to_python_not_null(ctypes_object, *args, **kwargs)
+    async def to_python_not_null_async(cls, ctypes_object, **kwargs):
+        return cls.to_python_not_null(ctypes_object, **kwargs)
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
+    def to_python(cls, ctypes_object, **kwargs):
         if cls.__is_null(ctypes_object):
             return None
 
-        return cls.to_python_not_null(ctypes_object, *args, **kwargs)
+        return cls.to_python_not_null(ctypes_object, **kwargs)
 
     @classmethod
-    async def to_python_async(cls, ctypes_object, *args, **kwargs):
+    async def to_python_async(cls, ctypes_object, **kwargs):
         if cls.__is_null(ctypes_object):
             return None
 
-        return await cls.to_python_not_null_async(ctypes_object, *args, **kwargs)
+        return await cls.to_python_not_null_async(ctypes_object, **kwargs)
 
     @classmethod
     def __check_null_input(cls, stream):

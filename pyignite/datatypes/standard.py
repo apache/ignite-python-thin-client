@@ -71,7 +71,7 @@ class String(Nullable):
     pythonic = str
 
     @classmethod
-    def hashcode(cls, value: str, *args, **kwargs) -> int:
+    def hashcode(cls, value: str, **kwargs) -> int:
         return hashcode(value)
 
     @classmethod
@@ -101,7 +101,7 @@ class String(Nullable):
         return data_type
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, **kwargs):
         if ctypes_object.length > 0:
             return ctypes_object.data.decode(PROTOCOL_STRING_ENCODING)
 
@@ -132,7 +132,7 @@ class DecimalObject(Nullable):
     default = decimal.Decimal('0.00')
 
     @classmethod
-    def hashcode(cls, value: decimal.Decimal, *args, **kwargs) -> int:
+    def hashcode(cls, value: decimal.Decimal, **kwargs) -> int:
         return decimal_hashcode(value)
 
     @classmethod
@@ -163,7 +163,7 @@ class DecimalObject(Nullable):
         return data_type
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, **kwargs):
         sign = 1 if ctypes_object.data[0] & 0x80 else 0
         data = ctypes_object.data[1:]
         data.insert(0, ctypes_object.data[0] & 0x7f)
@@ -227,7 +227,7 @@ class UUIDObject(StandardObject):
     UUID_BYTE_ORDER = (7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8)
 
     @classmethod
-    def hashcode(cls, value: 'UUID', *args, **kwargs) -> int:
+    def hashcode(cls, value: 'UUID', **kwargs) -> int:
         msb = value.int >> 64
         lsb = value.int & 0xffffffffffffffff
         hilo = msb ^ lsb
@@ -263,7 +263,7 @@ class UUIDObject(StandardObject):
         stream.write(data_object)
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, **kwargs):
         uuid_array = bytearray(ctypes_object.value)
         return uuid.UUID(
             bytes=bytes([uuid_array[i] for i in cls.UUID_BYTE_ORDER])
@@ -289,7 +289,7 @@ class TimestampObject(StandardObject):
     default = (datetime(1970, 1, 1), 0)
 
     @classmethod
-    def hashcode(cls, value: Tuple[datetime, int], *args, **kwargs) -> int:
+    def hashcode(cls, value: Tuple[datetime, int], **kwargs) -> int:
         return datetime_hashcode(int(value[0].timestamp() * 1000))
 
     @classmethod
@@ -323,7 +323,7 @@ class TimestampObject(StandardObject):
         stream.write(data_object)
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, **kwargs):
         return (
             datetime.fromtimestamp(ctypes_object.epoch / 1000),
             ctypes_object.fraction
@@ -345,7 +345,7 @@ class DateObject(StandardObject):
     default = datetime(1970, 1, 1)
 
     @classmethod
-    def hashcode(cls, value: datetime, *args, **kwargs) -> int:
+    def hashcode(cls, value: datetime, **kwargs) -> int:
         return datetime_hashcode(int(value.timestamp() * 1000))
 
     @classmethod
@@ -379,7 +379,7 @@ class DateObject(StandardObject):
         stream.write(data_object)
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, **kwargs):
         return datetime.fromtimestamp(ctypes_object.epoch / 1000)
 
 
@@ -397,7 +397,7 @@ class TimeObject(StandardObject):
     default = timedelta()
 
     @classmethod
-    def hashcode(cls, value: timedelta, *args, **kwargs) -> int:
+    def hashcode(cls, value: timedelta, **kwargs) -> int:
         return datetime_hashcode(int(value.total_seconds() * 1000))
 
     @classmethod
@@ -429,7 +429,7 @@ class TimeObject(StandardObject):
         stream.write(data_object)
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, **kwargs):
         return timedelta(milliseconds=ctypes_object.value)
 
 
@@ -476,7 +476,7 @@ class EnumObject(StandardObject):
         stream.write(data_object)
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, **kwargs):
         return ctypes_object.type_id, ctypes_object.ordinal
 
 
@@ -570,8 +570,8 @@ class StandardArray(IgniteDataType, _StandardArrayBase):
         cls._from_python(stream, value, **kwargs)
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
-        return cls._to_python(ctypes_object, *args, **kwargs)
+    def to_python(cls, ctypes_object, **kwargs):
+        return cls._to_python(ctypes_object, **kwargs)
 
 
 class StringArray(StandardArray):
@@ -660,8 +660,8 @@ class StandardArrayObject(Nullable, _StandardArrayBase):
         cls._from_python(stream, value, **kwargs)
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
-        return cls._to_python(ctypes_object, *args, **kwargs)
+    def to_python_not_null(cls, ctypes_object, **kwargs):
+        return cls._to_python(ctypes_object, **kwargs)
 
 
 class StringArrayObject(StandardArrayObject):
@@ -759,8 +759,8 @@ class EnumArrayObject(StandardArrayObject):
         super().from_python_not_null(stream, value, type_id=type_id)
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
-        return ctypes_object.type_id, cls._to_python(ctypes_object, *args, **kwargs)
+    def to_python_not_null(cls, ctypes_object, **kwargs):
+        return ctypes_object.type_id, cls._to_python(ctypes_object, **kwargs)
 
 
 class BinaryEnumArrayObject(EnumArrayObject):
