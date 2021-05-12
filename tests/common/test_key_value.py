@@ -17,7 +17,8 @@ from datetime import datetime
 
 import pytest
 
-from pyignite.datatypes import CollectionObject, IntObject, MapObject, TimestampObject
+from pyignite import GenericObjectMeta
+from pyignite.datatypes import CollectionObject, IntObject, MapObject, TimestampObject, String
 
 
 def test_put_get(cache):
@@ -352,16 +353,35 @@ async def test_cache_get_size_async(async_cache):
     assert await async_cache.get_size() == 1
 
 
+class Value(
+    metaclass=GenericObjectMeta,
+    schema={
+        'id': IntObject,
+        'name': String,
+    }
+):
+    pass
+
+
 collection_params = [
     [
         'simple',
-        (1, [(123, IntObject), 678, None, 55.2, ((datetime(year=1996, month=3, day=1), 0), TimestampObject)]),
-        (1, [123, 678, None, 55.2, (datetime(year=1996, month=3, day=1), 0)])
+        (CollectionObject.ARR_LIST, [
+            (123, IntObject), 678, None, 55.2, ((datetime(year=1996, month=3, day=1), 0), TimestampObject)
+        ]),
+        (CollectionObject.ARR_LIST, [123, 678, None, 55.2, (datetime(year=1996, month=3, day=1), 0)])
     ],
     [
         'nested',
-        (1, [123, ((1, [456, 'inner_test_string', 789]), CollectionObject), 'outer_test_string']),
-        (1, [123, (1, [456, 'inner_test_string', 789]), 'outer_test_string'])
+        (CollectionObject.ARR_LIST, [
+            123, ((1, [456, 'inner_test_string', 789]), CollectionObject), 'outer_test_string'
+        ]),
+        (CollectionObject.ARR_LIST, [123, (1, [456, 'inner_test_string', 789]), 'outer_test_string'])
+    ],
+    [
+        'binary',
+        (CollectionObject.ARR_LIST, [Value(id=i, name=f'val_{i}') for i in range(0, 10)]),
+        (CollectionObject.ARR_LIST, [Value(id=i, name=f'val_{i}') for i in range(0, 10)]),
     ],
     [
         'hash_map',
@@ -403,6 +423,11 @@ collection_params = [
             }
         )
     ],
+    [
+        'binary_map',
+        (MapObject.HASH_MAP, {i: Value(id=i, name=f"val_{i}") for i in range(10)}),
+        (MapObject.HASH_MAP, {i: Value(id=i, name=f"val_{i}") for i in range(10)})
+    ]
 ]
 
 

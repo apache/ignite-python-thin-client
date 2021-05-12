@@ -20,12 +20,24 @@ import decimal
 import pytest
 import uuid
 
+from pyignite import GenericObjectMeta
 from pyignite.datatypes import (
     ByteObject, IntObject, FloatObject, CharObject, ShortObject, BoolObject, ByteArrayObject, IntArrayObject,
     ShortArrayObject, FloatArrayObject, BoolArrayObject, CharArrayObject, TimestampObject, String, BinaryEnumObject,
     TimestampArrayObject, BinaryEnumArrayObject, ObjectArrayObject, CollectionObject, MapObject
 )
 from pyignite.utils import unsigned
+
+
+class Value(
+    metaclass=GenericObjectMeta,
+    schema={
+        'id': IntObject,
+        'name': String,
+    }
+):
+    pass
+
 
 put_get_data_params = [
     # integers
@@ -124,6 +136,7 @@ put_get_data_params = [
 
     # object array
     ((ObjectArrayObject.OBJECT, [1, 2, decimal.Decimal('3'), bytearray(b'\x10\x20')]), ObjectArrayObject),
+    ((ObjectArrayObject.OBJECT, [Value(id=i, name=f'val_{i}') for i in range(10)]), ObjectArrayObject),
 
     # collection
     ((CollectionObject.LINKED_LIST, [1, 2, 3]), None),
