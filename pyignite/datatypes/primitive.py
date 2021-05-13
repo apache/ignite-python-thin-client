@@ -52,7 +52,7 @@ class Primitive(IgniteDataType):
         return cls.c_type
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
+    def to_python(cls, ctypes_object, **kwargs):
         return ctypes_object
 
 
@@ -122,7 +122,7 @@ class Char(Primitive):
     c_type = ctypes.c_short
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
+    def to_python(cls, ctypes_object, **kwargs):
         return ctypes_object.value.to_bytes(
             ctypes.sizeof(cls.c_type),
             byteorder=PROTOCOL_BYTE_ORDER
@@ -147,7 +147,7 @@ class Bool(Primitive):
     c_type = ctypes.c_byte  # Use c_byte because c_bool throws endianness conversion error on BE systems.
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
+    def to_python(cls, ctypes_object, **kwargs):
         return ctypes_object != 0
 
     @classmethod

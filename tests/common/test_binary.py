@@ -451,13 +451,13 @@ def complex_objects():
 
 def test_complex_object_hash(client, complex_objects):
     for obj, hash in complex_objects:
-        assert hash == BinaryObject.hashcode(obj, client)
+        assert hash == BinaryObject.hashcode(obj, client=client)
 
 
 @pytest.mark.asyncio
 async def test_complex_object_hash_async(async_client, complex_objects):
     for obj, hash in complex_objects:
-        assert hash == await BinaryObject.hashcode_async(obj, async_client)
+        assert hash == await BinaryObject.hashcode_async(obj, client=async_client)
 
 
 def camel_to_snake(name):
@@ -504,3 +504,55 @@ async def test_complex_object_null_fields_async(async_cache, null_fields_object)
     """
     await async_cache.put(1, null_fields_object)
     assert await async_cache.get(1) == null_fields_object, 'Objects mismatch'
+
+
+def test_object_with_collections_of_binary_objects(cache):
+    __check_object_with_collections_of_binary_objects(cache)
+
+
+@pytest.mark.asyncio
+async def test_object_with_collections_of_binary_objects_async(async_cache):
+    await __check_object_with_collections_of_binary_objects(async_cache)
+
+
+def __check_object_with_collections_of_binary_objects(cache):
+    class Container(
+        metaclass=GenericObjectMeta,
+        schema={
+            'id': IntObject,
+            'collection': CollectionObject,
+            'array': ObjectArrayObject,
+            'map': MapObject
+        }
+    ):
+        pass
+
+    class Value(
+        metaclass=GenericObjectMeta,
+        schema={
+            'id': IntObject,
+            'name': String
+        }
+    ):
+        pass
+
+    def fixtures():
+        map_obj = (MapObject.HASH_MAP, {i: Value(i, f'val_{i}') for i in range(10)})
+        col_obj = (CollectionObject.ARR_LIST, [Value(i, f'val_{i}') for i in range(10)])
+        arr_obj = (ObjectArrayObject.OBJECT, [Value(i, f'val_{i}') for i in range(10)])
+        return [
+            Container(1, map=map_obj, collection=col_obj, array=arr_obj),
+            Container(2),  # Check if collections are not set
+        ]
+
+    async def inner_async():
+        for i, val in enumerate(fixtures()):
+            await cache.put(i, val)
+            assert await cache.get(i) == val
+
+    def inner():
+        for i, val in enumerate(fixtures()):
+            cache.put(i, val)
+            assert cache.get(i) == val
+
+    return inner_async() if isinstance(cache, AioCache) else inner()

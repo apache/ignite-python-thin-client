@@ -80,14 +80,14 @@ class ExpiryPolicy:
         return cls.parse(stream)
 
     @classmethod
-    def to_python(cls, ctypes_object):
+    def to_python(cls, ctypes_object, **kwargs):
         if ctypes_object == 0:
             return None
 
         return ExpiryPolicy(create=ctypes_object.create, update=ctypes_object.update, access=ctypes_object.access)
 
     @classmethod
-    async def to_python_async(cls, ctypes_object):
+    async def to_python_async(cls, ctypes_object, **kwargs):
         return cls.to_python(ctypes_object)
 
     @classmethod

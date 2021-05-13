@@ -31,7 +31,7 @@ from .datatypes import BinaryObject
 from .exceptions import BinaryTypeError, CacheError, ReconnectError, connection_errors
 from .queries.query import CacheInfo
 from .stream import AioBinaryStream, READ_BACKWARD
-from .utils import cache_id, entity_id, status_to_exception, is_wrapped
+from .utils import cache_id, entity_id, status_to_exception
 
 
 __all__ = ['AioClient']
@@ -269,11 +269,24 @@ class AioClient(BaseClient):
         :return: the result of the Binary Object unwrapping with all other data
          left intact.
         """
-        if is_wrapped(value):
-            blob, offset = value
-            with AioBinaryStream(self, blob) as stream:
-                data_class = await BinaryObject.parse_async(stream)
-                return await BinaryObject.to_python_async(stream.read_ctype(data_class, direction=READ_BACKWARD), self)
+        if isinstance(value, tuple) and len(value) == 2:
+            if type(value[0]) is bytes and type(value[1]) is int:
+                blob, offset = value
+                with AioBinaryStream(self, blob) as stream:
+                    data_class = await BinaryObject.parse_async(stream)
+                    return await BinaryObject.to_python_async(stream.read_ctype(data_class, direction=READ_BACKWARD),
+                                                              client=self)
+
+            if isinstance(value[0], int):
+                col_type, collection = value
+                if isinstance(collection, list):
+                    coros = [self.unwrap_binary(v) for v in collection]
+                    return col_type, await asyncio.gather(*coros)
+
+                if isinstance(collection, dict):
+                    coros = [asyncio.gather(self.unwrap_binary(k), self.unwrap_binary(v))
+                             for k, v in collection.items()]
+                    return col_type, dict(await asyncio.gather(*coros))
         return value
 
     @status_to_exception(CacheError)
@@ -351,7 +364,7 @@ class AioClient(BaseClient):
 
             key, key_hint = self._get_affinity_key(c_id, key, key_hint)
 
-            hashcode = await key_hint.hashcode_async(key, self)
+            hashcode = await key_hint.hashcode_async(key, client=self)
 
             best_node = self._get_node_by_hashcode(c_id, hashcode, parts)
             if best_node:

@@ -128,25 +128,22 @@ class Response:
             c_type = await ignite_type.parse_async(stream)
             fields.append((name, c_type))
 
-    def to_python(self, ctypes_object, *args, **kwargs):
+    def to_python(self, ctypes_object, **kwargs):
         if not self.following:
             return None
 
         result = OrderedDict()
         for name, c_type in self.following:
-            result[name] = c_type.to_python(
-                getattr(ctypes_object, name),
-                *args, **kwargs
-            )
+            result[name] = c_type.to_python(getattr(ctypes_object, name), **kwargs)
 
         return result
 
-    async def to_python_async(self, ctypes_object, *args, **kwargs):
+    async def to_python_async(self, ctypes_object, **kwargs):
         if not self.following:
             return None
 
         values = await asyncio.gather(
-            *[c_type.to_python_async(getattr(ctypes_object, name), *args, **kwargs) for name, c_type in self.following]
+            *[c_type.to_python_async(getattr(ctypes_object, name), **kwargs) for name, c_type in self.following]
         )
 
         return OrderedDict([(name, values[i]) for i, (name, _) in enumerate(self.following)])
@@ -239,9 +236,9 @@ class SQLResponse(Response):
             ('more', ctypes.c_byte),
         ]
 
-    def to_python(self, ctypes_object, *args, **kwargs):
+    def to_python(self, ctypes_object, **kwargs):
         if getattr(ctypes_object, 'status_code', 0) == 0:
-            result = self.__to_python_result_header(ctypes_object, *args, **kwargs)
+            result = self.__to_python_result_header(ctypes_object, **kwargs)
 
             for row_item in ctypes_object.data._fields_:
                 row_name = row_item[0]
@@ -250,13 +247,13 @@ class SQLResponse(Response):
                 for col_item in row_object._fields_:
                     col_name = col_item[0]
                     col_object = getattr(row_object, col_name)
-                    row.append(AnyDataObject.to_python(col_object, *args, **kwargs))
+                    row.append(AnyDataObject.to_python(col_object, **kwargs))
                 result['data'].append(row)
             return result
 
-    async def to_python_async(self, ctypes_object, *args, **kwargs):
+    async def to_python_async(self, ctypes_object, **kwargs):
         if getattr(ctypes_object, 'status_code', 0) == 0:
-            result = self.__to_python_result_header(ctypes_object, *args, **kwargs)
+            result = self.__to_python_result_header(ctypes_object, **kwargs)
 
             data_coro = []
             for row_item in ctypes_object.data._fields_:
@@ -266,7 +263,7 @@ class SQLResponse(Response):
                 for col_item in row_object._fields_:
                     col_name = col_item[0]
                     col_object = getattr(row_object, col_name)
-                    row_coro.append(AnyDataObject.to_python_async(col_object, *args, **kwargs))
+                    row_coro.append(AnyDataObject.to_python_async(col_object, **kwargs))
 
                 data_coro.append(asyncio.gather(*row_coro))
 
@@ -328,7 +325,7 @@ class BinaryTypeResponse(Response):
 
         return type_exists
 
-    def to_python(self, ctypes_object, *args, **kwargs):
+    def to_python(self, ctypes_object, **kwargs):
         if getattr(ctypes_object, 'status_code', 0) == 0:
             result = {
                 'type_exists': Bool.to_python(ctypes_object.type_exists)
@@ -349,5 +346,5 @@ class BinaryTypeResponse(Response):
                 }
             return result
 
-    async def to_python_async(self, ctypes_object, *args, **kwargs):
-        return self.to_python(ctypes_object, *args, **kwargs)
+    async def to_python_async(self, ctypes_object, **kwargs):
+        return self.to_python(ctypes_object, **kwargs)

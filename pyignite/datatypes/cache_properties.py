@@ -117,12 +117,12 @@ class PropBase:
         return cls.parse(stream)
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
-        return cls.prop_data_class.to_python(ctypes_object.data, *args, **kwargs)
+    def to_python(cls, ctypes_object, **kwargs):
+        return cls.prop_data_class.to_python(ctypes_object.data, **kwargs)
 
     @classmethod
-    async def to_python_async(cls, ctypes_object, *args, **kwargs):
-        return cls.to_python(ctypes_object, *args, **kwargs)
+    async def to_python_async(cls, ctypes_object, **kwargs):
+        return cls.to_python(ctypes_object, **kwargs)
 
     @classmethod
     def from_python(cls, stream, value):
@@ -302,6 +302,6 @@ class AnyProperty(PropBase):
         )
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
+    def to_python(cls, ctypes_object, **kwargs):
         prop_data_class = prop_map(ctypes_object.prop_code)
-        return prop_data_class.to_python(ctypes_object.data, *args, **kwargs)
+        return prop_data_class.to_python(ctypes_object.data, **kwargs)

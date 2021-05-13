@@ -48,11 +48,11 @@ class IgniteDataType(metaclass=IgniteDataTypeMeta):
     classes, both object and payload varieties.
     """
     @classmethod
-    async def hashcode_async(cls, value, *args, **kwargs):
-        return cls.hashcode(value, *args, **kwargs)
+    async def hashcode_async(cls, value, **kwargs):
+        return cls.hashcode(value, **kwargs)
 
     @classmethod
-    def hashcode(cls, value, *args, **kwargs):
+    def hashcode(cls, value, **kwargs):
         return 0
 
     @classmethod
@@ -72,9 +72,9 @@ class IgniteDataType(metaclass=IgniteDataTypeMeta):
         cls.from_python(stream, value, **kwargs)
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
+    def to_python(cls, ctypes_object, **kwargs):
         raise NotImplementedError
 
     @classmethod
-    async def to_python_async(cls, ctypes_object, *args, **kwargs):
-        return cls.to_python(ctypes_object, *args, **kwargs)
+    async def to_python_async(cls, ctypes_object, **kwargs):
+        return cls.to_python(ctypes_object, **kwargs)

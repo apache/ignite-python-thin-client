@@ -65,7 +65,7 @@ class DataObject(Nullable):
         return data_type
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, **kwargs):
         return ctypes_object.value
 
     @classmethod
@@ -89,7 +89,7 @@ class ByteObject(DataObject):
     default = 0
 
     @classmethod
-    def hashcode(cls, value: int, *args, **kwargs) -> int:
+    def hashcode(cls, value: int, **kwargs) -> int:
         return value
 
 
@@ -102,7 +102,7 @@ class ShortObject(DataObject):
     default = 0
 
     @classmethod
-    def hashcode(cls, value: int, *args, **kwargs) -> int:
+    def hashcode(cls, value: int, **kwargs) -> int:
         return value
 
 
@@ -115,7 +115,7 @@ class IntObject(DataObject):
     default = 0
 
     @classmethod
-    def hashcode(cls, value: int, *args, **kwargs) -> int:
+    def hashcode(cls, value: int, **kwargs) -> int:
         return value
 
 
@@ -128,7 +128,7 @@ class LongObject(DataObject):
     default = 0
 
     @classmethod
-    def hashcode(cls, value: int, *args, **kwargs) -> int:
+    def hashcode(cls, value: int, **kwargs) -> int:
         return value ^ (unsigned(value, ctypes.c_ulonglong) >> 32)
 
 
@@ -141,7 +141,7 @@ class FloatObject(DataObject):
     default = 0.0
 
     @classmethod
-    def hashcode(cls, value: float, *args, **kwargs) -> int:
+    def hashcode(cls, value: float, **kwargs) -> int:
         return ctypes.cast(
             ctypes.pointer(ctypes.c_float(value)),
             ctypes.POINTER(ctypes.c_int)
@@ -157,7 +157,7 @@ class DoubleObject(DataObject):
     default = 0.0
 
     @classmethod
-    def hashcode(cls, value: float, *args, **kwargs) -> int:
+    def hashcode(cls, value: float, **kwargs) -> int:
         bits = ctypes.cast(
             ctypes.pointer(ctypes.c_double(value)),
             ctypes.POINTER(ctypes.c_longlong)
@@ -180,11 +180,11 @@ class CharObject(DataObject):
     default = ' '
 
     @classmethod
-    def hashcode(cls, value: str, *args, **kwargs) -> int:
+    def hashcode(cls, value: str, **kwargs) -> int:
         return ord(value)
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, **kwargs):
         value = ctypes_object.value
         return value.to_bytes(
             ctypes.sizeof(cls.c_type),
@@ -214,9 +214,9 @@ class BoolObject(DataObject):
     default = False
 
     @classmethod
-    def hashcode(cls, value: bool, *args, **kwargs) -> int:
+    def hashcode(cls, value: bool, **kwargs) -> int:
         return 1231 if value else 1237
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, **kwargs):
         return ctypes_object.value != 0

@@ -61,7 +61,7 @@ from .exceptions import BinaryTypeError, CacheError, ReconnectError, connection_
 from .queries.query import CacheInfo
 from .stream import BinaryStream, READ_BACKWARD
 from .utils import (
-    cache_id, capitalize, entity_id, schema_id, process_delimiter, status_to_exception, is_iterable, is_wrapped,
+    cache_id, capitalize, entity_id, schema_id, process_delimiter, status_to_exception, is_iterable,
     get_field_by_id, unsigned
 )
 from .binary import GenericObjectMeta
@@ -539,17 +539,26 @@ class Client(BaseClient):
 
     def unwrap_binary(self, value: Any) -> Any:
         """
-        Detects and recursively unwraps Binary Object.
+        Detects and recursively unwraps Binary Object or collections of BinaryObject.
 
-        :param value: anything that could be a Binary Object,
+        :param value: anything that could be a Binary Object or collection of BinaryObject,
         :return: the result of the Binary Object unwrapping with all other data
          left intact.
         """
-        if is_wrapped(value):
-            blob, offset = value
-            with BinaryStream(self, blob) as stream:
-                data_class = BinaryObject.parse(stream)
-                return BinaryObject.to_python(stream.read_ctype(data_class, direction=READ_BACKWARD), self)
+        if isinstance(value, tuple) and len(value) == 2:
+            if type(value[0]) is bytes and type(value[1]) is int:
+                blob, offset = value
+                with BinaryStream(self, blob) as stream:
+                    data_class = BinaryObject.parse(stream)
+                    return BinaryObject.to_python(stream.read_ctype(data_class, direction=READ_BACKWARD), client=self)
+
+            if isinstance(value[0], int):
+                col_type, collection = value
+                if isinstance(collection, list):
+                    return col_type, [self.unwrap_binary(v) for v in collection]
+
+                if isinstance(collection, dict):
+                    return col_type, {self.unwrap_binary(k): self.unwrap_binary(v) for k, v in collection.items()}
         return value
 
     @status_to_exception(CacheError)
@@ -619,7 +628,7 @@ class Client(BaseClient):
                 return conn
 
             key, key_hint = self._get_affinity_key(c_id, key, key_hint)
-            hashcode = key_hint.hashcode(key, self)
+            hashcode = key_hint.hashcode(key, client=self)
 
             best_node = self._get_node_by_hashcode(c_id, hashcode, parts)
             if best_node:

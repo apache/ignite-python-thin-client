@@ -90,22 +90,21 @@ class ObjectArrayObject(Nullable):
         )
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, **kwargs):
         result = []
         for i in range(ctypes_object.length):
             result.append(
                 AnyDataObject.to_python(
-                    getattr(ctypes_object, f'element_{i}'),
-                    *args, **kwargs
+                    getattr(ctypes_object, f'element_{i}'), **kwargs
                 )
             )
         return ctypes_object.type_id, result
 
     @classmethod
-    async def to_python_not_null_async(cls, ctypes_object, *args, **kwargs):
+    async def to_python_not_null_async(cls, ctypes_object, **kwargs):
         result = [
             await AnyDataObject.to_python_async(
-                getattr(ctypes_object, f'element_{i}'), *args, **kwargs
+                getattr(ctypes_object, f'element_{i}'), **kwargs
             )
             for i in range(ctypes_object.length)]
         return ctypes_object.type_id, result
@@ -223,8 +222,6 @@ class CollectionObject(Nullable):
     _type_id = TYPE_COL
     _header_class = None
     type_code = TC_COLLECTION
-    pythonic = list
-    default = []
 
     @classmethod
     def parse_not_null(cls, stream):
@@ -271,7 +268,7 @@ class CollectionObject(Nullable):
     @classmethod
     def to_python_not_null(cls, ctypes_object, *args, **kwargs):
         result = [
-            AnyDataObject.to_python(getattr(ctypes_object, f'element_{i}'), *args, **kwargs)
+            AnyDataObject.to_python(getattr(ctypes_object, f'element_{i}'), **kwargs)
             for i in range(ctypes_object.length)
         ]
         return ctypes_object.type, result
@@ -279,7 +276,7 @@ class CollectionObject(Nullable):
     @classmethod
     async def to_python_not_null_async(cls, ctypes_object, *args, **kwargs):
         result_coro = [
-            AnyDataObject.to_python_async(getattr(ctypes_object, f'element_{i}'), *args, **kwargs)
+            AnyDataObject.to_python_async(getattr(ctypes_object, f'element_{i}'), **kwargs)
             for i in range(ctypes_object.length)
         ]
 
@@ -361,35 +358,27 @@ class _MapBase:
         )
 
     @classmethod
-    def _to_python(cls, ctypes_object, *args, **kwargs):
+    def _to_python(cls, ctypes_object, **kwargs):
         map_cls = cls.__get_map_class(ctypes_object)
 
         result = map_cls()
         for i in range(0, ctypes_object.length << 1, 2):
-            k = AnyDataObject.to_python(
-                getattr(ctypes_object, f'element_{i}'),
-                *args, **kwargs
-            )
-            v = AnyDataObject.to_python(
-                getattr(ctypes_object, f'element_{i + 1}'),
-                *args, **kwargs
-            )
+            k = AnyDataObject.to_python(getattr(ctypes_object, f'element_{i}'), **kwargs)
+            v = AnyDataObject.to_python(getattr(ctypes_object, f'element_{i + 1}'), **kwargs)
             result[k] = v
         return result
 
     @classmethod
-    async def _to_python_async(cls, ctypes_object, *args, **kwargs):
+    async def _to_python_async(cls, ctypes_object, **kwargs):
         map_cls = cls.__get_map_class(ctypes_object)
 
         kv_pairs_coro = [
             asyncio.gather(
                 AnyDataObject.to_python_async(
-                    getattr(ctypes_object, f'element_{i}'),
-                    *args, **kwargs
+                    getattr(ctypes_object, f'element_{i}'), **kwargs
                 ),
                 AnyDataObject.to_python_async(
-                    getattr(ctypes_object, f'element_{i + 1}'),
-                    *args, **kwargs
+                    getattr(ctypes_object, f'element_{i + 1}'), **kwargs
                 )
             ) for i in range(0, ctypes_object.length << 1, 2)
         ]
@@ -449,12 +438,12 @@ class Map(IgniteDataType, _MapBase):
         return [('length', ctypes.c_int)], length
 
     @classmethod
-    def to_python(cls, ctypes_object, *args, **kwargs):
-        return cls._to_python(ctypes_object, *args, **kwargs)
+    def to_python(cls, ctypes_object, **kwargs):
+        return cls._to_python(ctypes_object, **kwargs)
 
     @classmethod
-    async def to_python_async(cls, ctypes_object, *args, **kwargs):
-        return await cls._to_python_async(ctypes_object, *args, **kwargs)
+    async def to_python_async(cls, ctypes_object, **kwargs):
+        return await cls._to_python_async(ctypes_object, **kwargs)
 
     @classmethod
     def from_python(cls, stream, value, type_id=None):
@@ -484,8 +473,6 @@ class MapObject(Nullable, _MapBase):
     _type_name = NAME_MAP
     _type_id = TYPE_MAP
     type_code = TC_MAP
-    pythonic = dict
-    default = {}
 
     @classmethod
     def parse_not_null(cls, stream):
@@ -507,12 +494,12 @@ class MapObject(Nullable, _MapBase):
         return fields, length
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, *args, **kwargs):
-        return ctypes_object.type, cls._to_python(ctypes_object, *args, **kwargs)
+    def to_python_not_null(cls, ctypes_object, **kwargs):
+        return ctypes_object.type, cls._to_python(ctypes_object, **kwargs)
 
     @classmethod
-    async def to_python_not_null_async(cls, ctypes_object, *args, **kwargs):
-        return ctypes_object.type, await cls._to_python_async(ctypes_object, *args, **kwargs)
+    async def to_python_not_null_async(cls, ctypes_object, **kwargs):
+        return ctypes_object.type, await cls._to_python_async(ctypes_object, **kwargs)
 
     @classmethod
     def from_python_not_null(cls, stream, value, **kwargs):
@@ -557,7 +544,7 @@ class BinaryObject(Nullable):
     COMPACT_FOOTER = 0x0020
 
     @classmethod
-    def hashcode(cls, value: object, client: Optional['Client']) -> int:
+    def hashcode(cls, value: object, client: Optional['Client'] = None) -> int:
         # binary objects's hashcode implementation is special in the sense
         # that you need to fully serialize the object to calculate
         # its hashcode
@@ -568,7 +555,7 @@ class BinaryObject(Nullable):
         return value._hashcode
 
     @classmethod
-    async def hashcode_async(cls, value: object, client: Optional['AioClient']) -> int:
+    async def hashcode_async(cls, value: object, client: Optional['AioClient'] = None) -> int:
         if not value._hashcode and client:
             with AioBinaryStream(client) as stream:
                 await value._from_python_async(stream, save_to_buf=True)
@@ -680,7 +667,7 @@ class BinaryObject(Nullable):
         return final_class
 
     @classmethod
-    def to_python_not_null(cls, ctypes_object, client: 'Client' = None, *args, **kwargs):
+    def to_python_not_null(cls, ctypes_object, client: 'Client' = None, **kwargs):
         type_id = ctypes_object.type_id
         if not client:
             raise ParseError(f'Can not query binary type {type_id}')
@@ -692,14 +679,13 @@ class BinaryObject(Nullable):
         for field_name, field_type in data_class.schema.items():
             setattr(
                 result, field_name, field_type.to_python(
-                    getattr(ctypes_object.object_fields, field_name),
-                    client, *args, **kwargs
+                    getattr(ctypes_object.object_fields, field_name), client=client, **kwargs
                 )
             )
         return result
 
     @classmethod
-    async def to_python_not_null_async(cls, ctypes_object, client: 'AioClient' = None, *args, **kwargs):
+    async def to_python_not_null_async(cls, ctypes_object, client: 'AioClient' = None, **kwargs):
         type_id = ctypes_object.type_id
         if not client:
             raise ParseError(f'Can not query binary type {type_id}')
@@ -711,7 +697,7 @@ class BinaryObject(Nullable):
         field_values = await asyncio.gather(
             *[
                 field_type.to_python_async(
-                    getattr(ctypes_object.object_fields, field_name), client, *args, **kwargs
+                    getattr(ctypes_object.object_fields, field_name), client=client, **kwargs
                 )
                 for field_name, field_type in data_class.schema.items()
             ]
