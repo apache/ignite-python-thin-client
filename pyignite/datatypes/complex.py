@@ -48,8 +48,6 @@ class ObjectArrayObject(Nullable):
         ('length', ctypes.c_int)
     ]
     type_code = TC_OBJECT_ARRAY
-    pythonic = list
-    default = []
 
     @classmethod
     def parse_not_null(cls, stream):
@@ -224,8 +222,6 @@ class CollectionObject(Nullable):
     _type_id = TYPE_COL
     _header_class = None
     type_code = TC_COLLECTION
-    pythonic = list
-    default = []
 
     @classmethod
     def parse_not_null(cls, stream):
@@ -477,8 +473,6 @@ class MapObject(Nullable, _MapBase):
     _type_name = NAME_MAP
     _type_id = TYPE_MAP
     type_code = TC_MAP
-    pythonic = dict
-    default = {}
 
     @classmethod
     def parse_not_null(cls, stream):
