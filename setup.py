@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import re
-from collections import defaultdict
 from distutils.command.build_ext import build_ext
 from distutils.errors import CCompilerError, DistutilsExecError, DistutilsPlatformError
 
@@ -63,25 +62,12 @@ def is_a_requirement(line):
     ])
 
 
-requirement_sections = [
-    'install',
-    'setup',
-    'tests',
-    'docs',
-]
-
-requirements = defaultdict(list)
-
-for section in requirement_sections:
-    with open(
-        'requirements/{}.txt'.format(section),
-        'r',
-        encoding='utf-8',
-    ) as requirements_file:
-        for line in requirements_file.readlines():
-            line = line.strip('\n')
-            if is_a_requirement(line):
-                requirements[section].append(line)
+install_requirements = []
+with open('requirements/install.txt', 'r', encoding='utf-8') as requirements_file:
+    for line in requirements_file.readlines():
+        line = line.strip('\n')
+        if is_a_requirement(line):
+            install_requirements.append(line)
 
 with open('README.md', 'r', encoding='utf-8') as readme_file:
     long_description = readme_file.read()
@@ -114,12 +100,7 @@ def run_setup(with_binary=True):
         long_description_content_type='text/markdown',
         url='https://github.com/apache/ignite-python-thin-client',
         packages=setuptools.find_packages(),
-        install_requires=requirements['install'],
-        tests_require=requirements['tests'],
-        setup_requires=requirements['setup'],
-        extras_require={
-            'docs': requirements['docs'],
-        },
+        install_requires=install_requirements,
         license="Apache License 2.0",
         license_files=('LICENSE', 'NOTICE'),
         classifiers=[
