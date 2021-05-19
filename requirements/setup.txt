@@ -1,3 +1,0 @@
-# additional package for integrating pytest in setuptools
-
-pytest-runner==5.3.0

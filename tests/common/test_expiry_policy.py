@@ -124,7 +124,7 @@ async def test_expiry_policy_async(async_cache):
 
         await asyncio.sleep(ttl * 2 / 3)
 
-        cache_updated.get(2)  # Check that access doesn't matter for updated policy.
+        await cache_updated.get(2)  # Check that access doesn't matter for updated policy.
 
         await asyncio.sleep(ttl * 2 / 3)
 
