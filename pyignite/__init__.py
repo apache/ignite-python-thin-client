@@ -16,5 +16,8 @@
 from pyignite.client import Client
 from pyignite.aio_client import AioClient
 from pyignite.binary import GenericObjectMeta
+from .dbapi import connect
 
 __version__ = '0.6.0-dev'
+
+__all__ = [ 'Client', 'connect' ]
