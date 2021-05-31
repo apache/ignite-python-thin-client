@@ -54,12 +54,13 @@ from .cursors import SqlFieldsCursor
 from .cache import Cache, create_cache, get_cache, get_or_create_cache, BaseCache
 from .connection import Connection
 from .constants import IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT, PROTOCOL_BYTE_ORDER, AFFINITY_RETRIES, AFFINITY_DELAY
-from .datatypes import BinaryObject, AnyDataObject
+from .datatypes import BinaryObject, AnyDataObject, TransactionConcurrency, TransactionIsolation
 from .datatypes.base import IgniteDataType
 from .datatypes.internal import tc_map
 from .exceptions import BinaryTypeError, CacheError, ReconnectError, connection_errors
-from .queries.query import CacheInfo
+from .queries.cache_info import CacheInfo
 from .stream import BinaryStream, READ_BACKWARD
+from .transaction import Transaction
 from .utils import (
     cache_id, capitalize, entity_id, schema_id, process_delimiter, status_to_exception, is_iterable,
     get_field_by_id, unsigned
@@ -734,9 +735,9 @@ class Client(BaseClient):
         elif isinstance(cache, Cache):
             c_info = cache.cache_info
         else:
-            c_info = None
+            c_info = CacheInfo(protocol_context=self.protocol_context)
 
-        if c_info:
+        if c_info.cache_id:
             schema = None
 
         return SqlFieldsCursor(self, c_info, query_str, page_size, query_args, schema, statement_type,
@@ -750,3 +751,7 @@ class Client(BaseClient):
         :return: :py:class:`~pyignite.cluster.Cluster` instance.
         """
         return Cluster(self)
+
+    def tx_start(self, concurrency=TransactionConcurrency.PESSIMISTIC, isolation=TransactionIsolation.REPEATABLE_READ,
+                 timeout=0, label=None):
+        return Transaction(self, concurrency, isolation, timeout, label)

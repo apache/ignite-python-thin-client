@@ -103,8 +103,16 @@ class ClusterError(Exception):
 
 class NotSupportedByClusterError(Exception):
     """
-    This exception is raised, whenever cluster is not supported specific
+    This exception is raised, whenever cluster does not supported specific
     operation probably because it is outdated.
+    """
+    pass
+
+
+class NotSupportedError(Exception):
+    """
+    This exception is raised, whenever client does not support specific
+    operation.
     """
     pass
 

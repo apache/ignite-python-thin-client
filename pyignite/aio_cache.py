@@ -15,6 +15,7 @@
 import asyncio
 from typing import Any, Iterable, Optional, Union
 
+from .api.tx_api import get_tx_connection
 from .datatypes import ExpiryPolicy
 from .datatypes.internal import AnyDataObject
 from .exceptions import CacheCreationError, CacheError, ParameterError
@@ -91,6 +92,9 @@ class AioCache(BaseCache):
         super().__init__(client, name, expiry_policy)
 
     async def _get_best_node(self, key=None, key_hint=None):
+        tx_conn = get_tx_connection()
+        if tx_conn:
+            return tx_conn
         return await self.client.get_best_node(self, key, key_hint)
 
     async def settings(self) -> Optional[dict]:

@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import asyncio
+import traceback
 import contextlib
 from collections import OrderedDict, deque
 import random
@@ -52,7 +53,7 @@ def patched_send(self, *args, **kwargs):
 
 async def patched_send_async(self, *args, **kwargs):
     """Patched send function that push to queue idx of server to which request is routed."""
-    buf = args[0]
+    buf = args[1]
     if buf and len(buf) >= 6:
         op_code = int.from_bytes(buf[4:6], byteorder=PROTOCOL_BYTE_ORDER)
         # Filter only caches operation.
@@ -229,7 +230,7 @@ def client_routed_cache(client_routed, request):
 
 
 @pytest.fixture
-async def async_client_routed():
+async def async_client_routed(event_loop):
     client = AioClient(partition_aware=True)
     try:
         await client.connect(client_routed_connection_string)

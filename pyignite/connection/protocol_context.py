@@ -87,6 +87,12 @@ class ProtocolContext:
         """
         return self.version >= (1, 4, 0)
 
+    def is_transactions_supported(self) -> bool:
+        """
+        Check whether transactions supported by the current protocol.
+        """
+        return self.version >= (1, 6, 0)
+
     def is_feature_flags_supported(self) -> bool:
         """
         Check whether feature flags supported by the current protocol.

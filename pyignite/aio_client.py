@@ -14,6 +14,7 @@
 # limitations under the License.
 import asyncio
 import random
+import sys
 from itertools import chain
 from typing import Iterable, Type, Union, Any, Dict
 
@@ -27,10 +28,11 @@ from .cursors import AioSqlFieldsCursor
 from .aio_cache import AioCache, get_cache, create_cache, get_or_create_cache
 from .connection import AioConnection
 from .constants import AFFINITY_RETRIES, AFFINITY_DELAY
-from .datatypes import BinaryObject
-from .exceptions import BinaryTypeError, CacheError, ReconnectError, connection_errors
-from .queries.query import CacheInfo
+from .datatypes import BinaryObject, TransactionConcurrency, TransactionIsolation
+from .exceptions import BinaryTypeError, CacheError, ReconnectError, connection_errors, NotSupportedError
+from .queries.cache_info import CacheInfo
 from .stream import AioBinaryStream, READ_BACKWARD
+from .transaction import AioTransaction
 from .utils import cache_id, entity_id, status_to_exception
 
 
@@ -471,9 +473,9 @@ class AioClient(BaseClient):
         elif isinstance(cache, AioCache):
             c_info = cache.cache_info
         else:
-            c_info = None
+            c_info = CacheInfo(protocol_context=self.protocol_context)
 
-        if c_info:
+        if c_info.cache_id:
             schema = None
 
         return AioSqlFieldsCursor(self, c_info, query_str, page_size, query_args, schema, statement_type,
@@ -487,3 +489,9 @@ class AioClient(BaseClient):
         :return: :py:class:`~pyignite.aio_cluster.AioCluster` instance.
         """
         return AioCluster(self)
+
+    def tx_start(self, concurrency=TransactionConcurrency.PESSIMISTIC, isolation=TransactionIsolation.REPEATABLE_READ,
+                 timeout=0, label=None):
+        if sys.version_info < (3, 7):
+            raise NotSupportedError(f"Transactions are not supported in async client on current python {sys.version}")
+        return AioTransaction(self, concurrency, isolation, timeout, label)

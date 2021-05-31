@@ -15,10 +15,11 @@
 
 from typing import Any, Iterable, Optional, Tuple, Union
 
+from .api.tx_api import get_tx_connection
 from .datatypes import prop_codes, ExpiryPolicy
 from .datatypes.internal import AnyDataObject
 from .exceptions import CacheCreationError, CacheError, ParameterError, SQLError, NotSupportedByClusterError
-from .queries.query import CacheInfo
+from .queries.cache_info import CacheInfo
 from .utils import cache_id, status_to_exception
 from .api.cache_config import (
     cache_create, cache_create_with_config, cache_get_or_create, cache_get_or_create_with_config, cache_destroy,
@@ -177,7 +178,8 @@ class Cache(BaseCache):
         super().__init__(client, name, expiry_policy)
 
     def _get_best_node(self, key=None, key_hint=None):
-        return self.client.get_best_node(self, key, key_hint)
+        tx_conn = get_tx_connection()
+        return tx_conn if tx_conn else self.client.get_best_node(self, key, key_hint)
 
     @property
     def settings(self) -> Optional[dict]:
