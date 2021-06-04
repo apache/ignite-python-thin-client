@@ -29,7 +29,6 @@
 # limitations under the License.
 
 import asyncio
-from asyncio import Lock
 from collections import OrderedDict
 from typing import Union
 
@@ -147,7 +146,6 @@ class AioConnection(BaseConnection):
         """
         super().__init__(client, host, port, username, password, **ssl_params)
         self._pending_reqs = {}
-        self._mux = Lock()
         self._transport = None
         self._loop = asyncio.get_event_loop()
         self._closed = False
@@ -161,7 +159,6 @@ class AioConnection(BaseConnection):
         """
         Connect to the given server node with protocol version fallback.
         """
-        # async with self._mux:
         return await self._connect()
 
     async def _connect(self) -> Union[dict, OrderedDict]:
@@ -194,7 +191,6 @@ class AioConnection(BaseConnection):
         return result
 
     def on_connection_lost(self, error, reconnect=False):
-        print(f"connection lost {error}")
         self.client.failed = True
         for _, fut in self._pending_reqs.items():
             fut.set_exception(error)
@@ -207,8 +203,6 @@ class AioConnection(BaseConnection):
         if req_id in self._pending_reqs:
             self._pending_reqs[req_id].set_result(data)
             del self._pending_reqs[req_id]
-        else:
-            print(f"request not found {req_id}")
 
     async def _connect_version(self) -> Union[dict, OrderedDict]:
         """
@@ -229,15 +223,12 @@ class AioConnection(BaseConnection):
         return hs_response
 
     async def reconnect(self):
-        # async with self._mux:
         await self._reconnect()
 
     async def _reconnect(self):
         if self.alive:
             return
-
         self._close()
-
         # connect and silence the connection errors
         try:
             await self._connect()
@@ -258,19 +249,16 @@ class AioConnection(BaseConnection):
     async def _send(self, query_id, data):
         fut = self._loop.create_future()
         self._pending_reqs[query_id] = fut
-        # async with self._mux:
         self._transport.write(data)
         return await fut
 
     async def close(self):
-        # async with self._mux:
         self._close()
 
     def _close(self):
         """
         Close connection.
         """
-        # self._closed = True
         if self._transport:
             self._transport.close()
             self._transport = None
