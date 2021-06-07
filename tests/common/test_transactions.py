@@ -16,13 +16,15 @@
 import asyncio
 import itertools
 import sys
+import time
 
 import pytest
 
-from pyignite import AioClient
+from pyignite import AioClient, Client
 from pyignite.datatypes import TransactionIsolation, TransactionConcurrency
 from pyignite.datatypes.cache_config import CacheAtomicityMode
 from pyignite.datatypes.prop_codes import PROP_NAME, PROP_CACHE_ATOMICITY_MODE
+from pyignite.exceptions import CacheError
 
 
 @pytest.fixture
@@ -31,7 +33,7 @@ def connection_param():
 
 
 @pytest.fixture(params=['with-partition-awareness', 'without-partition-awareness'])
-async def async_client(request, connection_param):
+async def async_client(request, connection_param, event_loop):
     client = AioClient(partition_aware=request.param == 'with-partition-awareness')
     try:
         await client.connect(connection_param)
@@ -46,6 +48,29 @@ async def async_client(request, connection_param):
         await client.close()
 
 
+@pytest.fixture(params=['with-partition-awareness', 'without-partition-awareness'])
+def client(request, connection_param):
+    client = Client(partition_aware=request.param == 'with-partition-awareness')
+    try:
+        client.connect(connection_param)
+        if not client.protocol_context.is_transactions_supported():
+            pytest.skip(f'skipped {request.node.name}, transaction api is not supported.')
+        else:
+            yield client
+    finally:
+        client.close()
+
+
+@pytest.fixture
+def tx_cache(client):
+    cache = client.get_or_create_cache({
+        PROP_NAME: 'tx_cache',
+        PROP_CACHE_ATOMICITY_MODE: CacheAtomicityMode.TRANSACTIONAL
+    })
+    yield cache
+    cache.destroy()
+
+
 @pytest.fixture
 async def async_tx_cache(async_client):
     cache = await async_client.get_or_create_cache({
@@ -56,8 +81,70 @@ async def async_tx_cache(async_client):
     await cache.destroy()
 
 
+@pytest.mark.parametrize(
+    ['iso_level', 'concurrency'],
+    itertools.product(
+        [iso_level for iso_level in TransactionIsolation],
+        [concurrency for concurrency in TransactionConcurrency]
+    )
+)
+def test_simple_transaction(client, tx_cache, iso_level, concurrency):
+    with client.tx_start(isolation=iso_level, concurrency=concurrency) as tx:
+        tx_cache.put(1, 1)
+        tx.commit()
+
+    assert tx_cache.get(1) == 1
+
+    with client.tx_start(isolation=iso_level, concurrency=concurrency) as tx:
+        tx_cache.put(1, 10)
+        tx.rollback()
+
+    assert tx_cache.get(1) == 1
+
+    with client.tx_start(isolation=iso_level, concurrency=concurrency) as tx:
+        tx_cache.put(1, 10)
+
+    assert tx_cache.get(1) == 1
+
+
+@pytest.mark.parametrize(
+    ['iso_level', 'concurrency'],
+    itertools.product(
+        [iso_level for iso_level in TransactionIsolation],
+        [concurrency for concurrency in TransactionConcurrency]
+    )
+)
 @pytest.mark.asyncio
-async def test_transactions_timeout(async_client, async_tx_cache):
+async def test_simple_transaction_async(async_client, async_tx_cache, iso_level, concurrency):
+    async with async_client.tx_start(isolation=iso_level, concurrency=concurrency) as tx:
+        await async_tx_cache.put(1, 1)
+        await tx.commit()
+
+    assert await async_tx_cache.get(1) == 1
+
+    async with async_client.tx_start(isolation=iso_level, concurrency=concurrency) as tx:
+        await async_tx_cache.put(1, 10)
+        await tx.rollback()
+
+    assert await async_tx_cache.get(1) == 1
+
+    async with async_client.tx_start(isolation=iso_level, concurrency=concurrency) as tx:
+        async_tx_cache.put(1, 10)
+
+    assert await async_tx_cache.get(1) == 1
+
+
+def test_transactions_timeout(client, tx_cache):
+    with client.tx_start(timeout=2.0, label='tx-sync') as tx:
+        tx_cache.put(1, 1)
+        time.sleep(3.0)
+        with pytest.raises(CacheError) as to_error:
+            tx.commit()
+            assert 'tx-sync' in str(to_error) and 'timed out' in str(to_error)
+
+
+@pytest.mark.asyncio
+async def test_transactions_timeout_async(async_client, async_tx_cache):
     async def update(i, timeout):
         async with async_client.tx_start(
                 label=f'tx-{i}', timeout=timeout, isolation=TransactionIsolation.READ_COMMITTED,

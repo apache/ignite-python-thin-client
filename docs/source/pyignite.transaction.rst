@@ -13,35 +13,10 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 
-pyignite package
-================
+pyignite.transaction module
+=========================
 
-.. automodule:: pyignite
+.. automodule:: pyignite.transaction
     :members:
     :undoc-members:
     :show-inheritance:
-
-Subpackages
------------
-
-.. toctree::
-
-    pyignite.datatypes
-    pyignite.connection
-
-Submodules
-----------
-
-.. toctree::
-
-    pyignite.binary
-    pyignite.cache
-    pyignite.aio_cache
-    pyignite.client
-    pyignite.aio_client
-    pyignite.cluster
-    pyignite.aio_cluster
-    pyignite.transaction
-    pyignite.cursors
-    pyignite.exceptions
-

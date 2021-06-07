@@ -16,11 +16,27 @@ from enum import IntEnum
 
 
 class TransactionConcurrency(IntEnum):
+    """
+    Defines different cache transaction concurrency control.
+    """
+
+    #: Optimistic concurrency control.
     OPTIMISTIC = 0
+
+    #: Pessimistic concurrency control.
     PESSIMISTIC = 1
 
 
 class TransactionIsolation(IntEnum):
+    """
+    Defines different cache transaction isolation levels.
+    """
+
+    #: Read committed isolation level.Read committed isolation level.
     READ_COMMITTED = 0
+
+    #: Repeatable read isolation level.
     REPEATABLE_READ = 1
+
+    #: Serializable isolation level.
     SERIALIZABLE = 2

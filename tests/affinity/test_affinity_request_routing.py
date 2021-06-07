@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import asyncio
-import traceback
 import contextlib
 from collections import OrderedDict, deque
 import random

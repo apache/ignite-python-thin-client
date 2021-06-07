@@ -16,7 +16,7 @@ import asyncio
 import random
 import sys
 from itertools import chain
-from typing import Iterable, Type, Union, Any, Dict
+from typing import Iterable, Type, Union, Any, Dict, Optional
 
 from .aio_cluster import AioCluster
 from .api import cache_get_node_partitions_async
@@ -490,8 +490,20 @@ class AioClient(BaseClient):
         """
         return AioCluster(self)
 
-    def tx_start(self, concurrency=TransactionConcurrency.PESSIMISTIC, isolation=TransactionIsolation.REPEATABLE_READ,
-                 timeout=0, label=None):
+    def tx_start(self, concurrency: TransactionConcurrency = TransactionConcurrency.PESSIMISTIC,
+                 isolation: TransactionIsolation = TransactionIsolation.REPEATABLE_READ,
+                 timeout: Union[int, float] = 0, label: Optional[str] = None) -> 'AioTransaction':
+        """
+        Start async thin client transaction.
+
+        :param concurrency: (optional) transaction concurrency, see
+                :py:class:`~pyignite.datatypes.transactions.TransactionConcurrency`
+        :param isolation: (optional) transaction isolation level, see
+                :py:class:`~pyignite.datatypes.transactions.TransactionIsolation`
+        :param timeout: (optional) transaction timeout in seconds if float, in millis if int
+        :param label: (optional) transaction label.
+        :return: :py:class:`~pyignite.transaction.AioTransaction` instance.
+        """
         if sys.version_info < (3, 7):
             raise NotSupportedError(f"Transactions are not supported in async client on current python {sys.version}")
         return AioTransaction(self, concurrency, isolation, timeout, label)

@@ -54,7 +54,10 @@ class BaseProtocol(asyncio.Protocol):
         self.__process_connection_error(exc if exc else SocketError("Connection closed"))
 
     def connection_made(self, transport: asyncio.WriteTransport) -> None:
-        self.__send_handshake(transport, self._conn)
+        try:
+            self.__send_handshake(transport, self._conn)
+        except Exception as e:
+            self._handshake_fut.set_exception(e)
 
     def data_received(self, data: bytes) -> None:
         self._buffer += data
@@ -153,12 +156,13 @@ class AioConnection(BaseConnection):
     @property
     def closed(self) -> bool:
         """ Tells if socket is closed. """
-        return not self._transport or self._transport.is_closing()
+        return self._closed or not self._transport or self._transport.is_closing()
 
     async def connect(self) -> Union[dict, OrderedDict]:
         """
         Connect to the given server node with protocol version fallback.
         """
+        self._closed = False
         return await self._connect()
 
     async def _connect(self) -> Union[dict, OrderedDict]:
@@ -191,11 +195,11 @@ class AioConnection(BaseConnection):
         return result
 
     def on_connection_lost(self, error, reconnect=False):
-        self.client.failed = True
+        self.failed = True
         for _, fut in self._pending_reqs.items():
             fut.set_exception(error)
         self._pending_reqs.clear()
-        if reconnect:
+        if reconnect and not self._closed:
             self._loop.create_task(self._reconnect())
 
     def on_message(self, data):
@@ -217,7 +221,7 @@ class AioConnection(BaseConnection):
         hs_response = await handshake_fut
 
         if hs_response.op_code == 0:
-            self._close()
+            self._close_transport()
             self._process_handshake_error(hs_response)
 
         return hs_response
@@ -228,7 +232,8 @@ class AioConnection(BaseConnection):
     async def _reconnect(self):
         if self.alive:
             return
-        self._close()
+
+        self._close_transport()
         # connect and silence the connection errors
         try:
             await self._connect()
@@ -253,9 +258,10 @@ class AioConnection(BaseConnection):
         return await fut
 
     async def close(self):
-        self._close()
+        self._closed = True
+        self._close_transport()
 
-    def _close(self):
+    def _close_transport(self):
         """
         Close connection.
         """

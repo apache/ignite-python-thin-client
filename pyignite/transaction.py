@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import math
 from typing import Union
 
@@ -28,25 +29,37 @@ def _convert_to_millis(timeout: Union[int, float]) -> int:
 
 
 class Transaction:
+    """
+    Thin client transaction.
+    """
     def __init__(self, client, concurrency=TransactionConcurrency.PESSIMISTIC,
                  isolation=TransactionIsolation.REPEATABLE_READ, timeout=0, label=None):
         self.client, self.concurrency = client, concurrency
         self.isolation, self.timeout = isolation, _convert_to_millis(timeout)
         self.label, self.closed = label, False
+        self.tx_id = self.__start_tx()
 
-        self.tx_id = tx_start(self.client.random_node, self.concurrency, self.isolation, self.timeout, self.label)
+    def commit(self) -> None:
+        """
+        Commit transaction.
+        """
+        if not self.closed:
+            self.closed = True
+            return self.__end_tx(True)
 
-    @status_to_exception(CacheError)
-    def commit(self):
-        return tx_end(self.tx_id, True)
-
-    def rollback(self):
+    def rollback(self) -> None:
+        """
+        Rollback transaction.
+        """
         self.close()
 
-    @status_to_exception(CacheError)
-    def close(self):
-        self.closed = True
-        return tx_end(self.tx_id, False)
+    def close(self) -> None:
+        """
+        Close transaction.
+        """
+        if not self.closed:
+            self.closed = True
+            return self.__end_tx(False)
 
     def __enter__(self):
         return self
@@ -54,8 +67,20 @@ class Transaction:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
+    @status_to_exception(CacheError)
+    def __start_tx(self):
+        conn = self.client.random_node
+        return tx_start(conn, self.concurrency, self.isolation, self.timeout, self.label)
+
+    @status_to_exception(CacheError)
+    def __end_tx(self, committed):
+        return tx_end(self.tx_id, committed)
+
 
 class AioTransaction:
+    """
+    Async thin client transaction.
+    """
     def __init__(self, client, concurrency=TransactionConcurrency.PESSIMISTIC,
                  isolation=TransactionIsolation.REPEATABLE_READ, timeout=0, label=None):
         self.client, self.concurrency = client, concurrency
@@ -65,15 +90,24 @@ class AioTransaction:
     def __await__(self):
         return (yield from self.__aenter__().__await__())
 
-    async def commit(self):
+    async def commit(self) -> None:
+        """
+        Commit transaction.
+        """
         if not self.closed:
             self.closed = True
             return await self.__end_tx(True)
 
-    async def rollback(self):
+    async def rollback(self) -> None:
+        """
+        Rollback transaction.
+        """
         await self.close()
 
-    async def close(self):
+    async def close(self) -> None:
+        """
+        Close transaction.
+        """
         if not self.closed:
             self.closed = True
             return await self.__end_tx(False)
