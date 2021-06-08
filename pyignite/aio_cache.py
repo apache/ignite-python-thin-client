@@ -159,7 +159,7 @@ class AioCache(BaseCache):
         return await cache_put_async(conn, self.cache_info, key, value, key_hint=key_hint, value_hint=value_hint)
 
     @status_to_exception(CacheError)
-    async def get_all(self, keys: list) -> list:
+    async def get_all(self, keys: list) -> dict:
         """
         Retrieves multiple key-value pairs from cache.
 
