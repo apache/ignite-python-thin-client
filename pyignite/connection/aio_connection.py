@@ -29,9 +29,7 @@
 # limitations under the License.
 
 import asyncio
-from asyncio import Lock
 from collections import OrderedDict
-from io import BytesIO
 from typing import Union
 
 from pyignite.constants import PROTOCOLS, PROTOCOL_BYTE_ORDER
@@ -39,10 +37,66 @@ from pyignite.exceptions import HandshakeError, SocketError, connection_errors
 from .bitmask_feature import BitmaskFeature
 from .connection import BaseConnection
 
-from .handshake import HandshakeRequest, HandshakeResponse
+from .handshake import HandshakeRequest, HandshakeResponse, OP_HANDSHAKE
 from .protocol_context import ProtocolContext
 from .ssl import create_ssl_context
-from ..stream import AioBinaryStream
+from ..stream.binary_stream import BinaryStreamBase
+
+
+class BaseProtocol(asyncio.Protocol):
+    def __init__(self, conn, handshake_fut):
+        super().__init__()
+        self._buffer = bytearray()
+        self._conn = conn
+        self._handshake_fut = handshake_fut
+
+    def connection_lost(self, exc):
+        self.__process_connection_error(exc if exc else SocketError("Connection closed"))
+
+    def connection_made(self, transport: asyncio.WriteTransport) -> None:
+        try:
+            self.__send_handshake(transport, self._conn)
+        except Exception as e:
+            self._handshake_fut.set_exception(e)
+
+    def data_received(self, data: bytes) -> None:
+        self._buffer += data
+        while self.__has_full_response():
+            packet_sz = self.__packet_size(self._buffer)
+            packet = self._buffer[0:packet_sz]
+            if not self._handshake_fut.done():
+                hs_response = self.__parse_handshake(packet, self._conn.client)
+                self._handshake_fut.set_result(hs_response)
+            else:
+                self._conn.on_message(packet)
+            self._buffer = self._buffer[packet_sz:len(self._buffer)]
+
+    def __has_full_response(self):
+        if len(self._buffer) > 4:
+            response_len = int.from_bytes(self._buffer[0:4], byteorder=PROTOCOL_BYTE_ORDER, signed=True)
+            return response_len + 4 <= len(self._buffer)
+
+    @staticmethod
+    def __packet_size(buffer):
+        return int.from_bytes(buffer[0:4], byteorder=PROTOCOL_BYTE_ORDER, signed=True) + 4
+
+    def __process_connection_error(self, exc):
+        connected = self._handshake_fut.done()
+        if not connected:
+            self._handshake_fut.set_exception(exc)
+        self._conn.on_connection_lost(exc, connected)
+
+    @staticmethod
+    def __send_handshake(transport, conn):
+        hs_request = HandshakeRequest(conn.protocol_context, conn.username, conn.password)
+        with BinaryStreamBase(client=conn.client) as stream:
+            hs_request.from_python(stream)
+            transport.write(stream.getvalue())
+
+    @staticmethod
+    def __parse_handshake(data, client):
+        with BinaryStreamBase(client, data) as stream:
+            return HandshakeResponse.parse(stream, client.protocol_context)
 
 
 class AioConnection(BaseConnection):
@@ -94,21 +148,22 @@ class AioConnection(BaseConnection):
         :param password: (optional) password to authenticate to Ignite cluster.
         """
         super().__init__(client, host, port, username, password, **ssl_params)
-        self._mux = Lock()
-        self._reader = None
-        self._writer = None
+        self._pending_reqs = {}
+        self._transport = None
+        self._loop = asyncio.get_event_loop()
+        self._closed = False
 
     @property
     def closed(self) -> bool:
         """ Tells if socket is closed. """
-        return self._writer is None
+        return self._closed or not self._transport or self._transport.is_closing()
 
     async def connect(self) -> Union[dict, OrderedDict]:
         """
         Connect to the given server node with protocol version fallback.
         """
-        async with self._mux:
-            return await self._connect()
+        self._closed = False
+        return await self._connect()
 
     async def _connect(self) -> Union[dict, OrderedDict]:
         detecting_protocol = False
@@ -139,6 +194,20 @@ class AioConnection(BaseConnection):
         self.failed = False
         return result
 
+    def on_connection_lost(self, error, reconnect=False):
+        self.failed = True
+        for _, fut in self._pending_reqs.items():
+            fut.set_exception(error)
+        self._pending_reqs.clear()
+        if reconnect and not self._closed:
+            self._loop.create_task(self._reconnect())
+
+    def on_message(self, data):
+        req_id = int.from_bytes(data[4:12], byteorder=PROTOCOL_BYTE_ORDER, signed=True)
+        if req_id in self._pending_reqs:
+            self._pending_reqs[req_id].set_result(data)
+            del self._pending_reqs[req_id]
+
     async def _connect_version(self) -> Union[dict, OrderedDict]:
         """
         Connect to the given server node using protocol version
@@ -146,122 +215,56 @@ class AioConnection(BaseConnection):
         """
 
         ssl_context = create_ssl_context(self.ssl_params)
-        self._reader, self._writer = await asyncio.open_connection(self.host, self.port, ssl=ssl_context)
+        handshake_fut = self._loop.create_future()
+        self._transport, _ = await self._loop.create_connection(lambda: BaseProtocol(self, handshake_fut),
+                                                                host=self.host, port=self.port, ssl=ssl_context)
+        hs_response = await handshake_fut
 
-        protocol_context = self.client.protocol_context
+        if hs_response.op_code == 0:
+            self._close_transport()
+            self._process_handshake_error(hs_response)
 
-        hs_request = HandshakeRequest(
-            protocol_context,
-            self.username,
-            self.password
-        )
-
-        with AioBinaryStream(self.client) as stream:
-            await hs_request.from_python_async(stream)
-            await self._send(stream.getvalue(), reconnect=False)
-
-        with AioBinaryStream(self.client, await self._recv(reconnect=False)) as stream:
-            hs_response = await HandshakeResponse.parse_async(stream, self.protocol_context)
-
-            if hs_response.op_code == 0:
-                self._close()
-                self._process_handshake_error(hs_response)
-
-            return hs_response
+        return hs_response
 
     async def reconnect(self):
-        async with self._mux:
-            await self._reconnect()
+        await self._reconnect()
 
     async def _reconnect(self):
         if self.alive:
             return
 
-        self._close()
-
+        self._close_transport()
         # connect and silence the connection errors
         try:
             await self._connect()
         except connection_errors:
             pass
 
-    async def request(self, data: Union[bytes, bytearray]) -> bytearray:
+    async def request(self, query_id, data: Union[bytes, bytearray]) -> bytearray:
         """
         Perform request.
-
+        :param query_id: id of query.
         :param data: bytes to send.
         """
-        async with self._mux:
-            await self._send(data)
-            return await self._recv()
-
-    async def _send(self, data: Union[bytes, bytearray], reconnect=True):
-        if self.closed:
+        if not self.alive:
             raise SocketError('Attempt to use closed connection.')
 
-        try:
-            self._writer.write(data)
-            await self._writer.drain()
-        except connection_errors:
-            self.failed = True
-            if reconnect:
-                await self._reconnect()
-            raise
+        return await self._send(query_id, data)
 
-    async def _recv(self, reconnect=True) -> bytearray:
-        if self.closed:
-            raise SocketError('Attempt to use closed connection.')
-
-        data = bytearray(1024)
-        buffer = memoryview(data)
-        bytes_total_received, bytes_to_receive = 0, 0
-        while True:
-            try:
-                chunk = await self._reader.read(len(buffer))
-                bytes_received = len(chunk)
-                if bytes_received == 0:
-                    raise SocketError('Connection broken.')
-
-                buffer[0:bytes_received] = chunk
-                bytes_total_received += bytes_received
-            except connection_errors:
-                self.failed = True
-                if reconnect:
-                    await self._reconnect()
-                raise
-
-            if bytes_total_received < 4:
-                continue
-            elif bytes_to_receive == 0:
-                response_len = int.from_bytes(data[0:4], PROTOCOL_BYTE_ORDER)
-                bytes_to_receive = response_len
-
-                if response_len + 4 > len(data):
-                    buffer.release()
-                    data.extend(bytearray(response_len + 4 - len(data)))
-                    buffer = memoryview(data)[bytes_total_received:]
-                    continue
-
-            if bytes_total_received >= bytes_to_receive:
-                buffer.release()
-                break
-
-            buffer = buffer[bytes_received:]
-
-        return data
+    async def _send(self, query_id, data):
+        fut = self._loop.create_future()
+        self._pending_reqs[query_id] = fut
+        self._transport.write(data)
+        return await fut
 
     async def close(self):
-        async with self._mux:
-            self._close()
+        self._closed = True
+        self._close_transport()
 
-    def _close(self):
+    def _close_transport(self):
         """
         Close connection.
         """
-        if self._writer:
-            try:
-                self._writer.close()
-            except connection_errors:
-                pass
-
-            self._writer, self._reader = None, None
+        if self._transport:
+            self._transport.close()
+            self._transport = None

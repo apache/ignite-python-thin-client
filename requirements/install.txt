@@ -1,3 +1,4 @@
 # these pip packages are necessary for the pyignite to run
 
 attrs>=20.3.0
+contextvars>=2.4;python_version<"3.7"

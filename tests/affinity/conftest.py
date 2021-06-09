@@ -54,7 +54,7 @@ def client(connection_param):
 
 
 @pytest.fixture
-async def async_client(connection_param):
+async def async_client(connection_param, event_loop):
     client = AioClient(partition_aware=True)
     try:
         await client.connect(connection_param)

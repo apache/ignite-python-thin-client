@@ -12,19 +12,31 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from enum import IntEnum
 
-"""
-This module contains classes, used internally by `pyignite` for parsing and
-creating binary data.
-"""
 
-from .complex import *
-from .internal import *
-from .null_object import *
-from .primitive import *
-from .primitive_arrays import *
-from .primitive_objects import *
-from .standard import *
-from .cluster_state import ClusterState
-from .expiry_policy import ExpiryPolicy
-from .transactions import TransactionIsolation, TransactionConcurrency
+class TransactionConcurrency(IntEnum):
+    """
+    Defines different cache transaction concurrency control.
+    """
+
+    #: Optimistic concurrency control.
+    OPTIMISTIC = 0
+
+    #: Pessimistic concurrency control.
+    PESSIMISTIC = 1
+
+
+class TransactionIsolation(IntEnum):
+    """
+    Defines different cache transaction isolation levels.
+    """
+
+    #: Read committed isolation level.Read committed isolation level.
+    READ_COMMITTED = 0
+
+    #: Repeatable read isolation level.
+    REPEATABLE_READ = 1
+
+    #: Serializable isolation level.
+    SERIALIZABLE = 2

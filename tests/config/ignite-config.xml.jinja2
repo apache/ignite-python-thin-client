@@ -60,6 +60,7 @@
                 <property name="host" value="127.0.0.1"/>
                 <property name="port" value="{{ ignite_client_port }}"/>
                 <property name="portRange" value="0"/>
+                <property name="threadPoolSize" value="100"/>
                 {% if use_ssl %}
                     <property name="sslEnabled" value="true"/>
                     <property name="useIgniteSslContextFactory" value="false"/>
