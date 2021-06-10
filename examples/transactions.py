@@ -69,7 +69,7 @@ async def async_example():
             print(e)
 
         # key=1 value=success
-        val = await cache.get(1)
+        val = await cache.get(key)
         print(f"key=1 value={val}")
 
         # destroy cache

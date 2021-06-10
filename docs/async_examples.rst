@@ -90,35 +90,35 @@ Let's create transactional cache:
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 29-32
+  :lines: 30-33
 
 Let's start a transaction and commit it:
 
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 35-40
+  :lines: 36-41
 
 Let's check that the transaction was committed successfully:
 
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 42-44
+  :lines: 44-45
 
 Let's check that raising exception inside `async with` block leads to transaction's rollback
 
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 47-58
+  :lines: 48-59
 
 Let's check that timed out transaction is successfully rolled back
 
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 61-72
+  :lines: 62-73
 
 See more info about transaction's parameters in a documentation of :py:meth:`~pyignite.aio_client.AioClient.tx_start`
 
