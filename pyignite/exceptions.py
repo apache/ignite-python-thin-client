@@ -38,7 +38,7 @@ class HandshakeError(SocketError):
     """
     This exception is raised on Ignite binary protocol handshake failure,
     as defined in
-    https://apacheignite.readme.io/docs/binary-client-protocol#section-handshake
+    https://ignite.apache.org/docs/latest/binary-client-protocol/binary-client-protocol#connection-handshake
     """
 
     def __init__(self, expected_version: Tuple[int, int, int], message: str):

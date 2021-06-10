@@ -14,7 +14,7 @@
     limitations under the License.
 
 pyignite.transaction module
-=========================
+===========================
 
 .. automodule:: pyignite.transaction
     :members:

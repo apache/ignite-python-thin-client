@@ -22,6 +22,7 @@ Welcome to Apache Ignite binary client Python API documentation!
 
    readme
    modules
+   partition_awareness
    examples
    async_examples
 

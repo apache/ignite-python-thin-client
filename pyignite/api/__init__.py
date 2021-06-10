@@ -17,7 +17,7 @@
 This module contains functions, that are (more or less) directly mapped to
 Apache Ignite binary protocol operations. Read more:
 
-https://apacheignite.readme.io/docs/binary-client-protocol#section-client-operations
+https://ignite.apache.org/docs/latest/binary-client-protocol/binary-client-protocol#client-operations
 
 When the binary client protocol changes, these functions also change. For
 stable end user API see :mod:`pyignite.client` module.

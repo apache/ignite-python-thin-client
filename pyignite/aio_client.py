@@ -60,7 +60,7 @@ class AioClient(BaseClient):
     Asynchronous Client implementation.
     """
 
-    def __init__(self, compact_footer: bool = None, partition_aware: bool = False, **kwargs):
+    def __init__(self, compact_footer: bool = None, partition_aware: bool = True, **kwargs):
         """
         Initialize client.
 
@@ -68,13 +68,10 @@ class AioClient(BaseClient):
          full (False) schema approach when serializing Complex objects.
          Default is to use the same approach the server is using (None).
          Apache Ignite binary protocol documentation on this topic:
-         https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-schema
+         https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#schema
         :param partition_aware: (optional) try to calculate the exact data
          placement from the key before to issue the key operation to the
-         server node:
-         https://cwiki.apache.org/confluence/display/IGNITE/IEP-23%3A+Best+Effort+Affinity+for+thin+clients
-         The feature is in experimental status, so the parameter is `False`
-         by default. This will be changed later.
+         server node, `True` by default.
         """
         super().__init__(compact_footer, partition_aware, **kwargs)
         self._registry_mux = asyncio.Lock()
@@ -494,7 +491,7 @@ class AioClient(BaseClient):
                  isolation: TransactionIsolation = TransactionIsolation.REPEATABLE_READ,
                  timeout: Union[int, float] = 0, label: Optional[str] = None) -> 'AioTransaction':
         """
-        Start async thin client transaction.
+        Start async thin client transaction. **Supported only python 3.7+**
 
         :param concurrency: (optional) transaction concurrency, see
                 :py:class:`~pyignite.datatypes.transactions.TransactionConcurrency`

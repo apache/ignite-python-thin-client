@@ -131,7 +131,7 @@ async def test_simple_transaction_async(async_client, async_tx_cache, iso_level,
     assert await async_tx_cache.get(1) == 1
 
     async with async_client.tx_start(isolation=iso_level, concurrency=concurrency) as tx:
-        async_tx_cache.put(1, 10)
+        await async_tx_cache.put(1, 10)
 
     assert await async_tx_cache.get(1) == 1
 
