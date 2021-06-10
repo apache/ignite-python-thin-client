@@ -136,40 +136,40 @@ with your data, in to some API function as a *type conversion hint*.
 |0x1b         |`Wrapped data`_     |tuple[int, bytes]              |:class:`~pyignite.datatypes.complex.WrappedDataObject`            |
 +-------------+--------------------+-------------------------------+------------------------------------------------------------------+
 
-.. _Byte: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-byte
-.. _Short: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-short
-.. _Int: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-int
-.. _Long: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-long
-.. _Float: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-float
-.. _Double: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-double
-.. _Char: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-char
-.. _Bool: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-bool
-.. _Null: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-null
-.. _String: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-string
-.. _UUID: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-uuid-guid-
-.. _Timestamp: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-timestamp
-.. _Date: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-date
-.. _Time: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-time
-.. _Decimal: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-decimal
-.. _Enum: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-enum
-.. _Byte array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-byte-array
-.. _Short array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-short-array
-.. _Int array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-int-array
-.. _Long array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-long-array
-.. _Float array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-float-array
-.. _Double array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-double-array
-.. _Char array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-char-array
-.. _Bool array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-bool-array
-.. _String array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-string-array
-.. _UUID array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-uuid-guid-array
-.. _Timestamp array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-timestamp-array
-.. _Date array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-date-array
-.. _Time array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-time-array
-.. _Decimal array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-decimal-array
-.. _Object array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-object-collections
-.. _Collection: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-collection
-.. _Map: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-map
-.. _Enum array: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-enum-array
-.. _Binary enum: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-binary-enum
-.. _Wrapped data: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-wrapped-data
-.. _Complex object: https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-complex-object
+.. _Byte: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#byte
+.. _Short: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#short
+.. _Int: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#int
+.. _Long: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#long
+.. _Float: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#float
+.. _Double: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#double
+.. _Char: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#char
+.. _Bool: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#bool
+.. _Null: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#null
+.. _String: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#string
+.. _UUID: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#uuid-guid
+.. _Timestamp: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#timestamp
+.. _Date: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#date
+.. _Time: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#time
+.. _Decimal: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#decimal
+.. _Enum: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#enum
+.. _Byte array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#byte-array
+.. _Short array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#short-array
+.. _Int array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#int-array
+.. _Long array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#long-array
+.. _Float array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#float-array
+.. _Double array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#double-array
+.. _Char array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#char-array
+.. _Bool array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#bool-array
+.. _String array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#string-array
+.. _UUID array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#uuid-guid-array
+.. _Timestamp array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#timestamp-array
+.. _Date array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#date-array
+.. _Time array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#time-array
+.. _Decimal array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#decimal-array
+.. _Object array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#object-collections
+.. _Collection: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#collection
+.. _Map: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#map
+.. _Enum array: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#enum-array
+.. _Binary enum: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#binary-enum
+.. _Wrapped data: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#wrapped-data
+.. _Complex object: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#complex-object

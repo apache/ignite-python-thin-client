@@ -206,6 +206,51 @@ contents. But it still can be used for interoperability with Java.
   :dedent: 4
   :lines: 56-65
 
+
+Transactions
+------------
+File: `transactions.py`_.
+
+Client transactions are supported for caches with
+:py:attr:`~pyignite.datatypes.cache_config.CacheAtomicityMode.TRANSACTIONAL` mode.
+
+Let's create transactional cache:
+
+.. literalinclude:: ../examples/transactions.py
+  :language: python
+  :dedent: 8
+  :lines: 81-84
+
+Let's start a transaction and commit it:
+
+.. literalinclude:: ../examples/transactions.py
+  :language: python
+  :dedent: 8
+  :lines: 87-91
+
+Let's check that the transaction was committed successfully:
+
+.. literalinclude:: ../examples/transactions.py
+  :language: python
+  :dedent: 8
+  :lines: 93-94
+
+Let's check that raising exception inside `with` block leads to transaction's rollback
+
+.. literalinclude:: ../examples/transactions.py
+  :language: python
+  :dedent: 8
+  :lines: 97-107
+
+Let's check that timed out transaction is successfully rolled back
+
+.. literalinclude:: ../examples/transactions.py
+  :language: python
+  :dedent: 8
+  :lines: 110-120
+
+See more info about transaction's parameters in a documentation of :py:meth:`~pyignite.client.Client.tx_start`
+
 SQL
 ---
 File: `sql.py`_.
@@ -717,6 +762,7 @@ with the following message:
 .. _read_binary.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/read_binary.py
 .. _create_binary.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/create_binary.py
 .. _migrate_binary.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/migrate_binary.py
+.. _transactions.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/transactions.py
 .. _Getting Started: https://ignite.apache.org/docs/latest/thin-clients/python-thin-client
 .. _PyIgnite GitHub repository: https://github.com/apache/ignite-python-thin-client/blob/master
 .. _Complex object: https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#complex-object

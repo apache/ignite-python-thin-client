@@ -22,7 +22,7 @@ Cache Properties
 The :mod:`~pyignite.datatypes.prop_codes` module contains a list of ordinal
 values, that represent various cache settings.
 
-Please refer to the `Apache Ignite Data Grid`_ documentation on cache
+Please refer to the `Configuring Caches`_ documentation on cache
 synchronization, rebalance, affinity and other cache configuration-related
 matters.
 
@@ -160,7 +160,7 @@ A dict of the following format:
 - `type_name`: name of the complex object,
 - `affinity_key_field_name`: name of the affinity key field.
 
-.. _Apache Ignite Data Grid: https://apacheignite.readme.io/docs/data-grid
+.. _Configuring Caches: https://ignite.apache.org/docs/latest/configuring-caches/configuration-overview.html
 
 Expiry policy
 -------------

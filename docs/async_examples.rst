@@ -78,6 +78,50 @@ Secondly, expiry policy can be set for all cache operations, which are done unde
   :dedent: 12
   :lines: 96-105
 
+Transactions
+------------
+File: `transactions.py`_.
+
+Client transactions are supported for caches with
+:py:attr:`~pyignite.datatypes.cache_config.CacheAtomicityMode.TRANSACTIONAL` mode.
+
+Let's create transactional cache:
+
+.. literalinclude:: ../examples/transactions.py
+  :language: python
+  :dedent: 8
+  :lines: 29-32
+
+Let's start a transaction and commit it:
+
+.. literalinclude:: ../examples/transactions.py
+  :language: python
+  :dedent: 8
+  :lines: 35-40
+
+Let's check that the transaction was committed successfully:
+
+.. literalinclude:: ../examples/transactions.py
+  :language: python
+  :dedent: 8
+  :lines: 42-44
+
+Let's check that raising exception inside `async with` block leads to transaction's rollback
+
+.. literalinclude:: ../examples/transactions.py
+  :language: python
+  :dedent: 8
+  :lines: 47-58
+
+Let's check that timed out transaction is successfully rolled back
+
+.. literalinclude:: ../examples/transactions.py
+  :language: python
+  :dedent: 8
+  :lines: 61-72
+
+See more info about transaction's parameters in a documentation of :py:meth:`~pyignite.aio_client.AioClient.tx_start`
+
 SQL
 ---
 File: `async_sql.py`_.
@@ -174,3 +218,4 @@ Finally, delete the tables used in this example with the following queries:
 .. _expiry_policy.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/expiry_policy.py
 .. _async_key_value.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/async_key_value.py
 .. _async_sql.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/async_sql.py
+.. _transactions.py: https://github.com/apache/ignite-python-thin-client/blob/master/examples/transactions.py
