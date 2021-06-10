@@ -181,8 +181,8 @@ Licensing
 
 This is a free software, brought to you on terms of the `Apache License v2`_.
 
-.. _Apache Ignite: https://apacheignite.readme.io/docs/what-is-ignite
-.. _binary client protocol: https://apacheignite.readme.io/docs/binary-client-protocol
+.. _Apache Ignite: https://ignite.apache.org
+.. _binary client protocol: https://ignite.apache.org/docs/latest/binary-client-protocol/binary-client-protocol
 .. _Apache License v2: http://www.apache.org/licenses/LICENSE-2.0
 .. _virtualenv: https://virtualenv.pypa.io/
 .. _tox: https://tox.readthedocs.io/en/latest/
