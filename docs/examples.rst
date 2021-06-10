@@ -219,35 +219,35 @@ Let's create transactional cache:
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 81-84
+  :lines: 82-85
 
 Let's start a transaction and commit it:
 
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 87-91
+  :lines: 88-92
 
 Let's check that the transaction was committed successfully:
 
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 93-94
+  :lines: 94-95
 
 Let's check that raising exception inside `with` block leads to transaction's rollback
 
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 97-107
+  :lines: 98-108
 
 Let's check that timed out transaction is successfully rolled back
 
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 110-120
+  :lines: 111-121
 
 See more info about transaction's parameters in a documentation of :py:meth:`~pyignite.client.Client.tx_start`
 
