@@ -67,6 +67,7 @@ def tx_cache(client):
         PROP_NAME: 'tx_cache',
         PROP_CACHE_ATOMICITY_MODE: CacheAtomicityMode.TRANSACTIONAL
     })
+    time.sleep(1.0)  # Need to sleep because of https://issues.apache.org/jira/browse/IGNITE-14868
     yield cache
     cache.destroy()
 
@@ -77,6 +78,7 @@ async def async_tx_cache(async_client):
         PROP_NAME: 'tx_cache',
         PROP_CACHE_ATOMICITY_MODE: CacheAtomicityMode.TRANSACTIONAL
     })
+    await asyncio.sleep(1.0)  # Need to sleep because of https://issues.apache.org/jira/browse/IGNITE-14868
     yield cache
     await cache.destroy()
 

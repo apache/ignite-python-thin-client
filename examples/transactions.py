@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import asyncio
+import sys
 import time
 
 from pyignite import AioClient, Client
@@ -32,32 +33,35 @@ async def async_example():
         })
 
         # starting transaction
+        key = 1
         async with client.tx_start(
                 isolation=TransactionIsolation.REPEATABLE_READ, concurrency=TransactionConcurrency.PESSIMISTIC
         ) as tx:
-            await cache.put(1, 'success')
+            await cache.put(key, 'success')
             await tx.commit()
 
         # key=1 value=success
-        print(f"key=1 value={await cache.get(1)}")
+        val = await cache.get(key)
+        print(f"key=1 value={val}")
 
         # rollback transaction.
         try:
             async with client.tx_start(
                     isolation=TransactionIsolation.REPEATABLE_READ, concurrency=TransactionConcurrency.PESSIMISTIC
             ):
-                await cache.put(1, 'fail')
+                await cache.put(key, 'fail')
                 raise RuntimeError('test')
         except RuntimeError:
             pass
 
         # key=1 value=success
-        print(f"key=1 value={await cache.get(1)}")
+        val = await cache.get(key)
+        print(f"key=1 value={val}")
 
         # rollback transaction on timeout.
         try:
             async with client.tx_start(timeout=1.0, label='long-tx') as tx:
-                await cache.put(1, 'fail')
+                await cache.put(key, 'fail')
                 await asyncio.sleep(2.0)
                 await tx.commit()
         except CacheError as e:
@@ -65,7 +69,8 @@ async def async_example():
             print(e)
 
         # key=1 value=success
-        print(f"key=1 value={await cache.get(1)}")
+        val = await cache.get(1)
+        print(f"key=1 value={val}")
 
         # destroy cache
         await cache.destroy()
@@ -123,6 +128,7 @@ if __name__ == '__main__':
     print("Starting sync example")
     sync_example()
 
-    print("Starting async example")
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(async_example())
+    if sys.version_info >= (3, 7):
+        print("Starting async example")
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(async_example())

@@ -97,28 +97,28 @@ Let's start a transaction and commit it:
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 35-39
+  :lines: 35-40
 
 Let's check that the transaction was committed successfully:
 
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 41-42
+  :lines: 42-44
 
 Let's check that raising exception inside `async with` block leads to transaction's rollback
 
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 45-55
+  :lines: 47-58
 
 Let's check that timed out transaction is successfully rolled back
 
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 58-68
+  :lines: 61-72
 
 See more info about transaction's parameters in a documentation of :py:meth:`~pyignite.aio_client.AioClient.tx_start`
 
