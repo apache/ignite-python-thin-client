@@ -35,19 +35,21 @@ async def async_example():
         # starting transaction
         key = 1
         async with client.tx_start(
-                isolation=TransactionIsolation.REPEATABLE_READ, concurrency=TransactionConcurrency.PESSIMISTIC
+                isolation=TransactionIsolation.REPEATABLE_READ,
+                concurrency=TransactionConcurrency.PESSIMISTIC
         ) as tx:
             await cache.put(key, 'success')
             await tx.commit()
 
         # key=1 value=success
         val = await cache.get(key)
-        print(f"key=1 value={val}")
+        print(f"key={key} value={val}")
 
         # rollback transaction.
         try:
             async with client.tx_start(
-                    isolation=TransactionIsolation.REPEATABLE_READ, concurrency=TransactionConcurrency.PESSIMISTIC
+                    isolation=TransactionIsolation.REPEATABLE_READ,
+                    concurrency=TransactionConcurrency.PESSIMISTIC
             ):
                 await cache.put(key, 'fail')
                 raise RuntimeError('test')
@@ -56,7 +58,7 @@ async def async_example():
 
         # key=1 value=success
         val = await cache.get(key)
-        print(f"key=1 value={val}")
+        print(f"key={key} value={val}")
 
         # rollback transaction on timeout.
         try:
@@ -70,7 +72,7 @@ async def async_example():
 
         # key=1 value=success
         val = await cache.get(key)
-        print(f"key=1 value={val}")
+        print(f"key={key} value={val}")
 
         # destroy cache
         await cache.destroy()
@@ -85,32 +87,35 @@ def sync_example():
         })
 
         # starting transaction
+        key = 1
         with client.tx_start(
-                isolation=TransactionIsolation.REPEATABLE_READ, concurrency=TransactionConcurrency.PESSIMISTIC
+                isolation=TransactionIsolation.REPEATABLE_READ,
+                concurrency=TransactionConcurrency.PESSIMISTIC
         ) as tx:
-            cache.put(1, 'success')
+            cache.put(key, 'success')
             tx.commit()
 
         # key=1 value=success
-        print(f"key=1 value={cache.get(1)}")
+        print(f"key={key} value={cache.get(key)}")
 
         # rollback transaction.
         try:
             with client.tx_start(
-                    isolation=TransactionIsolation.REPEATABLE_READ, concurrency=TransactionConcurrency.PESSIMISTIC
+                    isolation=TransactionIsolation.REPEATABLE_READ,
+                    concurrency=TransactionConcurrency.PESSIMISTIC
             ):
-                cache.put(1, 'fail')
+                cache.put(key, 'fail')
                 raise RuntimeError('test')
         except RuntimeError:
             pass
 
         # key=1 value=success
-        print(f"key=1 value={cache.get(1)}")
+        print(f"key={key} value={cache.get(key)}")
 
         # rollback transaction on timeout.
         try:
             with client.tx_start(timeout=1.0, label='long-tx') as tx:
-                cache.put(1, 'fail')
+                cache.put(key, 'fail')
                 time.sleep(2.0)
                 tx.commit()
         except CacheError as e:
@@ -118,7 +123,7 @@ def sync_example():
             print(e)
 
         # key=1 value=success
-        print(f"key=1 value={cache.get(1)}")
+        print(f"key={key} value={cache.get(key)}")
 
         # destroy cache
         cache.destroy()

@@ -84,6 +84,7 @@ File: `transactions.py`_.
 
 Client transactions are supported for caches with
 :py:attr:`~pyignite.datatypes.cache_config.CacheAtomicityMode.TRANSACTIONAL` mode.
+**Supported only python 3.7+**
 
 Let's create transactional cache:
 
@@ -97,28 +98,28 @@ Let's start a transaction and commit it:
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 36-41
+  :lines: 36-42
 
 Let's check that the transaction was committed successfully:
 
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 44-45
+  :lines: 45-46
 
 Let's check that raising exception inside `async with` block leads to transaction's rollback
 
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 48-59
+  :lines: 49-61
 
 Let's check that timed out transaction is successfully rolled back
 
 .. literalinclude:: ../examples/transactions.py
   :language: python
   :dedent: 8
-  :lines: 62-73
+  :lines: 64-75
 
 See more info about transaction's parameters in a documentation of :py:meth:`~pyignite.aio_client.AioClient.tx_start`
 

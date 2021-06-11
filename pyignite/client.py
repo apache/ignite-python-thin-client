@@ -335,17 +335,10 @@ class _ConnectionContextManager:
 
 class Client(BaseClient):
     """
-    This is a main `pyignite` class, that is build upon the
-    :class:`~pyignite.connection.Connection`. In addition to the attributes,
-    properties and methods of its parent class, `Client` implements
-    the following features:
-
-     * cache factory. Cache objects are used for key-value operations,
-     * Ignite SQL endpoint,
-     * binary types registration endpoint.
+    Synchronous Client implementation.
     """
 
-    def __init__(self, compact_footer: bool = None, partition_aware: bool = False, **kwargs):
+    def __init__(self, compact_footer: bool = None, partition_aware: bool = True, **kwargs):
         """
         Initialize client.
 
@@ -353,13 +346,10 @@ class Client(BaseClient):
          full (False) schema approach when serializing Complex objects.
          Default is to use the same approach the server is using (None).
          Apache Ignite binary protocol documentation on this topic:
-         https://apacheignite.readme.io/docs/binary-client-protocol-data-format#section-schema
+         https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#schema
         :param partition_aware: (optional) try to calculate the exact data
          placement from the key before to issue the key operation to the
-         server node:
-         https://cwiki.apache.org/confluence/display/IGNITE/IEP-23%3A+Best+Effort+Affinity+for+thin+clients
-         The feature is in experimental status, so the parameter is `False`
-         by default. This will be changed later.
+         server node, `True` by default.
         """
         super().__init__(compact_footer, partition_aware, **kwargs)
 
