@@ -37,7 +37,7 @@ from pyignite.exceptions import HandshakeError, SocketError, connection_errors
 from .bitmask_feature import BitmaskFeature
 from .connection import BaseConnection
 
-from .handshake import HandshakeRequest, HandshakeResponse, OP_HANDSHAKE
+from .handshake import HandshakeRequest, HandshakeResponse
 from .protocol_context import ProtocolContext
 from .ssl import create_ssl_context
 from ..stream.binary_stream import BinaryStreamBase
@@ -152,20 +152,23 @@ class AioConnection(BaseConnection):
         self._transport = None
         self._loop = asyncio.get_event_loop()
         self._closed = False
+        self._transport_closed_fut = None
 
     @property
     def closed(self) -> bool:
         """ Tells if socket is closed. """
         return self._closed or not self._transport or self._transport.is_closing()
 
-    async def connect(self) -> Union[dict, OrderedDict]:
+    async def connect(self):
         """
         Connect to the given server node with protocol version fallback.
         """
+        if self.alive:
+            return
         self._closed = False
-        return await self._connect()
+        await self._connect()
 
-    async def _connect(self) -> Union[dict, OrderedDict]:
+    async def _connect(self):
         detecting_protocol = False
 
         # choose highest version first
@@ -192,13 +195,16 @@ class AioConnection(BaseConnection):
         self.client.protocol_context.features = features
         self.uuid = result.get('node_uuid', None)  # version-specific (1.4+)
         self.failed = False
-        return result
 
     def on_connection_lost(self, error, reconnect=False):
         self.failed = True
         for _, fut in self._pending_reqs.items():
             fut.set_exception(error)
         self._pending_reqs.clear()
+
+        if self._transport_closed_fut and not self._transport_closed_fut.done():
+            self._transport_closed_fut.set_result(None)
+
         if reconnect and not self._closed:
             self._loop.create_task(self._reconnect())
 
@@ -221,7 +227,7 @@ class AioConnection(BaseConnection):
         hs_response = await handshake_fut
 
         if hs_response.op_code == 0:
-            self._close_transport()
+            await self._close_transport()
             self._process_handshake_error(hs_response)
 
         return hs_response
@@ -233,7 +239,7 @@ class AioConnection(BaseConnection):
         if self.alive:
             return
 
-        self._close_transport()
+        await self._close_transport()
         # connect and silence the connection errors
         try:
             await self._connect()
@@ -259,12 +265,20 @@ class AioConnection(BaseConnection):
 
     async def close(self):
         self._closed = True
-        self._close_transport()
+        await self._close_transport()
 
-    def _close_transport(self):
+    async def _close_transport(self):
         """
         Close connection.
         """
-        if self._transport:
+        if self._transport and not self._transport.is_closing():
+            self._transport_closed_fut = self._loop.create_future()
+
             self._transport.close()
             self._transport = None
+            try:
+                await asyncio.wait_for(self._transport_closed_fut, 1.0)
+            except asyncio.TimeoutError:
+                pass
+            finally:
+                self._transport_closed_fut = None
