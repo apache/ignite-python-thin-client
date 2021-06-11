@@ -335,14 +335,7 @@ class _ConnectionContextManager:
 
 class Client(BaseClient):
     """
-    This is a main `pyignite` class, that is build upon the
-    :class:`~pyignite.connection.Connection`. In addition to the attributes,
-    properties and methods of its parent class, `Client` implements
-    the following features:
-
-     * cache factory. Cache objects are used for key-value operations,
-     * Ignite SQL endpoint,
-     * binary types registration endpoint.
+    Synchronous Client implementation.
     """
 
     def __init__(self, compact_footer: bool = None, partition_aware: bool = True, **kwargs):
