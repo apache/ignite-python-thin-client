@@ -62,7 +62,7 @@ async def async_example():
 
         # rollback transaction on timeout.
         try:
-            async with client.tx_start(timeout=1.0, label='long-tx') as tx:
+            async with client.tx_start(timeout=1000, label='long-tx') as tx:
                 await cache.put(key, 'fail')
                 await asyncio.sleep(2.0)
                 await tx.commit()
@@ -114,7 +114,7 @@ def sync_example():
 
         # rollback transaction on timeout.
         try:
-            with client.tx_start(timeout=1.0, label='long-tx') as tx:
+            with client.tx_start(timeout=1000, label='long-tx') as tx:
                 cache.put(key, 'fail')
                 time.sleep(2.0)
                 tx.commit()
