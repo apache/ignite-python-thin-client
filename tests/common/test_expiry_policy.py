@@ -14,6 +14,7 @@
 # limitations under the License.
 import asyncio
 import time
+from datetime import timedelta
 
 import pytest
 
@@ -23,11 +24,11 @@ from pyignite.datatypes.prop_codes import PROP_NAME, PROP_EXPIRY_POLICY
 
 @pytest.mark.skip_if_no_expiry_policy
 def test_expiry_policy(cache):
-    ttl, num_retries = 0.6, 10
+    ttl, num_retries = timedelta(seconds=0.6), 10
     cache_eternal = cache.with_expire_policy(create=ExpiryPolicy.ETERNAL)
-    cache_created = cache.with_expire_policy(create=0.6)
-    cache_updated = cache.with_expire_policy(update=0.6)
-    cache_accessed = cache.with_expire_policy(access=0.6)
+    cache_created = cache.with_expire_policy(create=ttl)
+    cache_updated = cache.with_expire_policy(update=ttl)
+    cache_accessed = cache.with_expire_policy(access=ttl)
 
     for _ in range(num_retries):
         cache.clear()
@@ -39,11 +40,11 @@ def test_expiry_policy(cache):
         cache_updated.put(2, 2)
         cache_accessed.put(3, 3)
 
-        time.sleep(ttl * 2 / 3)
+        time.sleep(ttl.total_seconds() * 2 / 3)
 
         result = [cache.contains_key(k) for k in range(4)]
 
-        if time.time() - start >= ttl:
+        if time.time() - start >= ttl.total_seconds():
             continue
 
         assert all(result)
@@ -55,20 +56,20 @@ def test_expiry_policy(cache):
         cache_updated.put(2, 3)  # Check that update policy works.
         cache_accessed.get(3)   # Check that access policy works.
 
-        time.sleep(ttl * 2 / 3)
+        time.sleep(ttl.total_seconds() * 2 / 3)
 
         result = [cache.contains_key(k) for k in range(4)]
 
-        if time.time() - start >= ttl:
+        if time.time() - start >= ttl.total_seconds():
             continue
 
         assert result == [True, False, True, True]
 
-        time.sleep(ttl * 2 / 3)
+        time.sleep(ttl.total_seconds() * 2 / 3)
 
         cache_updated.get(2)  # Check that access doesn't matter for updated policy.
 
-        time.sleep(ttl * 2 / 3)
+        time.sleep(ttl.total_seconds() * 2 / 3)
 
         result = [cache.contains_key(k) for k in range(0, 4)]
         assert result == [True, False, False, False]
@@ -77,11 +78,11 @@ def test_expiry_policy(cache):
 @pytest.mark.asyncio
 @pytest.mark.skip_if_no_expiry_policy
 async def test_expiry_policy_async(async_cache):
-    ttl, num_retries = 0.6, 10
+    ttl, num_retries = timedelta(seconds=0.6), 10
     cache_eternal = async_cache.with_expire_policy(create=ExpiryPolicy.ETERNAL)
-    cache_created = async_cache.with_expire_policy(create=0.6)
-    cache_updated = async_cache.with_expire_policy(update=0.6)
-    cache_accessed = async_cache.with_expire_policy(access=0.6)
+    cache_created = async_cache.with_expire_policy(create=ttl)
+    cache_updated = async_cache.with_expire_policy(update=ttl)
+    cache_accessed = async_cache.with_expire_policy(access=ttl)
 
     for _ in range(num_retries):
         await async_cache.clear()
@@ -95,11 +96,11 @@ async def test_expiry_policy_async(async_cache):
             cache_accessed.put(3, 3)
         )
 
-        await asyncio.sleep(ttl * 2 / 3)
+        await asyncio.sleep(ttl.total_seconds() * 2 / 3)
 
         result = await asyncio.gather(*[async_cache.contains_key(k) for k in range(4)])
 
-        if time.time() - start >= ttl:
+        if time.time() - start >= ttl.total_seconds():
             continue
 
         assert all(result)
@@ -113,20 +114,20 @@ async def test_expiry_policy_async(async_cache):
             cache_accessed.get(3)   # Check that access policy works.
         )
 
-        await asyncio.sleep(ttl * 2 / 3)
+        await asyncio.sleep(ttl.total_seconds() * 2 / 3)
 
         result = await asyncio.gather(*[async_cache.contains_key(k) for k in range(4)])
 
-        if time.time() - start >= ttl:
+        if time.time() - start >= ttl.total_seconds():
             continue
 
         assert result == [True, False, True, True]
 
-        await asyncio.sleep(ttl * 2 / 3)
+        await asyncio.sleep(ttl.total_seconds() * 2 / 3)
 
         await cache_updated.get(2)  # Check that access doesn't matter for updated policy.
 
-        await asyncio.sleep(ttl * 2 / 3)
+        await asyncio.sleep(ttl.total_seconds() * 2 / 3)
 
         result = await asyncio.gather(*[async_cache.contains_key(k) for k in range(4)])
         assert result == [True, False, False, False]
@@ -169,3 +170,17 @@ async def test_create_cache_with_expiry_policy_async(async_client, expiry_policy
         assert settings[PROP_EXPIRY_POLICY] == expiry_policy
     finally:
         await cache.destroy()
+
+
+@pytest.mark.skip_if_no_expiry_policy
+@pytest.mark.parametrize(
+    'params',
+    [
+        {'create': timedelta(seconds=-1), 'update': timedelta(seconds=-1), 'delete': timedelta(seconds=-1)},
+        {'create': 0.6},
+        {'create': -3}
+    ]
+)
+def test_expiry_policy_param_validation(params):
+    with pytest.raises((TypeError, ValueError)):
+        ExpiryPolicy(**params)

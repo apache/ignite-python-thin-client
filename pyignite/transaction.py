@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import math
-from typing import Union
+from enum import IntEnum
+from typing import Union, Type
 
 from pyignite.api.tx_api import tx_end, tx_start, tx_end_async, tx_start_async
 from pyignite.datatypes import TransactionIsolation, TransactionConcurrency
@@ -22,21 +22,41 @@ from pyignite.exceptions import CacheError
 from pyignite.utils import status_to_exception
 
 
-def _convert_to_millis(timeout: Union[int, float]) -> int:
-    if isinstance(timeout, float):
-        return math.floor(timeout * 1000)
-    return timeout
+def _validate_int_enum_param(value: Union[int, IntEnum], cls: Type[IntEnum]):
+    if value not in cls:
+        raise ValueError(f'{value} not in {cls}')
+    return value
 
 
-class Transaction:
+def _validate_timeout(value):
+    if not isinstance(value, int) or value < 0:
+        raise ValueError(f'Timeout value should be a positive integer, {value} passed instead')
+    return value
+
+
+def _validate_label(value):
+    if value and not isinstance(value, str):
+        raise ValueError(f'Label should be str, {type(value)} passed instead')
+    return value
+
+
+class _BaseTransaction:
+    def __init__(self, client, concurrency=TransactionConcurrency.PESSIMISTIC,
+                 isolation=TransactionIsolation.REPEATABLE_READ, timeout=0, label=None):
+        self.client = client
+        self.concurrency = _validate_int_enum_param(concurrency, TransactionConcurrency)
+        self.isolation = _validate_int_enum_param(isolation, TransactionIsolation)
+        self.timeout = _validate_timeout(timeout)
+        self.label, self.closed = _validate_label(label), False
+
+
+class Transaction(_BaseTransaction):
     """
     Thin client transaction.
     """
     def __init__(self, client, concurrency=TransactionConcurrency.PESSIMISTIC,
                  isolation=TransactionIsolation.REPEATABLE_READ, timeout=0, label=None):
-        self.client, self.concurrency = client, concurrency
-        self.isolation, self.timeout = isolation, _convert_to_millis(timeout)
-        self.label, self.closed = label, False
+        super().__init__(client, concurrency, isolation, timeout, label)
         self.tx_id = self.__start_tx()
 
     def commit(self) -> None:
@@ -77,15 +97,13 @@ class Transaction:
         return tx_end(self.tx_id, committed)
 
 
-class AioTransaction:
+class AioTransaction(_BaseTransaction):
     """
     Async thin client transaction.
     """
     def __init__(self, client, concurrency=TransactionConcurrency.PESSIMISTIC,
                  isolation=TransactionIsolation.REPEATABLE_READ, timeout=0, label=None):
-        self.client, self.concurrency = client, concurrency
-        self.isolation, self.timeout = isolation, _convert_to_millis(timeout)
-        self.label, self.closed = label, False
+        super().__init__(client, concurrency, isolation, timeout, label)
 
     def __await__(self):
         return (yield from self.__aenter__().__await__())

@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import ctypes
+import math
+from datetime import timedelta
 from io import SEEK_CUR
 from typing import Union
 
@@ -22,13 +24,16 @@ from pyignite.constants import PROTOCOL_BYTE_ORDER
 
 
 def _positive(_, attrib, value):
+    if isinstance(value, timedelta):
+        value = value.total_seconds() * 1000
+
     if value < 0 and value not in [ExpiryPolicy.UNCHANGED, ExpiryPolicy.ETERNAL]:
         raise ValueError(f"'{attrib.name}' value must not be negative")
 
 
 def _write_duration(stream, value):
-    if isinstance(value, float):
-        value = int(value * 1000)
+    if isinstance(value, timedelta):
+        value = math.floor(value.total_seconds() * 1000)
 
     stream.write(value.to_bytes(8, byteorder=PROTOCOL_BYTE_ORDER, signed=True))
 
@@ -44,17 +49,17 @@ class ExpiryPolicy:
     #: Set TTL eternal.
     ETERNAL = -1
 
-    #: Set TTL for create in seconds(float) or millis(int)
-    create = attr.ib(kw_only=True, default=UNCHANGED,
-                     validator=[attr.validators.instance_of((int, float)), _positive])
+    #: Set TTL for create in milliseconds or :py:class:`~time.timedelta`
+    create = attr.ib(kw_only=True, default=UNCHANGED, type=Union[int, timedelta],
+                     validator=[attr.validators.instance_of((int, timedelta)), _positive])
 
-    #: Set TTL for update in seconds(float) or millis(int)
-    update = attr.ib(kw_only=True, default=UNCHANGED, type=Union[int, float],
-                     validator=[attr.validators.instance_of((int, float)), _positive])
+    #: Set TTL for update in milliseconds or :py:class:`~time.timedelta`
+    update = attr.ib(kw_only=True, default=UNCHANGED, type=Union[int, timedelta],
+                     validator=[attr.validators.instance_of((int, timedelta)), _positive])
 
-    #: Set TTL for access in seconds(float) or millis(int)
-    access = attr.ib(kw_only=True, default=UNCHANGED, type=Union[int, float],
-                     validator=[attr.validators.instance_of((int, float)), _positive])
+    #: Set TTL for access in milliseconds or :py:class:`~time.timedelta`
+    access = attr.ib(kw_only=True, default=UNCHANGED, type=Union[int, timedelta],
+                     validator=[attr.validators.instance_of((int, timedelta)), _positive])
 
     class _CType(ctypes.LittleEndianStructure):
         _pack_ = 1
