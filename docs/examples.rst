@@ -97,12 +97,12 @@ in cache settings dictionary on creation.
 .. literalinclude:: ../examples/expiry_policy.py
   :language: python
   :dedent: 12
-  :lines: 31-34
+  :lines: 32-35
 
 .. literalinclude:: ../examples/expiry_policy.py
   :language: python
   :dedent: 12
-  :lines: 40-46
+  :lines: 41-47
 
 Secondly, expiry policy can be set for all cache operations, which are done under decorator. To create it use
 :py:meth:`~pyignite.cache.BaseCache.with_expire_policy`
@@ -110,7 +110,7 @@ Secondly, expiry policy can be set for all cache operations, which are done unde
 .. literalinclude:: ../examples/expiry_policy.py
   :language: python
   :dedent: 12
-  :lines: 53-60
+  :lines: 54-61
 
 Scan
 ====

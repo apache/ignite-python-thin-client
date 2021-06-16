@@ -25,6 +25,7 @@ from pyignite.datatypes import TransactionIsolation, TransactionConcurrency
 from pyignite.datatypes.cache_config import CacheAtomicityMode
 from pyignite.datatypes.prop_codes import PROP_NAME, PROP_CACHE_ATOMICITY_MODE
 from pyignite.exceptions import CacheError
+from pyignite.transaction import Transaction, AioTransaction
 
 
 @pytest.fixture
@@ -137,7 +138,7 @@ async def test_simple_transaction_async(async_client, async_tx_cache, iso_level,
 
 
 def test_transactions_timeout(client, tx_cache):
-    with client.tx_start(timeout=2.0, label='tx-sync') as tx:
+    with client.tx_start(timeout=2000, label='tx-sync') as tx:
         tx_cache.put(1, 1)
         time.sleep(3.0)
         with pytest.raises(CacheError) as to_error:
@@ -160,7 +161,7 @@ async def test_transactions_timeout_async(async_client, async_tx_cache):
 
             await tx.commit()
 
-    task = asyncio.gather(*[update(i, 2.0) for i in range(20)], return_exceptions=True)
+    task = asyncio.gather(*[update(i, 2000) for i in range(20)], return_exceptions=True)
     await asyncio.sleep(5.0)
     assert task.done()  # Check that all transactions completed or rolled-back on timeout
     for i, ex in enumerate(task.result()):
@@ -231,3 +232,21 @@ async def test_concurrent_transactions(async_client, async_tx_cache, iso_level, 
 
     await asyncio.gather(*[update(i) for i in range(20)], return_exceptions=True)
     assert await async_tx_cache.get_all(list(range(20))) == {i: f'test-{i}' for i in range(20) if i % 2 == 0}
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {'isolation': 25},
+        {'concurrency': 45},
+        {'timeout': 2.0},
+        {'timeout': -10},
+        {'label': 100500}
+    ]
+)
+def test_tx_parameter_validation(params):
+    with pytest.raises((TypeError, ValueError)):
+        Transaction(None, **params)
+
+    with pytest.raises((TypeError, ValueError)):
+        AioTransaction(None, **params)

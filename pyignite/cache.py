@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import datetime
 from typing import Any, Iterable, Optional, Tuple, Union
 
 from .api.tx_api import get_tx_connection
@@ -136,16 +136,16 @@ class BaseCache:
 
     def with_expire_policy(
             self, expiry_policy: Optional[ExpiryPolicy] = None,
-            create: Union[int, float] = ExpiryPolicy.UNCHANGED,
-            update: Union[int, float] = ExpiryPolicy.UNCHANGED,
-            access: Union[int, float] = ExpiryPolicy.UNCHANGED
+            create: Union[int, datetime.timedelta] = ExpiryPolicy.UNCHANGED,
+            update: Union[int, datetime.timedelta] = ExpiryPolicy.UNCHANGED,
+            access: Union[int, datetime.timedelta] = ExpiryPolicy.UNCHANGED
     ):
         """
         :param expiry_policy: optional :class:`~pyignite.datatypes.expiry_policy.ExpiryPolicy`
-         object. If it is set, other params will be ignored.
-        :param create: create TTL in seconds (float) or milliseconds (int),
-        :param update: Create TTL in seconds (float) or milliseconds (int),
-        :param access: Create TTL in seconds (float) or milliseconds (int).
+         object. If it is set, other params will be ignored,
+        :param create: TTL for create in milliseconds or :py:class:`~time.timedelta`,
+        :param update: TTL for update in milliseconds or :py:class:`~time.timedelta`,
+        :param access: TTL for access in milliseconds or :py:class:`~time.timedelta`,
         :return: cache decorator with expiry policy set.
         """
         if not self.client.protocol_context.is_expiry_policy_supported():

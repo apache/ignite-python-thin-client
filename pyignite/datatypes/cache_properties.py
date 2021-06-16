@@ -14,6 +14,8 @@
 # limitations under the License.
 
 import ctypes
+import math
+from typing import Union
 
 from . import ExpiryPolicy
 from .prop_codes import *
@@ -137,6 +139,20 @@ class PropBase:
         return cls.from_python(stream, value)
 
 
+class TimeoutProp(PropBase):
+    prop_data_class = Long
+
+    @classmethod
+    def from_python(cls, stream, value: int):
+        if not isinstance(value, int) or value < 0:
+            raise ValueError(f'Timeout value should be a positive integer, {value} passed instead')
+        return super().from_python(stream, value)
+
+    @classmethod
+    async def from_python_async(cls, stream, value):
+        return cls.from_python(stream, value)
+
+
 class PropName(PropBase):
     prop_code = PROP_NAME
     prop_data_class = String
@@ -227,9 +243,8 @@ class PropRebalanceDelay(PropBase):
     prop_data_class = Long
 
 
-class PropRebalanceTimeout(PropBase):
+class PropRebalanceTimeout(TimeoutProp):
     prop_code = PROP_REBALANCE_TIMEOUT
-    prop_data_class = Long
 
 
 class PropRebalanceBatchSize(PropBase):
@@ -262,9 +277,8 @@ class PropCacheKeyConfiguration(PropBase):
     prop_data_class = CacheKeyConfiguration
 
 
-class PropDefaultLockTimeout(PropBase):
+class PropDefaultLockTimeout(TimeoutProp):
     prop_code = PROP_DEFAULT_LOCK_TIMEOUT
-    prop_data_class = Long
 
 
 class PropMaxConcurrentAsyncOperation(PropBase):
