@@ -46,7 +46,7 @@ class DBCursor:
     def close(self):
         """
         Close the cursor now. The cursor will be unusable from this point
-        forward; an :data:`~clickhouse_driver.dbapi.Error` (or subclass)
+        forward; an :data:`~pyignite.dbapi.Error` (or subclass)
         exception will be raised if any operation is attempted with the
         cursor.
         """

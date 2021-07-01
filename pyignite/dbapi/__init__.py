@@ -16,6 +16,7 @@
 
 from .dbclient import DBClient
 from .. import constants
+from urllib.parse import urlparse, parse_qs
 
 apiLevel = '2.0'
 threadsafety = 2
@@ -45,7 +46,7 @@ def connect(dsn=None,
     - *user*: database user.
     - *password*: user's password.
 
-    See defaults in :data:`~pygridgain.connection.Connection`
+    See defaults in :data:`~pyignite.connection.Connection`
     constructor.
 
     DSN or host is required.
@@ -55,18 +56,30 @@ def connect(dsn=None,
 
     :return: a new connection.
     """
-
-    if dsn is None and host is None:
-        raise ValueError('host or dsn is required')
-        
-    # TODO: implement connection using DSN
-    if host is None:
-        raise ValueError('dsn connection is not currently implemented')
+    
+    if dsn is not None:
+        parsed_dsn = _parse_dsn(dsn)
+        host = parsed_dsn['host']
+        port = parsed_dsn['port']
 
     client = DBClient()
     client.connect(host, port)
 
     return client
+
+def _parse_dsn(dsn):
+    url_components = urlparse(dsn)
+    host = url_components.hostname
+    if url_components.port is not None:
+        port = url_components.port
+    else:
+        port = 10800
+    if url_components.path is not None:
+        schema = url_components.path.replace('/', '')
+    else:
+        schema = 'PUBLIC'
+    schema = url_components.path
+    return { 'host':host, 'port':port, 'schema':schema }
 
 __all__ = [
     'connect',

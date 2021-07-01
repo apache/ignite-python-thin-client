@@ -23,7 +23,7 @@ class DBClient (Client):
     def close(self):
         """
         """
-        # TODO: close ope cursors
+        # TODO: close open cursors
         super.close()
     
     def commit(self):
