@@ -89,6 +89,9 @@ class IgniteIdentifierPreparer(compiler.IdentifierPreparer):
 class IgniteCompiler(compiler.SQLCompiler):
     pass
 
+class IgniteDDLCompiler(compiler.DDLCompiler):
+    def visit_foreign_key_constraint(self, constraint, **kw):
+        return None
 
 class IgniteTypeCompiler(compiler.GenericTypeCompiler):
     def visit_REAL(self, type_, **kwargs):
@@ -138,6 +141,7 @@ class IgniteDialect(default.DefaultDialect):
     preparer = IgniteIdentifierPreparer
     statement_compiler = IgniteCompiler
     type_compiler = IgniteTypeCompiler
+    ddl_compiler = IgniteDDLCompiler
     supports_alter = False
     supports_views = False
     postfetch_lastrowid = False
