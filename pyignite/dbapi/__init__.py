@@ -15,6 +15,7 @@
 #
 
 from .dbclient import DBClient
+from .errors import *
 from .. import constants
 from urllib.parse import urlparse, parse_qs
 
@@ -70,10 +71,7 @@ def connect(dsn=None,
 def _parse_dsn(dsn):
     url_components = urlparse(dsn)
     host = url_components.hostname
-    if url_components.port is not None:
-        port = url_components.port
-    else:
-        port = 10800
+    port = url_components.port or 10800
     if url_components.path is not None:
         schema = url_components.path.replace('/', '')
     else:
@@ -82,8 +80,8 @@ def _parse_dsn(dsn):
     return { 'host':host, 'port':port, 'schema':schema }
 
 __all__ = [
-    'connect',
+    'connect', 'apiLevel', 'threadsafety', 'paramstyle',
     'Warning', 'Error', 'DataError', 'DatabaseError', 'ProgrammingError',
     'IntegrityError', 'InterfaceError', 'InternalError', 'NotSupportedError',
-    'OperationalError'
+    'OperationalError', 'IgniteDialect'
 ]

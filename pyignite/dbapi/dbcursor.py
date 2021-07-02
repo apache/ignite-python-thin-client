@@ -16,32 +16,23 @@
 
 from ..cursors import SqlCursor
 
-class DBCursor:
-
+class DBCursor(object):
 
     def __init__(self, connection):
         self.connection = connection
         self.cursor = None
+        self.rowcount = -1
     
     @property
     def description(self):
-        if self._state == self._states.NONE:
-            return None
-
-        columns = self._columns or []
-        types = self._types or []
+#         columns =  self._columns
+#         types =  [ bool ]
 
         return [
-            Column(name, type_code, None, None, None, None, True)
-            for name, type_code in zip(columns, types)
+            [name, None, None, None, None, None, True]
+            for name in self._columns
+#             for name, type_code in zip(columns, types)
         ]
-
-    @property
-    def rowcount(self):
-        """
-        :return: the number of rows that the last .execute*() produced.
-        """
-        return self._rowcount
 
     def close(self):
         """
@@ -50,14 +41,14 @@ class DBCursor:
         exception will be raised if any operation is attempted with the
         cursor.
         """
-        self._client.disconnect()
-        self._state = self._states.CURSOR_CLOSED
+#         self.connection.disconnect()
+#         self._state = self._states.CURSOR_CLOSED
 
-        try:
-            # cursor can be already closed
-            self._connection.cursors.remove(self)
-        except ValueError:
-            pass
+#         try:
+#             # cursor can be already closed
+#             self.connection.cursors.remove(self)
+#         except ValueError:
+#             pass
 
     def execute(self, operation, parameters=None):
         """
@@ -68,7 +59,8 @@ class DBCursor:
                            variables in the operation.
         :return: None
         """
-        self.cursor = self.connection.sql(operation, query_args=parameters)
+        self.cursor = self.connection.sql(operation, query_args=parameters, include_field_names=True)
+        self._columns = next(self.cursor)
 
     def executemany(self, operation, seq_of_parameters):
         """
@@ -89,16 +81,10 @@ class DBCursor:
 
         :return: the next row of a query result set or None.
         """
-        self._check_query_started()
-
-        if self._stream_results:
-            return next(self._rows, None)
-
+        if self.cursor is not None:
+            return next(self.cursor)
         else:
-            if not self._rows:
-                return None
-
-            return self._rows.pop(0)
+            return None
 
     def fetchmany(self, size=None):
         """
