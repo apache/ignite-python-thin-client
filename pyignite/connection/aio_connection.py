@@ -207,9 +207,8 @@ class AioConnection(BaseConnection):
         if self._transport_closed_fut and not self._transport_closed_fut.done():
             self._transport_closed_fut.set_result(None)
 
-        self._on_connection_lost(err, self._closed)
-
         if reconnect and not self._closed:
+            self._on_connection_lost(err)
             self._loop.create_task(self._reconnect())
 
     def process_message(self, data):
@@ -231,7 +230,7 @@ class AioConnection(BaseConnection):
         hs_response = await handshake_fut
 
         if hs_response.op_code == 0:
-            await self._close_transport()
+            await self.close()
             self._process_handshake_error(hs_response)
 
         return hs_response
@@ -285,4 +284,5 @@ class AioConnection(BaseConnection):
             except asyncio.TimeoutError:
                 pass
             finally:
+                self._on_connection_lost(expected=True)
                 self._transport_closed_fut = None

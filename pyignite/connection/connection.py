@@ -118,15 +118,15 @@ class BaseConnection:
         if isinstance(err, connection_errors):
             logger.error("Failed to perform handshake, connection to node(address=%s, port=%d) "
                          "with protocol context %s failed: %s",
-                         self.host, self.port, self.client.protocol_context, err)
+                         self.host, self.port, self.client.protocol_context, err, exc_info=True)
 
-    def _on_connection_lost(self, err, expected=False):
+    def _on_connection_lost(self, err=None, expected=False):
         if expected and logger.isEnabledFor(logging.DEBUG):
             logger.debug("Connection closed to node(address=%s, port=%d, node_uuid=%s)",
                          self.host, self.port, self.uuid)
         else:
             logger.error("Connection lost to node(address=%s, port=%d, node_uuid=%s): %s",
-                         self.host, self.port, self.uuid, err)
+                         self.host, self.port, self.uuid, err, exc_info=True)
 
 
 class Connection(BaseConnection):
@@ -297,8 +297,8 @@ class Connection(BaseConnection):
             self._socket.sendall(data, **kwargs)
         except connection_errors as e:
             self.failed = True
-            self._on_connection_lost(e)
             if reconnect:
+                self._on_connection_lost(e)
                 self.reconnect()
             raise e
 
@@ -327,8 +327,8 @@ class Connection(BaseConnection):
                 bytes_total_received += bytes_received
             except connection_errors as e:
                 self.failed = True
-                self._on_connection_lost(e)
                 if reconnect:
+                    self._on_connection_lost(e)
                     self.reconnect()
                 raise e
 
@@ -362,8 +362,7 @@ class Connection(BaseConnection):
             try:
                 self._socket.shutdown(socket.SHUT_RDWR)
                 self._socket.close()
-            except connection_errors as e:
-                self._on_connection_lost(e, expected=True)
+            except connection_errors:
                 pass
-
+            self._on_connection_lost(expected=True)
             self._socket = None

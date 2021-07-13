@@ -206,7 +206,6 @@ class Query:
                 response = stream.read_ctype(response_ctype, direction=READ_BACKWARD)
 
             result = self.__post_process_response(conn, response_struct, response)
-
             if result.status == 0:
                 result.value = await response_struct.to_python_async(response)
             self._on_query_finished(conn, result=result)
