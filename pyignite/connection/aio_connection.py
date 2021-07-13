@@ -33,7 +33,7 @@ from collections import OrderedDict
 from typing import Union
 
 from pyignite.constants import PROTOCOLS, PROTOCOL_BYTE_ORDER
-from pyignite.exceptions import HandshakeError, SocketError, connection_errors
+from pyignite.exceptions import HandshakeError, SocketError, connection_errors, AuthenticationError
 from .bitmask_feature import BitmaskFeature
 from .connection import BaseConnection
 
@@ -68,7 +68,7 @@ class BaseProtocol(asyncio.Protocol):
                 hs_response = self.__parse_handshake(packet, self._conn.client)
                 self._handshake_fut.set_result(hs_response)
             else:
-                self._conn.on_message(packet)
+                self._conn.process_message(packet)
             self._buffer = self._buffer[packet_sz:len(self._buffer)]
 
     def __has_full_response(self):
@@ -84,7 +84,7 @@ class BaseProtocol(asyncio.Protocol):
         connected = self._handshake_fut.done()
         if not connected:
             self._handshake_fut.set_exception(exc)
-        self._conn.on_connection_lost(exc, connected)
+        self._conn.process_connection_lost(exc, connected)
 
     @staticmethod
     def __send_handshake(transport, conn):
@@ -177,38 +177,42 @@ class AioConnection(BaseConnection):
             self.client.protocol_context = ProtocolContext(max(PROTOCOLS), BitmaskFeature.all_supported())
 
         try:
+            self._on_handshake_start()
             result = await self._connect_version()
         except HandshakeError as e:
             if e.expected_version in PROTOCOLS:
                 self.client.protocol_context.version = e.expected_version
                 result = await self._connect_version()
             else:
+                self._on_handshake_fail(e)
                 raise e
-        except connection_errors:
+        except AuthenticationError as e:
+            self._on_handshake_fail(e)
+            raise e
+        except connection_errors as e:
             # restore undefined protocol version
             if detecting_protocol:
                 self.client.protocol_context = None
-            raise
+            self._on_handshake_fail(e)
+            raise e
 
-        # connection is ready for end user
-        features = BitmaskFeature.from_array(result.get('features', None))
-        self.client.protocol_context.features = features
-        self.uuid = result.get('node_uuid', None)  # version-specific (1.4+)
-        self.failed = False
+        self._on_handshake_success(result)
 
-    def on_connection_lost(self, error, reconnect=False):
+    def process_connection_lost(self, err, reconnect=False):
         self.failed = True
         for _, fut in self._pending_reqs.items():
-            fut.set_exception(error)
+            fut.set_exception(err)
         self._pending_reqs.clear()
 
         if self._transport_closed_fut and not self._transport_closed_fut.done():
             self._transport_closed_fut.set_result(None)
 
+        self._on_connection_lost(err, self._closed)
+
         if reconnect and not self._closed:
             self._loop.create_task(self._reconnect())
 
-    def on_message(self, data):
+    def process_message(self, data):
         req_id = int.from_bytes(data[4:12], byteorder=PROTOCOL_BYTE_ORDER, signed=True)
         if req_id in self._pending_reqs:
             self._pending_reqs[req_id].set_result(data)

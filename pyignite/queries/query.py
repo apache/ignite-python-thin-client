@@ -14,6 +14,9 @@
 # limitations under the License.
 
 import ctypes
+import inspect
+import logging
+import time
 from io import SEEK_CUR
 
 import attr
@@ -21,8 +24,11 @@ import attr
 from pyignite.api.result import APIResult
 from pyignite.connection import Connection, AioConnection
 from pyignite.constants import MAX_LONG, RHF_TOPOLOGY_CHANGED
+from pyignite.queries import op_codes
 from pyignite.queries.response import Response
 from pyignite.stream import AioBinaryStream, BinaryStream, READ_BACKWARD
+
+logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 
 
 def query_perform(query_struct, conn, post_process_fun=None, **kwargs):
@@ -54,6 +60,18 @@ def _get_query_id():
     return _QUERY_COUNTER
 
 
+_OP_CODES = {code: name for name, code in inspect.getmembers(op_codes) if name.startswith('OP_')}
+
+
+def _get_op_code_name(code):
+    global _OP_CODES
+    return _OP_CODES.get(code)
+
+
+def _sec_to_millis(secs):
+    return int(secs * 1000)
+
+
 @attr.s
 class Query:
     op_code = attr.ib(type=int)
@@ -61,6 +79,7 @@ class Query:
     query_id = attr.ib(type=int)
     response_type = attr.ib(type=type(Response), default=Response)
     _query_c_type = None
+    _start_ts = 0.0
 
     @query_id.default
     def _set_query_id(self):
@@ -134,22 +153,28 @@ class Query:
         :return: instance of :class:`~pyignite.api.result.APIResult` with raw
          value (may undergo further processing in API functions).
         """
-        with BinaryStream(conn.client) as stream:
-            self.from_python(stream, query_params)
-            response_data = conn.request(stream.getvalue())
+        try:
+            self._on_query_started(conn)
 
-        response_struct = self.response_type(protocol_context=conn.protocol_context,
-                                             following=response_config, **kwargs)
+            with BinaryStream(conn.client) as stream:
+                self.from_python(stream, query_params)
+                response_data = conn.request(stream.getvalue())
 
-        with BinaryStream(conn.client, response_data) as stream:
-            response_ctype = response_struct.parse(stream)
-            response = stream.read_ctype(response_ctype, direction=READ_BACKWARD)
+            response_struct = self.response_type(protocol_context=conn.protocol_context,
+                                                 following=response_config, **kwargs)
 
-        result = self.__post_process_response(conn, response_struct, response)
+            with BinaryStream(conn.client, response_data) as stream:
+                response_ctype = response_struct.parse(stream)
+                response = stream.read_ctype(response_ctype, direction=READ_BACKWARD)
 
-        if result.status == 0:
-            result.value = response_struct.to_python(response)
-        return result
+            result = self.__post_process_response(conn, response_struct, response)
+            if result.status == 0:
+                result.value = response_struct.to_python(response)
+            self._on_query_finished(conn, result=result)
+            return result
+        except Exception as e:
+            self._on_query_finished(conn, err=e)
+            raise e
 
     async def perform_async(
         self, conn: AioConnection, query_params: dict = None,
@@ -166,22 +191,29 @@ class Query:
         :return: instance of :class:`~pyignite.api.result.APIResult` with raw
          value (may undergo further processing in API functions).
         """
-        with AioBinaryStream(conn.client) as stream:
-            await self.from_python_async(stream, query_params)
-            data = await conn.request(self.query_id, stream.getvalue())
+        try:
+            self._on_query_started(conn)
 
-        response_struct = self.response_type(protocol_context=conn.protocol_context,
-                                             following=response_config, **kwargs)
+            with AioBinaryStream(conn.client) as stream:
+                await self.from_python_async(stream, query_params)
+                data = await conn.request(self.query_id, stream.getvalue())
 
-        with AioBinaryStream(conn.client, data) as stream:
-            response_ctype = await response_struct.parse_async(stream)
-            response = stream.read_ctype(response_ctype, direction=READ_BACKWARD)
+            response_struct = self.response_type(protocol_context=conn.protocol_context,
+                                                 following=response_config, **kwargs)
 
-        result = self.__post_process_response(conn, response_struct, response)
+            with AioBinaryStream(conn.client, data) as stream:
+                response_ctype = await response_struct.parse_async(stream)
+                response = stream.read_ctype(response_ctype, direction=READ_BACKWARD)
 
-        if result.status == 0:
-            result.value = await response_struct.to_python_async(response)
-        return result
+            result = self.__post_process_response(conn, response_struct, response)
+
+            if result.status == 0:
+                result.value = await response_struct.to_python_async(response)
+            self._on_query_finished(conn, result=result)
+            return result
+        except Exception as e:
+            self._on_query_finished(conn, err=e)
+            raise e
 
     @staticmethod
     def __post_process_response(conn, response_struct, response):
@@ -195,6 +227,26 @@ class Query:
 
         # build result
         return APIResult(response)
+
+    def _on_query_started(self, conn):
+        if logger.isEnabledFor(logging.DEBUG):
+            self._start_ts = time.monotonic()
+            logger.debug("Start query(query_id=%d, op_type=%s, host=%s, port=%d, node_id=%s)",
+                         self.query_id, _get_op_code_name(self.op_code), conn.host, conn.port, conn.uuid)
+
+    def _on_query_finished(self, conn, result=None, err=None):
+        if logger.isEnabledFor(logging.DEBUG):
+            dur_ms = _sec_to_millis(time.monotonic() - self._start_ts)
+            if result and result.status != 0:
+                err = result.message
+            if err:
+                logger.debug("Failed to perform query(query_id=%d, op_type=%s, host=%s, port=%d, node_id=%s) "
+                             "in %.3f ms: %s", self.query_id, _get_op_code_name(self.op_code),
+                             conn.host, conn.port, conn.uuid, dur_ms, err)
+            else:
+                logger.debug("Finished query(query_id=%d, op_type=%s, host=%s, port=%d, node_id=%s) "
+                             "successfully in %.3f ms", self.query_id, _get_op_code_name(self.op_code),
+                             conn.host, conn.port, conn.uuid, dur_ms)
 
 
 class ConfigQuery(Query):
