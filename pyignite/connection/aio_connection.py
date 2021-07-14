@@ -189,7 +189,7 @@ class AioConnection(BaseConnection):
         except AuthenticationError as e:
             self._on_handshake_fail(e)
             raise e
-        except connection_errors as e:
+        except Exception as e:
             # restore undefined protocol version
             if detecting_protocol:
                 self.client.protocol_context = None

@@ -115,7 +115,7 @@ class BaseConnection:
         if isinstance(err, AuthenticationError):
             logger.error("Authentication failed while connecting to node(address=%s, port=%d): %s",
                          self.host, self.port, err)
-        if isinstance(err, connection_errors):
+        else:
             logger.error("Failed to perform handshake, connection to node(address=%s, port=%d) "
                          "with protocol context %s failed: %s",
                          self.host, self.port, self.client.protocol_context, err, exc_info=True)
@@ -125,8 +125,8 @@ class BaseConnection:
             logger.debug("Connection closed to node(address=%s, port=%d, node_uuid=%s)",
                          self.host, self.port, self.uuid)
         else:
-            logger.error("Connection lost to node(address=%s, port=%d, node_uuid=%s): %s",
-                         self.host, self.port, self.uuid, err, exc_info=True)
+            logger.info("Connection lost to node(address=%s, port=%d, node_uuid=%s): %s",
+                        self.host, self.port, self.uuid, err)
 
 
 class Connection(BaseConnection):
@@ -215,7 +215,7 @@ class Connection(BaseConnection):
         except AuthenticationError as e:
             self._on_handshake_fail(e)
             raise e
-        except connection_errors as e:
+        except Exception as e:
             # restore undefined protocol version
             if detecting_protocol:
                 self.client.protocol_context = None
