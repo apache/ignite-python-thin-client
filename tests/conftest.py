@@ -13,8 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import asyncio
+import logging
+import sys
 
 import pytest
+
+logger = logging.getLogger('pyignite')
+logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(stream=sys.stdout)
+handler.setFormatter(
+    logging.Formatter('%(asctime)s %(name)s %(levelname)s %(message)s')
+)
+logger.addHandler(handler)
 
 
 @pytest.fixture(autouse=True)

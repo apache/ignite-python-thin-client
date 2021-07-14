@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 from collections import OrderedDict
 import socket
 from typing import Union
@@ -27,6 +28,8 @@ from .ssl import wrap, check_ssl_params
 from ..stream import BinaryStream
 
 CLIENT_STATUS_AUTH_FAILURE = 2000
+
+logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 
 
 class BaseConnection:
@@ -78,20 +81,52 @@ class BaseConnection:
         return self.client.protocol_context
 
     def _process_handshake_error(self, response):
-        error_text = f'Handshake error: {response.message}'
         # if handshake fails for any reason other than protocol mismatch
         # (i.e. authentication error), server version is 0.0.0
+        if response.client_status == CLIENT_STATUS_AUTH_FAILURE:
+            raise AuthenticationError(response.message)
+
         protocol_version = self.client.protocol_context.version
         server_version = (response.version_major, response.version_minor, response.version_patch)
-
+        error_text = f'Handshake error: {response.message}'
         if any(server_version):
             error_text += f' Server expects binary protocol version ' \
                           f'{server_version[0]}.{server_version[1]}.{server_version[2]}. ' \
                           f'Client provides ' \
                           f'{protocol_version[0]}.{protocol_version[1]}.{protocol_version[2]}.'
-        elif response.client_status == CLIENT_STATUS_AUTH_FAILURE:
-            raise AuthenticationError(error_text)
         raise HandshakeError(server_version, error_text)
+
+    def _on_handshake_start(self):
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Connecting to node(address=%s, port=%d) with protocol context %s",
+                         self.host, self.port, self.client.protocol_context)
+
+    def _on_handshake_success(self, result):
+        features = BitmaskFeature.from_array(result.get('features', None))
+        self.client.protocol_context.features = features
+        self.uuid = result.get('node_uuid', None)  # version-specific (1.4+)
+        self.failed = False
+
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Connected to node(address=%s, port=%d, node_uuid=%s) with protocol context %s",
+                         self.host, self.port, self.uuid, self.client.protocol_context)
+
+    def _on_handshake_fail(self, err):
+        if isinstance(err, AuthenticationError):
+            logger.error("Authentication failed while connecting to node(address=%s, port=%d): %s",
+                         self.host, self.port, err)
+        else:
+            logger.error("Failed to perform handshake, connection to node(address=%s, port=%d) "
+                         "with protocol context %s failed: %s",
+                         self.host, self.port, self.client.protocol_context, err, exc_info=True)
+
+    def _on_connection_lost(self, err=None, expected=False):
+        if expected and logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Connection closed to node(address=%s, port=%d, node_uuid=%s)",
+                         self.host, self.port, self.uuid)
+        else:
+            logger.info("Connection lost to node(address=%s, port=%d, node_uuid=%s): %s",
+                        self.host, self.port, self.uuid, err)
 
 
 class Connection(BaseConnection):
@@ -168,24 +203,26 @@ class Connection(BaseConnection):
             self.client.protocol_context = ProtocolContext(max(PROTOCOLS), BitmaskFeature.all_supported())
 
         try:
+            self._on_handshake_start()
             result = self._connect_version()
         except HandshakeError as e:
             if e.expected_version in PROTOCOLS:
                 self.client.protocol_context.version = e.expected_version
                 result = self._connect_version()
             else:
+                self._on_handshake_fail(e)
                 raise e
-        except connection_errors:
+        except AuthenticationError as e:
+            self._on_handshake_fail(e)
+            raise e
+        except Exception as e:
             # restore undefined protocol version
             if detecting_protocol:
                 self.client.protocol_context = None
-            raise
+            self._on_handshake_fail(e)
+            raise e
 
-        # connection is ready for end user
-        features = BitmaskFeature.from_array(result.get('features', None))
-        self.client.protocol_context.features = features
-        self.uuid = result.get('node_uuid', None)  # version-specific (1.4+)
-        self.failed = False
+        self._on_handshake_success(result)
 
     def _connect_version(self) -> Union[dict, OrderedDict]:
         """
@@ -258,11 +295,12 @@ class Connection(BaseConnection):
 
         try:
             self._socket.sendall(data, **kwargs)
-        except connection_errors:
+        except connection_errors as e:
             self.failed = True
             if reconnect:
+                self._on_connection_lost(e)
                 self.reconnect()
-            raise
+            raise e
 
     def recv(self, flags=None, reconnect=True) -> bytearray:
         """
@@ -287,11 +325,12 @@ class Connection(BaseConnection):
                 if bytes_received == 0:
                     raise SocketError('Connection broken.')
                 bytes_total_received += bytes_received
-            except connection_errors:
+            except connection_errors as e:
                 self.failed = True
                 if reconnect:
+                    self._on_connection_lost(e)
                     self.reconnect()
-                raise
+                raise e
 
             if bytes_total_received < 4:
                 continue
@@ -325,5 +364,5 @@ class Connection(BaseConnection):
                 self._socket.close()
             except connection_errors:
                 pass
-
+            self._on_connection_lost(expected=True)
             self._socket = None
