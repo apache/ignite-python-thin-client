@@ -37,6 +37,9 @@ class ProtocolContext:
             self.version == other.version and \
             self.features == other.features
 
+    def __str__(self):
+        return f'ProtocolContext(version={self._version}, features={self._features})'
+
     def _ensure_consistency(self):
         if not self.is_feature_flags_supported():
             self._features = None
