@@ -18,7 +18,9 @@ import re
 import pytest
 
 from pyignite import Client, AioClient
+from pyignite import monitoring
 from pyignite.exceptions import AuthenticationError
+from tests.security.conftest import AccumulatingConnectionListener
 from tests.util import start_ignite_gen, clear_ignite_work_dir
 
 DEFAULT_IGNITE_USERNAME = 'ignite'
@@ -44,23 +46,29 @@ def cleanup():
 
 def test_auth_success(with_ssl, ssl_params, caplog):
     ssl_params['use_ssl'] = with_ssl
-    client = Client(username=DEFAULT_IGNITE_USERNAME, password=DEFAULT_IGNITE_PASSWORD, **ssl_params)
+    listener = AccumulatingConnectionListener()
+    client = Client(username=DEFAULT_IGNITE_USERNAME, password=DEFAULT_IGNITE_PASSWORD,
+                    event_listeners=[listener], **ssl_params)
     with caplog.at_level(logger='pyignite', level=logging.DEBUG):
         with client.connect("127.0.0.1", 10801):
             assert all(node.alive for node in client._nodes)
 
         __assert_successful_connect_log(caplog)
+        __assert_successful_connect_events(listener)
 
 
 @pytest.mark.asyncio
 async def test_auth_success_async(with_ssl, ssl_params, caplog):
     ssl_params['use_ssl'] = with_ssl
-    client = AioClient(username=DEFAULT_IGNITE_USERNAME, password=DEFAULT_IGNITE_PASSWORD, **ssl_params)
+    listener = AccumulatingConnectionListener()
+    client = AioClient(username=DEFAULT_IGNITE_USERNAME, password=DEFAULT_IGNITE_PASSWORD,
+                       event_listeners=[listener], **ssl_params)
     with caplog.at_level(logger='pyignite', level=logging.DEBUG):
         async with client.connect("127.0.0.1", 10801):
             assert all(node.alive for node in client._nodes)
 
         __assert_successful_connect_log(caplog)
+        __assert_successful_connect_events(listener)
 
 
 def __assert_successful_connect_log(caplog):
@@ -68,6 +76,19 @@ def __assert_successful_connect_log(caplog):
     assert any(re.match(r'Connected to node\(address=127.0.0.1,\s+port=10801', r.message) for r in caplog.records)
     assert any(re.match(r'Connection closed to node\(address=127.0.0.1,\s+port=10801', r.message)
                for r in caplog.records)
+
+
+def __assert_successful_connect_events(listener):
+    event_classes = (monitoring.HandshakeStartEvent, monitoring.HandshakeSuccessEvent,
+                     monitoring.ConnectionClosedEvent)
+
+    for cls in event_classes:
+        any(isinstance(ev, cls) for ev in listener.events)
+
+    for ev in listener.events:
+        if isinstance(ev, event_classes):
+            assert ev.host == "127.0.0.1"
+            assert ev.port == 10801
 
 
 auth_failed_params = [
@@ -83,13 +104,15 @@ auth_failed_params = [
 )
 def test_auth_failed(username, password, with_ssl, ssl_params, caplog):
     ssl_params['use_ssl'] = with_ssl
-
+    listener = AccumulatingConnectionListener()
     with pytest.raises(AuthenticationError):
-        client = Client(username=username, password=password, **ssl_params)
+        client = Client(username=username, password=password,
+                        event_listeners=[listener], **ssl_params)
         with client.connect("127.0.0.1", 10801):
             pass
 
-        __assert_auth_failed_log(caplog)
+    __assert_auth_failed_log(caplog)
+    __assert_auth_failed_listener(listener)
 
 
 @pytest.mark.parametrize(
@@ -99,15 +122,28 @@ def test_auth_failed(username, password, with_ssl, ssl_params, caplog):
 @pytest.mark.asyncio
 async def test_auth_failed_async(username, password, with_ssl, ssl_params, caplog):
     ssl_params['use_ssl'] = with_ssl
-
+    listener = AccumulatingConnectionListener()
     with pytest.raises(AuthenticationError):
-        client = AioClient(username=username, password=password, **ssl_params)
+        client = AioClient(username=username, password=password,
+                           event_listeners=[listener], **ssl_params)
         async with client.connect("127.0.0.1", 10801):
             pass
 
-        __assert_auth_failed_log(caplog)
+    __assert_auth_failed_log(caplog)
+    __assert_auth_failed_listener(listener)
 
 
 def __assert_auth_failed_log(caplog):
     pattern = r'Authentication failed while connecting to node\(address=127.0.0.1,\s+port=10801'
-    assert any(re.match(pattern, r.message) and r.levelname == logging.ERROR for r in caplog.records)
+    assert any(re.match(pattern, r.message) and r.levelname == logging.getLevelName(logging.ERROR)
+               for r in caplog.records)
+
+
+def __assert_auth_failed_listener(listener):
+    found = False
+    for ev in listener.events:
+        if isinstance(ev, monitoring.AuthenticationFailedEvent):
+            found = True
+            assert ev.host == '127.0.0.1'
+            assert ev.port == 10801
+    assert found

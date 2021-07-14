@@ -16,6 +16,7 @@ import os
 
 import pytest
 
+from pyignite import monitoring
 from tests.util import get_test_dir
 
 
@@ -47,3 +48,26 @@ def __create_ssl_param(with_password=False):
             'ssl_certfile': cert,
             'ssl_ca_certfile': cert
         }
+
+
+class AccumulatingConnectionListener(monitoring.ConnectionEventListener):
+    def __init__(self):
+        self.events = []
+
+    def on_handshake_start(self, event):
+        self.events.append(event)
+
+    def on_handshake_success(self, event):
+        self.events.append(event)
+
+    def on_handshake_fail(self, event):
+        self.events.append(event)
+
+    def on_authentication_fail(self, event):
+        self.events.append(event)
+
+    def on_connection_closed(self, event):
+        self.events.append(event)
+
+    def on_connection_lost(self, event):
+        self.events.append(event)

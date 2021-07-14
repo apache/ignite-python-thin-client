@@ -44,7 +44,7 @@ from collections import defaultdict, OrderedDict
 import random
 import re
 from itertools import chain
-from typing import Iterable, Type, Union, Any, Dict, Optional
+from typing import Iterable, Type, Union, Any, Dict, Optional, Sequence
 
 from .api import cache_get_node_partitions
 from .api.binary import get_binary_type, put_binary_type
@@ -66,6 +66,7 @@ from .utils import (
     get_field_by_id, unsigned
 )
 from .binary import GenericObjectMeta
+from .monitoring import _EventListeners
 
 
 __all__ = ['Client']
@@ -76,7 +77,8 @@ class BaseClient:
     _identifier = re.compile(r'[^0-9a-zA-Z_.+$]', re.UNICODE)
     _ident_start = re.compile(r'^[^a-zA-Z_]+', re.UNICODE)
 
-    def __init__(self, compact_footer: bool = None, partition_aware: bool = False, **kwargs):
+    def __init__(self, compact_footer: bool = None, partition_aware: bool = False,
+                 event_listeners: Optional[Sequence] = None, **kwargs):
         self._compact_footer = compact_footer
         self._partition_aware = partition_aware
         self._connection_args = kwargs
@@ -87,6 +89,7 @@ class BaseClient:
         self.affinity_version = (0, 0)
         self._affinity = {'version': self.affinity_version, 'partition_mapping': defaultdict(dict)}
         self._protocol_context = None
+        self._event_listeners = _EventListeners(event_listeners)
 
     @property
     def protocol_context(self):
@@ -338,7 +341,8 @@ class Client(BaseClient):
     Synchronous Client implementation.
     """
 
-    def __init__(self, compact_footer: bool = None, partition_aware: bool = True, **kwargs):
+    def __init__(self, compact_footer: bool = None, partition_aware: bool = True,
+                 event_listeners: Optional[Sequence] = None, **kwargs):
         """
         Initialize client.
 
@@ -349,9 +353,10 @@ class Client(BaseClient):
          https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#schema
         :param partition_aware: (optional) try to calculate the exact data
          placement from the key before to issue the key operation to the
-         server node, `True` by default.
+         server node, `True` by default,
+        :param event_listeners: (optional) event listeners.
         """
-        super().__init__(compact_footer, partition_aware, **kwargs)
+        super().__init__(compact_footer, partition_aware, event_listeners, **kwargs)
 
     def connect(self, *args):
         """
