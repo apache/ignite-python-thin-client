@@ -387,7 +387,6 @@ class Client(BaseClient):
                         self._current_node = i
 
             except connection_errors:
-                conn.failed = True
                 if self.partition_aware:
                     # schedule the reconnection
                     conn.reconnect()
@@ -570,7 +569,7 @@ class Client(BaseClient):
         """
         for _ in range(AFFINITY_RETRIES or 1):
             result = cache_get_node_partitions(conn, caches)
-            if result.status == 0 and result.value['partition_mapping']:
+            if result.status == 0:
                 break
             time.sleep(AFFINITY_DELAY)
 
@@ -613,9 +612,9 @@ class Client(BaseClient):
 
                 self._update_affinity(full_affinity)
 
-                for conn in self._nodes:
-                    if not conn.alive:
-                        conn.reconnect()
+                for node in self._nodes:
+                    if not node.alive:
+                        node.reconnect()
 
             c_id = cache.cache_id if isinstance(cache, BaseCache) else cache_id(cache)
             parts = self._cache_partition_mapping(c_id).get('number_of_partitions')

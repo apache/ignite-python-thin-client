@@ -113,4 +113,5 @@ def __assert_handshake_failed_listener(listener):
             found = True
             assert ev.host == '127.0.0.1'
             assert ev.port == 10801
+            assert ev.error_msg
     assert found

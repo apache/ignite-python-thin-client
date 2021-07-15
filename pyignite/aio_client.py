@@ -101,9 +101,8 @@ class AioClient(BaseClient):
 
                         # do not try to open more nodes
                         self._current_node = i
-
                 except connection_errors:
-                    conn.failed = True
+                    pass
 
             self._nodes.append(conn)
 
@@ -303,7 +302,7 @@ class AioClient(BaseClient):
         """
         for _ in range(AFFINITY_RETRIES or 1):
             result = await cache_get_node_partitions_async(conn, caches)
-            if result.status == 0 and result.value['partition_mapping']:
+            if result.status == 0:
                 break
             await asyncio.sleep(AFFINITY_DELAY)
 
@@ -343,7 +342,7 @@ class AioClient(BaseClient):
 
                             asyncio.ensure_future(
                                 asyncio.gather(
-                                    *[conn.reconnect() for conn in self._nodes if not conn.alive],
+                                    *[node.reconnect() for node in self._nodes if not node.alive],
                                     return_exceptions=True
                                 )
                             )
