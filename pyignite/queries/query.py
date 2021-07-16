@@ -253,7 +253,7 @@ class Query:
                 err = result.message
             if err:
                 logger.debug("Failed to perform query(query_id=%d, op_type=%s, host=%s, port=%d, node_id=%s) "
-                             "in %.3f ms: %s", self.query_id, _get_op_code_name(self.op_code),
+                             "in %d ms: %s", self.query_id, _get_op_code_name(self.op_code),
                              conn.host, conn.port, conn.uuid, dur_ms, err)
                 if self._enabled_query_listener(conn):
                     self._event_listener(conn).publish_query_fail(conn.host, conn.port, conn.uuid, self.query_id,
@@ -261,7 +261,7 @@ class Query:
                                                                   dur_ms, err)
             else:
                 logger.debug("Finished query(query_id=%d, op_type=%s, host=%s, port=%d, node_id=%s) "
-                             "successfully in %.3f ms", self.query_id, _get_op_code_name(self.op_code),
+                             "successfully in %d ms", self.query_id, _get_op_code_name(self.op_code),
                              conn.host, conn.port, conn.uuid, dur_ms)
                 if self._enabled_query_listener(conn):
                     self._event_listener(conn).publish_query_success(conn.host, conn.port, conn.uuid, self.query_id,
