@@ -301,6 +301,55 @@ async def test_replicated_cache_operation_routed_to_random_node_async(async_repl
     await verify_random_node(async_replicated_cache)
 
 
+def test_replicated_cache_operation_not_routed_to_failed_node(replicated_cache):
+    srv = start_ignite(idx=4)
+    try:
+        while True:
+            replicated_cache.put(1, 1)
+
+            if requests.pop() == 4:
+                break
+
+        kill_process_tree(srv.pid)
+
+        num_failures = 0
+        for i in range(100):
+            # Request may fail one time, because query can be requested before affinity update or connection
+            # lost will be detected.
+            try:
+                replicated_cache.put(1, 1)
+            except:  # noqa 13
+                num_failures += 1
+                assert num_failures <= 1, "Expected no more than 1 failure."
+    finally:
+        kill_process_tree(srv.pid)
+
+
+@pytest.mark.asyncio
+async def test_replicated_cache_operation_not_routed_to_failed_node_async(async_replicated_cache):
+    srv = start_ignite(idx=4)
+    try:
+        while True:
+            await async_replicated_cache.put(1, 1)
+
+            if requests.pop() == 4:
+                break
+
+        kill_process_tree(srv.pid)
+
+        num_failures = 0
+        for i in range(100):
+            # Request may fail one time, because query can be requested before affinity update or connection
+            # lost will be detected.
+            try:
+                await async_replicated_cache.put(1, 1)
+            except:  # noqa 13
+                num_failures += 1
+                assert num_failures <= 1, "Expected no more than 1 failure."
+    finally:
+        kill_process_tree(srv.pid)
+
+
 def verify_random_node(cache):
     key = 1
 

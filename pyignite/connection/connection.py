@@ -387,6 +387,6 @@ class Connection(BaseConnection):
                 self._socket.close()
             except connection_errors:
                 pass
-            if not on_reconnect:
+            if not on_reconnect and not self.failed:
                 self._on_connection_lost(expected=True)
             self._socket = None

@@ -31,3 +31,4 @@ of `pyignite`, intended for end users.
     datatypes/parsers
     datatypes/cache_props
     Exceptions <source/pyignite.exceptions>
+    Monitoring and handling events <source/pyignite.monitoring>

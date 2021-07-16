@@ -13,16 +13,8 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 
-pyignite.connection package
+pyignite.connection.protocol_context package
 ===========================
 
-.. automodule:: pyignite.connection
+.. automodule:: pyignite.connection.protocol_context
     :members:
-    :undoc-members:
-    :show-inheritance:
-
-Submodules
-----------
-
-.. toctree::
-    pyignite.connection.protocol_context
