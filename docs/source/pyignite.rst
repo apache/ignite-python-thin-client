@@ -44,4 +44,5 @@ Submodules
     pyignite.transaction
     pyignite.cursors
     pyignite.exceptions
+    pyignite.monitoring
 

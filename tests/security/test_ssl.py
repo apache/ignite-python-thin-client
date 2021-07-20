@@ -17,8 +17,9 @@ import re
 
 import pytest
 
-from pyignite import Client, AioClient
+from pyignite import Client, AioClient, monitoring
 from pyignite.exceptions import ReconnectError
+from tests.security.conftest import AccumulatingConnectionListener
 from tests.util import start_ignite_gen, get_or_create_cache, get_or_create_cache_async
 
 
@@ -76,25 +77,41 @@ invalid_params = [
 
 @pytest.mark.parametrize('invalid_ssl_params', invalid_params)
 def test_connection_error_with_incorrect_config(invalid_ssl_params, caplog):
+    listener = AccumulatingConnectionListener()
     with pytest.raises(ReconnectError):
-        client = Client(**invalid_ssl_params)
+        client = Client(event_listeners=[listener], **invalid_ssl_params)
         with client.connect([("127.0.0.1", 10801)]):
             pass
 
-        __assert_handshake_failed_log(caplog)
+    __assert_handshake_failed_log(caplog)
+    __assert_handshake_failed_listener(listener)
 
 
 @pytest.mark.parametrize('invalid_ssl_params', invalid_params)
 @pytest.mark.asyncio
 async def test_connection_error_with_incorrect_config_async(invalid_ssl_params, caplog):
+    listener = AccumulatingConnectionListener()
     with pytest.raises(ReconnectError):
-        client = AioClient(**invalid_ssl_params)
+        client = AioClient(event_listeners=[listener], **invalid_ssl_params)
         async with client.connect([("127.0.0.1", 10801)]):
             pass
 
-        __assert_handshake_failed_log(caplog)
+    __assert_handshake_failed_log(caplog)
+    __assert_handshake_failed_listener(listener)
 
 
 def __assert_handshake_failed_log(caplog):
     pattern = r'Failed to perform handshake, connection to node\(address=127.0.0.1,\s+port=10801.*failed:'
-    assert any(re.match(pattern, r.message) and r.levelname == logging.ERROR for r in caplog.records)
+    assert any(re.match(pattern, r.message) and r.levelname == logging.getLevelName(logging.ERROR)
+               for r in caplog.records)
+
+
+def __assert_handshake_failed_listener(listener):
+    found = False
+    for ev in listener.events:
+        if isinstance(ev, monitoring.HandshakeFailedEvent):
+            found = True
+            assert ev.host == '127.0.0.1'
+            assert ev.port == 10801
+            assert ev.error_msg
+    assert found

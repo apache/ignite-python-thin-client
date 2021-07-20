@@ -44,6 +44,9 @@ class ProtocolContext:
         if not self.is_feature_flags_supported():
             self._features = None
 
+    def copy(self):
+        return ProtocolContext(self.version, self.features)
+
     @property
     def version(self):
         return getattr(self, '_version', None)
