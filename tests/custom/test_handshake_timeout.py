@@ -55,7 +55,7 @@ class FakeIgniteProtocol(asyncio.Protocol):
         return struct.unpack('<lbhhhb', buf)
 
     def data_received(self, data):
-        logger.debug(f'Data received: \'{data if data else ""}\'')
+        logger.debug(f'Data received: {data if data else b""}')
 
         if self._server.do_handshake and not self._done_handshake:
             self._buf += data
@@ -63,14 +63,17 @@ class FakeIgniteProtocol(asyncio.Protocol):
             if len(self._buf) < 12:
                 return
 
-            logger.debug("Parsing handshake")
             req = self._parse_handshake_request(self._buf[0:12])
 
             if req[1] == 1 and (req[2], req[3], req[4]) > (1, 3, 0):
-                self._transport.write(self._handshake_response(True))
+                response = self._handshake_response(True)
+                logger.debug(f'Writing handshake response {response}')
+                self._transport.write(response)
                 self._transport.close()
             else:
-                self._transport.write(self._handshake_response(False))
+                response = self._handshake_response(False)
+                logger.debug(f'Writing handshake response {response}')
+                self._transport.write(response)
                 self._done_handshake = True
             self._buf = bytearray()
 
