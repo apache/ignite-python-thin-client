@@ -231,7 +231,7 @@ class AioConnection(BaseConnection):
                                                                 host=self.host, port=self.port, ssl=ssl_context)
         try:
             hs_response = await asyncio.wait_for(handshake_fut, self.handshake_timeout)
-        except asyncio.exceptions.TimeoutError:
+        except asyncio.TimeoutError:
             raise ConnectionError('timed out')
 
         if hs_response.op_code == 0:

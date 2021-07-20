@@ -87,7 +87,6 @@ class FakeIgniteServer:
 
     async def start(self):
         self.server = await self.loop.create_server(lambda: FakeIgniteProtocol(self), DEFAULT_HOST, DEFAULT_PORT)
-        await self.server.start_serving()
 
     def add_client(self, client):
         self.clients.append(client)
