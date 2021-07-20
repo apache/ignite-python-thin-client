@@ -65,6 +65,9 @@ class AioClient(BaseClient):
         """
         Initialize client.
 
+        For the use of the SSL-related parameters see
+        https://docs.python.org/3/library/ssl.html#ssl-certificates.
+
         :param compact_footer: (optional) use compact (True, recommended) or
          full (False) schema approach when serializing Complex objects.
          Default is to use the same approach the server is using (None).
