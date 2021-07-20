@@ -73,7 +73,37 @@ class AioClient(BaseClient):
         :param partition_aware: (optional) try to calculate the exact data
          placement from the key before to issue the key operation to the
          server node, `True` by default,
-        :param event_listeners: (optional) event listeners.
+        :param event_listeners: (optional) event listeners,
+        :param handshake_timeout: (optional) sets timeout (in seconds) for performing handshake (connection)
+         with node. Default is 10.0 seconds,
+        :param use_ssl: (optional) set to True if Ignite server uses SSL
+         on its binary connector. Defaults to use SSL when username
+         and password has been supplied, not to use SSL otherwise,
+        :param ssl_version: (optional) SSL version constant from standard
+         `ssl` module. Defaults to TLS v1.2,
+        :param ssl_ciphers: (optional) ciphers to use. If not provided,
+         `ssl` default ciphers are used,
+        :param ssl_cert_reqs: (optional) determines how the remote side
+         certificate is treated:
+
+         * `ssl.CERT_NONE` − remote certificate is ignored (default),
+         * `ssl.CERT_OPTIONAL` − remote certificate will be validated,
+           if provided,
+         * `ssl.CERT_REQUIRED` − valid remote certificate is required,
+
+        :param ssl_keyfile: (optional) a path to SSL key file to identify
+         local (client) party,
+        :param ssl_keyfile_password: (optional) password for SSL key file,
+         can be provided when key file is encrypted to prevent OpenSSL
+         password prompt,
+        :param ssl_certfile: (optional) a path to ssl certificate file
+         to identify local (client) party,
+        :param ssl_ca_certfile: (optional) a path to a trusted certificate
+         or a certificate chain. Required to check the validity of the remote
+         (server-side) certificate,
+        :param username: (optional) user name to authenticate to Ignite
+         cluster,
+        :param password: (optional) password to authenticate to Ignite cluster.
         """
         super().__init__(compact_footer, partition_aware, event_listeners, **kwargs)
         self._registry_mux = asyncio.Lock()

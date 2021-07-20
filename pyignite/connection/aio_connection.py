@@ -118,11 +118,13 @@ class AioConnection(BaseConnection):
         :param client: Ignite client object,
         :param host: Ignite server node's host name or IP,
         :param port: Ignite server node's port number,
+        :param handshake_timeout: (optional) sets timeout (in seconds) for performing handshake (connection)
+         with node. Default is 10.0 seconds,
         :param use_ssl: (optional) set to True if Ignite server uses SSL
          on its binary connector. Defaults to use SSL when username
          and password has been supplied, not to use SSL otherwise,
         :param ssl_version: (optional) SSL version constant from standard
-         `ssl` module. Defaults to TLS v1.1, as in Ignite 2.5,
+         `ssl` module. Defaults to TLS v1.2,
         :param ssl_ciphers: (optional) ciphers to use. If not provided,
          `ssl` default ciphers are used,
         :param ssl_cert_reqs: (optional) determines how the remote side
@@ -227,7 +229,10 @@ class AioConnection(BaseConnection):
         handshake_fut = self._loop.create_future()
         self._transport, _ = await self._loop.create_connection(lambda: BaseProtocol(self, handshake_fut),
                                                                 host=self.host, port=self.port, ssl=ssl_context)
-        hs_response = await handshake_fut
+        try:
+            hs_response = await asyncio.wait_for(handshake_fut, self.handshake_timeout)
+        except asyncio.exceptions.TimeoutError:
+            raise ConnectionError('timed out')
 
         if hs_response.op_code == 0:
             await self.close()

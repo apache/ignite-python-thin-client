@@ -19,7 +19,7 @@ import socket
 from typing import Union
 
 from pyignite.constants import PROTOCOLS, IGNITE_DEFAULT_HOST, IGNITE_DEFAULT_PORT, PROTOCOL_BYTE_ORDER
-from pyignite.exceptions import HandshakeError, SocketError, connection_errors, AuthenticationError
+from pyignite.exceptions import HandshakeError, SocketError, connection_errors, AuthenticationError, ParameterError
 from .bitmask_feature import BitmaskFeature
 
 from .handshake import HandshakeRequest, HandshakeResponse
@@ -34,13 +34,17 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 
 class BaseConnection:
     def __init__(self, client, host: str = None, port: int = None, username: str = None, password: str = None,
-                 **ssl_params):
+                 handshake_timeout: float = 10.0, **ssl_params):
         self.client = client
+        self.handshake_timeout = handshake_timeout
         self.host = host if host else IGNITE_DEFAULT_HOST
         self.port = port if port else IGNITE_DEFAULT_PORT
         self.username = username
         self.password = password
         self.uuid = None
+
+        if handshake_timeout <= 0.0:
+            raise ParameterError("handshake_timeout should be positive")
 
         check_ssl_params(ssl_params)
 
@@ -162,8 +166,9 @@ class Connection(BaseConnection):
      * binary protocol connector. Encapsulates handshake and failover reconnection.
     """
 
-    def __init__(self, client: 'Client', host: str, port: int, timeout: float = None,
-                 username: str = None, password: str = None, **ssl_params):
+    def __init__(self, client: 'Client', host: str, port: int, username: str = None, password: str = None,
+                 timeout: float = None, handshake_timeout: float = 10.0,
+                 **ssl_params):
         """
         Initialize connection.
 
@@ -177,11 +182,13 @@ class Connection(BaseConnection):
          operation including `connect`. 0 means non-blocking mode, which is
          virtually guaranteed to fail. Can accept integer or float value.
          Default is None (blocking mode),
+        :param handshake_timeout: (optional) sets timeout (in seconds) for performing handshake (connection)
+         with node. Default is 10.0.
         :param use_ssl: (optional) set to True if Ignite server uses SSL
          on its binary connector. Defaults to use SSL when username
          and password has been supplied, not to use SSL otherwise,
         :param ssl_version: (optional) SSL version constant from standard
-         `ssl` module. Defaults to TLS v1.1, as in Ignite 2.5,
+         `ssl` module. Defaults to TLS v1.2,
         :param ssl_ciphers: (optional) ciphers to use. If not provided,
          `ssl` default ciphers are used,
         :param ssl_cert_reqs: (optional) determines how the remote side
@@ -206,7 +213,7 @@ class Connection(BaseConnection):
          cluster,
         :param password: (optional) password to authenticate to Ignite cluster.
         """
-        super().__init__(client, host, port, username, password, **ssl_params)
+        super().__init__(client, host, port, username, password, handshake_timeout, **ssl_params)
         self.timeout = timeout
         self._socket = None
 
@@ -245,6 +252,7 @@ class Connection(BaseConnection):
                 self.client.protocol_context = None
             raise e
 
+        self._socket.settimeout(self.timeout)
         self._on_handshake_success(result)
 
     def _connect_version(self) -> Union[dict, OrderedDict]:
@@ -254,7 +262,7 @@ class Connection(BaseConnection):
         """
 
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._socket.settimeout(self.timeout)
+        self._socket.settimeout(self.handshake_timeout)
         self._socket = wrap(self._socket, self.ssl_params)
         self._socket.connect((self.host, self.port))
 

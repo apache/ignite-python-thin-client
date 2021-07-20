@@ -93,7 +93,7 @@ def __assert_fail_events(client):
             assert ev.port == conn.port
             assert ev.node_uuid == str(conn.uuid if conn.uuid else '')
             assert 'Cache does not exist' in ev.err_msg
-            assert ev.duration > 0
+            assert ev.duration >= 0
 
 
 def test_query_success_events(client):
@@ -124,4 +124,4 @@ def __assert_success_events(client):
             assert ev.host == conn.host
             assert ev.port == conn.port
             assert ev.node_uuid == str(conn.uuid if conn.uuid else '')
-            assert ev.duration > 0
+            assert ev.duration >= 0
