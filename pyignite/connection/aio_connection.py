@@ -190,10 +190,10 @@ class AioConnection(BaseConnection):
             self._on_handshake_fail(e)
             raise e
         except Exception as e:
+            self._on_handshake_fail(e)
             # restore undefined protocol version
             if detecting_protocol:
                 self.client.protocol_context = None
-            self._on_handshake_fail(e)
             raise e
 
         self._on_handshake_success(result)

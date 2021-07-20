@@ -99,7 +99,9 @@ class BaseConnection:
     def _on_handshake_start(self):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Connecting to node(address=%s, port=%d) with protocol context %s",
-                         self.host, self.port, self.client.protocol_context)
+                         self.host, self.port, self.protocol_context)
+        if self._enabled_connection_listener:
+            self._connection_listener.publish_handshake_start(self.host, self.port, self.protocol_context)
 
     def _on_handshake_success(self, result):
         features = BitmaskFeature.from_array(result.get('features', None))
@@ -109,24 +111,45 @@ class BaseConnection:
 
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Connected to node(address=%s, port=%d, node_uuid=%s) with protocol context %s",
-                         self.host, self.port, self.uuid, self.client.protocol_context)
+                         self.host, self.port, self.uuid, self.protocol_context)
+        if self._enabled_connection_listener:
+            self._connection_listener.publish_handshake_success(self.host, self.port, self.protocol_context, self.uuid)
 
     def _on_handshake_fail(self, err):
+        self.failed = True
+
         if isinstance(err, AuthenticationError):
             logger.error("Authentication failed while connecting to node(address=%s, port=%d): %s",
                          self.host, self.port, err)
+            if self._enabled_connection_listener:
+                self._connection_listener.publish_authentication_fail(self.host, self.port, self.protocol_context, err)
         else:
             logger.error("Failed to perform handshake, connection to node(address=%s, port=%d) "
                          "with protocol context %s failed: %s",
-                         self.host, self.port, self.client.protocol_context, err, exc_info=True)
+                         self.host, self.port, self.protocol_context, err, exc_info=True)
+            if self._enabled_connection_listener:
+                self._connection_listener.publish_handshake_fail(self.host, self.port, self.protocol_context, err)
 
     def _on_connection_lost(self, err=None, expected=False):
-        if expected and logger.isEnabledFor(logging.DEBUG):
-            logger.debug("Connection closed to node(address=%s, port=%d, node_uuid=%s)",
-                         self.host, self.port, self.uuid)
+        if expected:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Connection closed to node(address=%s, port=%d, node_uuid=%s)",
+                             self.host, self.port, self.uuid)
+            if self._enabled_connection_listener:
+                self._connection_listener.publish_connection_closed(self.host, self.port, self.uuid)
         else:
             logger.info("Connection lost to node(address=%s, port=%d, node_uuid=%s): %s",
                         self.host, self.port, self.uuid, err)
+            if self._enabled_connection_listener:
+                self._connection_listener.publish_connection_lost(self.host, self.port, self.uuid, err)
+
+    @property
+    def _enabled_connection_listener(self):
+        return self.client._event_listeners and self.client._event_listeners.enabled_connection_listener
+
+    @property
+    def _connection_listener(self):
+        return self.client._event_listeners
 
 
 class Connection(BaseConnection):
@@ -216,10 +239,10 @@ class Connection(BaseConnection):
             self._on_handshake_fail(e)
             raise e
         except Exception as e:
+            self._on_handshake_fail(e)
             # restore undefined protocol version
             if detecting_protocol:
                 self.client.protocol_context = None
-            self._on_handshake_fail(e)
             raise e
 
         self._on_handshake_success(result)
@@ -260,7 +283,7 @@ class Connection(BaseConnection):
         if self.alive:
             return
 
-        self.close()
+        self.close(on_reconnect=True)
 
         # connect and silence the connection errors
         try:
@@ -352,7 +375,7 @@ class Connection(BaseConnection):
 
         return data
 
-    def close(self):
+    def close(self, on_reconnect=False):
         """
         Try to mark socket closed, then unlink it. This is recommended but
         not required, since sockets are automatically closed when
@@ -364,5 +387,6 @@ class Connection(BaseConnection):
                 self._socket.close()
             except connection_errors:
                 pass
-            self._on_connection_lost(expected=True)
+            if not on_reconnect and not self.failed:
+                self._on_connection_lost(expected=True)
             self._socket = None

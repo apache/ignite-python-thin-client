@@ -16,7 +16,7 @@ import asyncio
 import random
 import sys
 from itertools import chain
-from typing import Iterable, Type, Union, Any, Dict, Optional
+from typing import Iterable, Type, Union, Any, Dict, Optional, Sequence
 
 from .aio_cluster import AioCluster
 from .api import cache_get_node_partitions_async
@@ -60,7 +60,8 @@ class AioClient(BaseClient):
     Asynchronous Client implementation.
     """
 
-    def __init__(self, compact_footer: bool = None, partition_aware: bool = True, **kwargs):
+    def __init__(self, compact_footer: bool = None, partition_aware: bool = True,
+                 event_listeners: Optional[Sequence] = None, **kwargs):
         """
         Initialize client.
 
@@ -71,9 +72,10 @@ class AioClient(BaseClient):
          https://ignite.apache.org/docs/latest/binary-client-protocol/data-format#schema
         :param partition_aware: (optional) try to calculate the exact data
          placement from the key before to issue the key operation to the
-         server node, `True` by default.
+         server node, `True` by default,
+        :param event_listeners: (optional) event listeners.
         """
-        super().__init__(compact_footer, partition_aware, **kwargs)
+        super().__init__(compact_footer, partition_aware, event_listeners, **kwargs)
         self._registry_mux = asyncio.Lock()
         self._affinity_query_mux = asyncio.Lock()
 
@@ -99,9 +101,8 @@ class AioClient(BaseClient):
 
                         # do not try to open more nodes
                         self._current_node = i
-
                 except connection_errors:
-                    conn.failed = True
+                    pass
 
             self._nodes.append(conn)
 
@@ -301,7 +302,7 @@ class AioClient(BaseClient):
         """
         for _ in range(AFFINITY_RETRIES or 1):
             result = await cache_get_node_partitions_async(conn, caches)
-            if result.status == 0 and result.value['partition_mapping']:
+            if result.status == 0:
                 break
             await asyncio.sleep(AFFINITY_DELAY)
 
@@ -341,7 +342,7 @@ class AioClient(BaseClient):
 
                             asyncio.ensure_future(
                                 asyncio.gather(
-                                    *[conn.reconnect() for conn in self._nodes if not conn.alive],
+                                    *[node.reconnect() for node in self._nodes if not node.alive],
                                     return_exceptions=True
                                 )
                             )

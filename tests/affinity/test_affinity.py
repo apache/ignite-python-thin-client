@@ -36,7 +36,6 @@ from tests.util import wait_for_condition, wait_for_condition_async
 
 def test_get_node_partitions(client, caches):
     cache_ids = [cache.cache_id for cache in caches]
-    __wait_for_ready_affinity(client, cache_ids)
     mappings = __get_mappings(client, cache_ids)
     __check_mappings(mappings, cache_ids)
 
@@ -44,7 +43,6 @@ def test_get_node_partitions(client, caches):
 @pytest.mark.asyncio
 async def test_get_node_partitions_async(async_client, async_caches):
     cache_ids = [cache.cache_id for cache in async_caches]
-    await __wait_for_ready_affinity(async_client, cache_ids)
     mappings = await __get_mappings(async_client, cache_ids)
     __check_mappings(mappings, cache_ids)
 
@@ -157,6 +155,7 @@ def __create_caches_fixture(client):
         caches = []
         try:
             caches = generate_caches()
+            __wait_for_ready_affinity(client, [cache.cache_id for cache in caches])
             yield caches
         finally:
             for cache in caches:
@@ -166,6 +165,7 @@ def __create_caches_fixture(client):
         caches = []
         try:
             caches = await generate_caches()
+            await __wait_for_ready_affinity(client, [cache.cache_id for cache in caches])
             yield caches
         finally:
             await asyncio.gather(*[cache.destroy() for cache in caches])
@@ -180,6 +180,7 @@ def cache(client):
         PROP_CACHE_MODE: CacheMode.PARTITIONED,
     })
     try:
+        __wait_for_ready_affinity(client, [cache.cache_id])
         yield cache
     finally:
         cache.destroy()
@@ -192,6 +193,7 @@ async def async_cache(async_client):
         PROP_CACHE_MODE: CacheMode.PARTITIONED,
     })
     try:
+        await __wait_for_ready_affinity(async_client, [cache.cache_id])
         yield cache
     finally:
         await cache.destroy()

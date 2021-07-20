@@ -13,16 +13,9 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 
-pyignite.connection package
+pyignite.monitoring module
 ===========================
 
-.. automodule:: pyignite.connection
+.. automodule:: pyignite.monitoring
     :members:
-    :undoc-members:
-    :show-inheritance:
-
-Submodules
-----------
-
-.. toctree::
-    pyignite.connection.protocol_context
+    :member-order: bysource

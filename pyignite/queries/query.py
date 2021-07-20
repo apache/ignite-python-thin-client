@@ -227,11 +227,24 @@ class Query:
         # build result
         return APIResult(response)
 
+    @staticmethod
+    def _enabled_query_listener(conn):
+        client = conn.client
+        return client._event_listeners and client._event_listeners.enabled_query_listener
+
+    @staticmethod
+    def _event_listener(conn):
+        return conn.client._event_listeners
+
     def _on_query_started(self, conn):
+        self._start_ts = time.monotonic()
         if logger.isEnabledFor(logging.DEBUG):
-            self._start_ts = time.monotonic()
             logger.debug("Start query(query_id=%d, op_type=%s, host=%s, port=%d, node_id=%s)",
                          self.query_id, _get_op_code_name(self.op_code), conn.host, conn.port, conn.uuid)
+
+        if self._enabled_query_listener(conn):
+            self._event_listener(conn).publish_query_start(conn.host, conn.port, conn.uuid, self.query_id,
+                                                           self.op_code, _get_op_code_name(self.op_code))
 
     def _on_query_finished(self, conn, result=None, err=None):
         if logger.isEnabledFor(logging.DEBUG):
@@ -240,12 +253,20 @@ class Query:
                 err = result.message
             if err:
                 logger.debug("Failed to perform query(query_id=%d, op_type=%s, host=%s, port=%d, node_id=%s) "
-                             "in %.3f ms: %s", self.query_id, _get_op_code_name(self.op_code),
+                             "in %d ms: %s", self.query_id, _get_op_code_name(self.op_code),
                              conn.host, conn.port, conn.uuid, dur_ms, err)
+                if self._enabled_query_listener(conn):
+                    self._event_listener(conn).publish_query_fail(conn.host, conn.port, conn.uuid, self.query_id,
+                                                                  self.op_code, _get_op_code_name(self.op_code),
+                                                                  dur_ms, err)
             else:
                 logger.debug("Finished query(query_id=%d, op_type=%s, host=%s, port=%d, node_id=%s) "
-                             "successfully in %.3f ms", self.query_id, _get_op_code_name(self.op_code),
+                             "successfully in %d ms", self.query_id, _get_op_code_name(self.op_code),
                              conn.host, conn.port, conn.uuid, dur_ms)
+                if self._enabled_query_listener(conn):
+                    self._event_listener(conn).publish_query_success(conn.host, conn.port, conn.uuid, self.query_id,
+                                                                     self.op_code, _get_op_code_name(self.op_code),
+                                                                     dur_ms)
 
 
 class ConfigQuery(Query):
