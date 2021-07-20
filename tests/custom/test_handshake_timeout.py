@@ -49,7 +49,10 @@ class FakeIgniteProtocol(asyncio.Protocol):
         self._transport = transport
 
     def _handshake_response(self, error=True):
-        return struct.pack('<lbhhhll', 15, 0 if error else 1, 1, 3, 0, 0, 0)
+        if error:
+            return struct.pack('<lbhhhbll', 16, 0, 1, 3, 0, 9, 0, 0)
+        else:
+            return struct.pack('<lb', 1, 1)
 
     def _parse_handshake_request(self, buf):
         return struct.unpack('<lbhhhb', buf)
@@ -184,6 +187,16 @@ async def test_socket_timeout_applied_sync(server_with_handshake, event_loop):
     assert isinstance(err, socket.timeout)
     assert 5.0 <= duration < 6.0
     assert len(events) == 0
+
+
+@pytest.mark.asyncio
+async def test_socket_timeout_applied_async(server_with_handshake, event_loop):
+    hs_to_listener = HandshakeTimeoutListener()
+    client = AioClient(handshake_timeout=3.0, event_listeners=[hs_to_listener])
+    with pytest.raises(asyncio.TimeoutError):
+        await client.connect(DEFAULT_HOST, DEFAULT_PORT)
+        assert all(n.alive for n in client._nodes)
+        await asyncio.wait_for(client.get_cache_names(), 5.0)
 
 
 @pytest.mark.parametrize(

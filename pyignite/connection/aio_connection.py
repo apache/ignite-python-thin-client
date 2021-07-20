@@ -167,7 +167,6 @@ class AioConnection(BaseConnection):
         """
         if self.alive:
             return
-        self._closed = False
         await self._connect()
 
     async def _connect(self):
@@ -227,6 +226,7 @@ class AioConnection(BaseConnection):
 
         ssl_context = create_ssl_context(self.ssl_params)
         handshake_fut = self._loop.create_future()
+        self._closed = False
         self._transport, _ = await self._loop.create_connection(lambda: BaseProtocol(self, handshake_fut),
                                                                 host=self.host, port=self.port, ssl=ssl_context)
         try:
