@@ -130,6 +130,12 @@ def sync_example():
 
 
 if __name__ == '__main__':
+    client = Client()
+    with client.connect('127.0.0.1', 10800):
+        if not client.protocol_context.is_transactions_supported():
+            print("'Transactions' API is not supported by cluster. Finishing...")
+            exit(0)
+
     print("Starting sync example")
     sync_example()
 

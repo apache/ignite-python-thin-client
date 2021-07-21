@@ -17,7 +17,7 @@ import pytest
 from pyignite import Client, AioClient
 from pyignite.exceptions import CacheError
 from pyignite.monitoring import QueryEventListener, QueryStartEvent, QueryFailEvent, QuerySuccessEvent
-from pyignite.queries.op_codes import OP_CACHE_PUT, OP_CACHE_PARTITIONS, OP_CLUSTER_GET_STATE
+from pyignite.queries.op_codes import OP_CACHE_PUT, OP_CACHE_PARTITIONS, OP_CACHE_GET_NAMES
 
 events = []
 
@@ -97,13 +97,13 @@ def __assert_fail_events(client):
 
 
 def test_query_success_events(client):
-    client.get_cluster().get_state()
+    client.get_cache_names()
     __assert_success_events(client)
 
 
 @pytest.mark.asyncio
 async def test_query_success_events_async(async_client):
-    await async_client.get_cluster().get_state()
+    await async_client.get_cache_names()
     __assert_success_events(async_client)
 
 
@@ -112,15 +112,15 @@ def __assert_success_events(client):
     conn = client._nodes[0]
     for ev in events:
         if isinstance(ev, QueryStartEvent):
-            assert ev.op_code == OP_CLUSTER_GET_STATE
-            assert ev.op_name == 'OP_CLUSTER_GET_STATE'
+            assert ev.op_code == OP_CACHE_GET_NAMES
+            assert ev.op_name == 'OP_CACHE_GET_NAMES'
             assert ev.host == conn.host
             assert ev.port == conn.port
             assert ev.node_uuid == str(conn.uuid if conn.uuid else '')
 
         if isinstance(ev, QuerySuccessEvent):
-            assert ev.op_code == OP_CLUSTER_GET_STATE
-            assert ev.op_name == 'OP_CLUSTER_GET_STATE'
+            assert ev.op_code == OP_CACHE_GET_NAMES
+            assert ev.op_name == 'OP_CACHE_GET_NAMES'
             assert ev.host == conn.host
             assert ev.port == conn.port
             assert ev.node_uuid == str(conn.uuid if conn.uuid else '')

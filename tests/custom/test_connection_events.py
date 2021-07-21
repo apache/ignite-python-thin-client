@@ -104,7 +104,7 @@ async def test_events_async(request, server2):
 def __assert_events(nodes, protocol_context):
     assert len([e for e in events if isinstance(e, ConnectionLostEvent)]) == 1
     # ConnectionLostEvent is a subclass of ConnectionClosedEvent
-    assert len([e for e in events if type(e) == ConnectionClosedEvent]) == 1
+    assert len([e for e in events if type(e) == ConnectionClosedEvent and e.node_uuid]) == 1
     assert len([e for e in events if isinstance(e, HandshakeSuccessEvent)]) == 2
 
     for ev in events:
@@ -114,7 +114,6 @@ def __assert_events(nodes, protocol_context):
             assert ev.node_uuid == str(nodes[ev.port].uuid)
             assert ev.error_msg
         elif isinstance(ev, HandshakeStartEvent):
-            assert ev.protocol_context == protocol_context
             assert ev.port in {10801, 10802}
         elif isinstance(ev, HandshakeFailedEvent):
             assert ev.port == 10802
@@ -126,4 +125,5 @@ def __assert_events(nodes, protocol_context):
             assert ev.protocol_context == protocol_context
         elif isinstance(ev, ConnectionClosedEvent):
             assert ev.port == 10801
-            assert ev.node_uuid == str(nodes[ev.port].uuid)
+            if ev.node_uuid:  # Possible if protocol negotiation occurred.
+                assert ev.node_uuid == str(nodes[ev.port].uuid)

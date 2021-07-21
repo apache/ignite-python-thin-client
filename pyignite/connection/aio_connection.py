@@ -177,25 +177,27 @@ class AioConnection(BaseConnection):
             detecting_protocol = True
             self.client.protocol_context = ProtocolContext(max(PROTOCOLS), BitmaskFeature.all_supported())
 
-        try:
-            self._on_handshake_start()
-            result = await self._connect_version()
-        except HandshakeError as e:
-            if e.expected_version in PROTOCOLS:
-                self.client.protocol_context.version = e.expected_version
+        while True:
+            try:
+                self._on_handshake_start()
                 result = await self._connect_version()
-            else:
+                break
+            except HandshakeError as e:
+                if e.expected_version in PROTOCOLS:
+                    self.client.protocol_context.version = e.expected_version
+                    continue
+                else:
+                    self._on_handshake_fail(e)
+                    raise e
+            except AuthenticationError as e:
                 self._on_handshake_fail(e)
                 raise e
-        except AuthenticationError as e:
-            self._on_handshake_fail(e)
-            raise e
-        except Exception as e:
-            self._on_handshake_fail(e)
-            # restore undefined protocol version
-            if detecting_protocol:
-                self.client.protocol_context = None
-            raise e
+            except Exception as e:
+                self._on_handshake_fail(e)
+                # restore undefined protocol version
+                if detecting_protocol:
+                    self.client.protocol_context = None
+                raise e
 
         self._on_handshake_success(result)
 
