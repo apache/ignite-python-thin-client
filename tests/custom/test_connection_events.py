@@ -12,11 +12,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import random
-
 import pytest
 
 from pyignite import Client, AioClient
+from pyignite.datatypes.cache_config import CacheMode
+from pyignite.datatypes.prop_codes import PROP_NAME, PROP_CACHE_MODE
 from pyignite.monitoring import ConnectionEventListener, ConnectionLostEvent, ConnectionClosedEvent, \
     HandshakeSuccessEvent, HandshakeFailedEvent, HandshakeStartEvent
 
@@ -65,12 +65,16 @@ def test_events(request, server2):
     with client.connect([('127.0.0.1', 10800 + idx) for idx in range(1, 3)]):
         protocol_context = client.protocol_context
         nodes = {conn.port: conn for conn in client._nodes}
-        cache = client.get_or_create_cache(request.node.name)
+        cache = client.get_or_create_cache({
+            PROP_NAME: request.node.name,
+            PROP_CACHE_MODE: CacheMode.REPLICATED,
+        })
+
         kill_process_tree(server2.pid)
 
-        while True:
+        for _ in range(0, 100):
             try:
-                cache.put(random.randint(0, 1000), 1)
+                cache.put(1, 1)
             except: # noqa 13
                 pass
 
@@ -86,12 +90,15 @@ async def test_events_async(request, server2):
     async with client.connect([('127.0.0.1', 10800 + idx) for idx in range(1, 3)]):
         protocol_context = client.protocol_context
         nodes = {conn.port: conn for conn in client._nodes}
-        cache = await client.get_or_create_cache(request.node.name)
+        cache = await client.get_or_create_cache({
+            PROP_NAME: request.node.name,
+            PROP_CACHE_MODE: CacheMode.REPLICATED,
+        })
         kill_process_tree(server2.pid)
 
-        while True:
+        for _ in range(0, 100):
             try:
-                await cache.put(random.randint(0, 1000), 1)
+                await cache.put(1, 1)
             except: # noqa 13
                 pass
 
