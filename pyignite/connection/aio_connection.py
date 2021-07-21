@@ -181,7 +181,8 @@ class AioConnection(BaseConnection):
             try:
                 self._on_handshake_start()
                 result = await self._connect_version()
-                break
+                self._on_handshake_success(result)
+                return
             except HandshakeError as e:
                 if e.expected_version in PROTOCOLS:
                     self.client.protocol_context.version = e.expected_version
@@ -198,8 +199,6 @@ class AioConnection(BaseConnection):
                 if detecting_protocol:
                     self.client.protocol_context = None
                 raise e
-
-        self._on_handshake_success(result)
 
     def process_connection_lost(self, err, reconnect=False):
         self.failed = True

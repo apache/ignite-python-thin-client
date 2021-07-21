@@ -236,7 +236,9 @@ class Connection(BaseConnection):
             try:
                 self._on_handshake_start()
                 result = self._connect_version()
-                break
+                self._socket.settimeout(self.timeout)
+                self._on_handshake_success(result)
+                return
             except HandshakeError as e:
                 if e.expected_version in PROTOCOLS:
                     self.client.protocol_context.version = e.expected_version
@@ -253,9 +255,6 @@ class Connection(BaseConnection):
                 if detecting_protocol:
                     self.client.protocol_context = None
                 raise e
-
-        self._socket.settimeout(self.timeout)
-        self._on_handshake_success(result)
 
     def _connect_version(self) -> Union[dict, OrderedDict]:
         """
