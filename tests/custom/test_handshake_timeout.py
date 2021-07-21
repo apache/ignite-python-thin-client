@@ -190,7 +190,7 @@ async def test_socket_timeout_applied_sync(server_with_handshake, event_loop):
 
 
 @pytest.mark.asyncio
-async def test_socket_timeout_applied_async(server_with_handshake, event_loop):
+async def test_handshake_timeout_not_affected_for_others_requests_async(server_with_handshake):
     hs_to_listener = HandshakeTimeoutListener()
     client = AioClient(handshake_timeout=3.0, event_listeners=[hs_to_listener])
     with pytest.raises(asyncio.TimeoutError):
