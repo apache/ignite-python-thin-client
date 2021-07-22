@@ -17,4 +17,4 @@ from pyignite.client import Client
 from pyignite.aio_client import AioClient
 from pyignite.binary import GenericObjectMeta
 
-__version__ = '0.5.0'
+__version__ = '0.5.1'
