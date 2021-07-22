@@ -1,6 +1,15 @@
 Apache Ignite python thin client
 ================================
 
+0.5.1
+--------------------------------
+* Added logging of connection and queries events
+* Added event listeners to connection events and query events
+* Added client's side handshake timeout
+* Fixed excessive deprecation warnings on python 3.7
+* Fixed request to failed node when querying replicated cache
+* Fixed excessive partition mapping requests
+
 0.5.0
 --------------------------------
 * Added transaction API support (sync and async versions, async version supports only python 3.7+)
