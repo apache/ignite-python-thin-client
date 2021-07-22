@@ -40,6 +40,9 @@ class ProtocolContext:
     def __str__(self):
         return f'ProtocolContext(version={self._version}, features={self._features})'
 
+    def __repr__(self):
+        return self.__str__()
+
     def _ensure_consistency(self):
         if not self.is_feature_flags_supported():
             self._features = None

@@ -23,7 +23,7 @@ from pyignite.utils import status_to_exception
 
 
 def _validate_int_enum_param(value: Union[int, IntEnum], cls: Type[IntEnum]):
-    if value not in cls:
+    if value not in set(v.value for v in cls):  # Use this trick to disable warning on python 3.7
         raise ValueError(f'{value} not in {cls}')
     return value
 
