@@ -20,11 +20,6 @@ import pytest
 
 logger = logging.getLogger('pyignite')
 logger.setLevel(logging.DEBUG)
-handler = logging.StreamHandler(stream=sys.stdout)
-handler.setFormatter(
-    logging.Formatter('%(asctime)s %(name)s %(levelname)s %(message)s')
-)
-logger.addHandler(handler)
 
 
 @pytest.fixture(autouse=True)

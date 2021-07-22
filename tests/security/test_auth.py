@@ -95,7 +95,8 @@ def __assert_successful_connect_events(conn, listener):
             assert ev.host == conn.host
             assert ev.port == conn.port
             if isinstance(ev, (HandshakeSuccessEvent, ConnectionClosedEvent)):
-                assert ev.node_uuid == str(conn.uuid if conn.uuid else '')
+                if ev.node_uuid:
+                    assert ev.node_uuid == str(conn.uuid)
                 if isinstance(ev, HandshakeSuccessEvent):
                     assert ev.protocol_context
 
