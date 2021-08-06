@@ -66,7 +66,8 @@ def is_hinted(value):
     """
     Check if a value is a tuple of data item and its type hint.
     """
-    return isinstance(value, tuple) and len(value) == 2 and issubclass(value[1], IgniteDataType)
+    return isinstance(value, tuple) and len(value) == 2 and inspect.isclass(value[1]) and \
+        issubclass(value[1], IgniteDataType)
 
 
 def int_overflow(value: int) -> int:
