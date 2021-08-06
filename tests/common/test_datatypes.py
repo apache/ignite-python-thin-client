@@ -166,6 +166,41 @@ async def test_put_get_data_async(async_cache, value, value_hint):
     assert await async_cache.get('my_key') == value
 
 
+nested_array_objects_params = [
+    [
+        (ObjectArrayObject.OBJECT, [
+            ((ObjectArrayObject.OBJECT, [
+                'test', 1, Value(1, 'test'),
+                ((ObjectArrayObject.OBJECT, ['test', 1, Value(1, 'test')]), ObjectArrayObject)
+            ]), ObjectArrayObject)
+        ]),
+        (ObjectArrayObject.OBJECT, [
+            (ObjectArrayObject.OBJECT, ['test', 1, Value(1, 'test'),
+                                        (ObjectArrayObject.OBJECT, ['test', 1, Value(1, 'test')])])
+        ])
+    ],
+]
+
+
+@pytest.mark.parametrize(
+    'hinted_value, value',
+    nested_array_objects_params
+)
+def test_put_get_nested_array_objects(cache, hinted_value, value):
+    cache.put('my_key', hinted_value, value_hint=ObjectArrayObject)
+    assert cache.get('my_key') == value
+
+
+@pytest.mark.parametrize(
+    'hinted_value, value',
+    nested_array_objects_params
+)
+@pytest.mark.asyncio
+async def test_put_get_nested_array_objects_async(async_cache, hinted_value, value):
+    await async_cache.put('my_key', hinted_value, value_hint=ObjectArrayObject)
+    assert await async_cache.get('my_key') == value
+
+
 bytearray_params = [
     ([1, 2, 3, 5], ByteArrayObject),
     ((7, 8, 13, 18), ByteArrayObject),
