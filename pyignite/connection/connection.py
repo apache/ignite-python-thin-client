@@ -156,6 +156,9 @@ class BaseConnection:
         return self.client._event_listeners
 
 
+DEFAULT_INITIAL_BUF_SIZE = 1024
+
+
 class Connection(BaseConnection):
     """
     This is a `pyignite` class, that represents a connection to Ignite
@@ -348,15 +351,15 @@ class Connection(BaseConnection):
         if flags is not None:
             kwargs['flags'] = flags
 
-        data = bytearray(1024)
+        data = bytearray(DEFAULT_INITIAL_BUF_SIZE)
         buffer = memoryview(data)
-        bytes_total_received, bytes_to_receive = 0, 0
+        total_rcvd, packet_len = 0, 0
         while True:
             try:
-                bytes_received = self._socket.recv_into(buffer, len(buffer), **kwargs)
-                if bytes_received == 0:
+                bytes_rcvd = self._socket.recv_into(buffer, len(buffer), **kwargs)
+                if bytes_rcvd == 0:
                     raise SocketError('Connection broken.')
-                bytes_total_received += bytes_received
+                total_rcvd += bytes_rcvd
             except connection_errors as e:
                 self.failed = True
                 if reconnect:
@@ -364,23 +367,19 @@ class Connection(BaseConnection):
                     self.reconnect()
                 raise e
 
-            if bytes_total_received < 4:
-                continue
-            elif bytes_to_receive == 0:
-                response_len = int.from_bytes(data[0:4], PROTOCOL_BYTE_ORDER)
-                bytes_to_receive = response_len
-
-                if response_len + 4 > len(data):
+            if packet_len == 0 and total_rcvd > 4:
+                packet_len = int.from_bytes(data[0:4], PROTOCOL_BYTE_ORDER, signed=True) + 4
+                if packet_len > len(data):
                     buffer.release()
-                    data.extend(bytearray(response_len + 4 - len(data)))
-                    buffer = memoryview(data)[bytes_total_received:]
+                    data.extend(bytearray(packet_len - len(data)))
+                    buffer = memoryview(data)[total_rcvd:]
                     continue
 
-            if bytes_total_received >= bytes_to_receive:
+            if 0 < packet_len <= total_rcvd:
                 buffer.release()
                 break
 
-            buffer = buffer[bytes_received:]
+            buffer = buffer[bytes_rcvd:]
 
         return data
 
