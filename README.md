@@ -67,7 +67,7 @@ pip install pyignite
 
 To install a specific version:
 ```bash
-pip install pyignite==0.5.0
+pip install pyignite==0.5.2
 ```
 
 ## Documentation
