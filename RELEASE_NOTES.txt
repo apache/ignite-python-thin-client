@@ -1,6 +1,11 @@
 Apache Ignite python thin client
 ================================
 
+0.5.2
+--------------------------------
+* Fixed incorrect partial read from socket in sync client
+* Fixed nested object arrays deserialization
+
 0.5.1
 --------------------------------
 * Added logging of connection and queries events
