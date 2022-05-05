@@ -16,7 +16,7 @@
 
 DISTR_DIR="$(pwd)/distr/"
 SRC_DIR="$(pwd)"
-DEFAULT_DOCKER_IMAGE="quay.io/pypa/manylinux1_x86_64"
+DEFAULT_DOCKER_IMAGE="quay.io/pypa/manylinux2010_x86_64"
 
 usage() {
     cat <<EOF
@@ -50,7 +50,7 @@ run_wheel_arch() {
     if [[ $1 =~ ^(i686|x86)$ ]]; then
         PLAT="manylinux1_i686"
         PRE_CMD="linux32"
-        DOCKER_IMAGE="quay.io/pypa/manylinux1_i686"
+        DOCKER_IMAGE="quay.io/pypa/manylinux2010_i686"
     elif [[ $1 =~ ^(x86_64)$ ]]; then
         PLAT="manylinux1_x86_64"
         PRE_CMD=""

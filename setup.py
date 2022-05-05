@@ -92,7 +92,7 @@ def run_setup(with_binary=True):
     setuptools.setup(
         name='pyignite',
         version=version,
-        python_requires='>=3.6',
+        python_requires='>=3.7',
         author='The Apache Software Foundation',
         author_email='dev@ignite.apache.org',
         description='Apache Ignite binary client Python API',
@@ -106,10 +106,10 @@ def run_setup(with_binary=True):
         classifiers=[
             'Programming Language :: Python',
             'Programming Language :: Python :: 3',
-            'Programming Language :: Python :: 3.6',
             'Programming Language :: Python :: 3.7',
             'Programming Language :: Python :: 3.8',
             'Programming Language :: Python :: 3.9',
+            'Programming Language :: Python :: 3.10',
             'Programming Language :: Python :: 3 :: Only',
             'Intended Audience :: Developers',
             'Topic :: Database :: Front-Ends',
