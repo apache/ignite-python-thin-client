@@ -2,12 +2,16 @@
 
 This directory contains the following example files:
 
+- `async_key_value` - asynchronous key-value operations,
+- `async_sql` - asynchronous SQL operations,
 - `binary_basics.py` − basic operations with Complex objects,
-- `binary_types.py` - read SQL table as a key-value cache,
 - `create_binary.py` − create SQL row with key-value operation,
+- `expiry_policy.py` - the expiration policy for caches for synchronous and asynchronous operations is demonstrated,
 - `failover.py` − fail-over connection to Ignite cluster,
 - `get_and_put.py` − basic key-value operations,
+- `get_and_put_complex.py` − key-value operations with different value  and key types,
 - `migrate_binary.py` − work with Complex object schemas,
+- `read_binary.py` − creates caches and fills them with data through SQL queries, demonstrates working with binary objects,
 - `scans.py` − cache scan operation,
 - `sql.py` − use Ignite SQL,
 - `type_hints.py` − type hints.

@@ -13,3 +13,4 @@ junit*.xml
 pyignite.egg-info
 ignite-log-*
 __pycache__
+venv
