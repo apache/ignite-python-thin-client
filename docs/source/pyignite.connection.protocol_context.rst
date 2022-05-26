@@ -14,7 +14,7 @@
     limitations under the License.
 
 pyignite.connection.protocol_context package
-===========================
+============================================
 
 .. automodule:: pyignite.connection.protocol_context
     :members:

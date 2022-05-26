@@ -18,7 +18,7 @@ from datetime import date, datetime, time, timedelta
 import decimal
 from io import SEEK_CUR
 from math import ceil
-from typing import Tuple
+from typing import Tuple, Union
 import uuid
 
 from pyignite.constants import *
@@ -365,7 +365,7 @@ class DateObject(StandardObject):
         return cls._object_c_type
 
     @classmethod
-    def from_python_not_null(cls, stream, value: [date, datetime], **kwargs):
+    def from_python_not_null(cls, stream, value: Union[date, datetime], **kwargs):
         if type(value) is date:
             value = datetime.combine(value, time())
         data_type = cls.build_c_type()

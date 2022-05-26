@@ -27,7 +27,7 @@ function repair_wheel {
 
 # Compile wheels
 for PYBIN in /opt/python/*/bin; do
-    if [[ $PYBIN =~ ^(.*)cp3[6789](.*)$ ]]; then
+    if [[ $PYBIN =~ ^(.*)cp3[7891](.*)$ ]]; then
         "${PYBIN}/pip" wheel /pyignite/ --no-deps -w /wheels
     fi
 done

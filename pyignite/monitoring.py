@@ -56,8 +56,6 @@ Event listeners can be registered by passing parameter to :class:`~pyignite.clie
 
 .. note:: Debug logging is also available, standard ``logging`` is used. Just set ``DEBUG`` level to
     *pyignite* logger.
-|
-|
 """
 from typing import Optional, Sequence
 
