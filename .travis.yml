@@ -23,7 +23,7 @@ addons:
 
 env:
   global:
-    - IGNITE_VERSION=2.12.0
+    - IGNITE_VERSION=2.13.0
     - IGNITE_HOME=/opt/ignite
 
 before_install:
