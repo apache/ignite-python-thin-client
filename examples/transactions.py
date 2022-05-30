@@ -19,8 +19,8 @@ import time
 
 from pyignite import AioClient, Client
 from pyignite.datatypes import TransactionIsolation, TransactionConcurrency
-from pyignite.datatypes.prop_codes import PROP_CACHE_ATOMICITY_MODE, PROP_NAME
 from pyignite.datatypes.cache_config import CacheAtomicityMode
+from pyignite.datatypes.prop_codes import PROP_CACHE_ATOMICITY_MODE, PROP_NAME
 from pyignite.exceptions import CacheError
 
 
@@ -129,17 +129,20 @@ def sync_example():
         cache.destroy()
 
 
-if __name__ == '__main__':
+def check_is_transactions_supported():
     client = Client()
     with client.connect('127.0.0.1', 10800):
         if not client.protocol_context.is_transactions_supported():
             print("'Transactions' API is not supported by cluster. Finishing...")
             exit(0)
 
+
+if __name__ == '__main__':
+    check_is_transactions_supported()
+
     print("Starting sync example")
     sync_example()
 
     if sys.version_info >= (3, 7):
         print("Starting async example")
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(async_example())
+        asyncio.run(async_example())

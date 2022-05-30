@@ -13,11 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import OrderedDict
-
 from pyignite import Client, GenericObjectMeta
 from pyignite.datatypes import DoubleObject, IntObject, String
 from pyignite.datatypes.prop_codes import PROP_NAME, PROP_SQL_SCHEMA, PROP_QUERY_ENTITIES
+
+
+class Student(
+    metaclass=GenericObjectMeta,
+    type_name='SQL_PUBLIC_STUDENT_TYPE',
+    schema={'NAME': String, 'LOGIN': String, 'AGE': IntObject, 'GPA': DoubleObject}
+):
+    pass
+
 
 client = Client()
 with client.connect('127.0.0.1', 10800):
@@ -60,18 +67,6 @@ with client.connect('127.0.0.1', 10800):
             },
         ],
     })
-
-    class Student(
-        metaclass=GenericObjectMeta,
-        type_name='SQL_PUBLIC_STUDENT_TYPE',
-        schema=OrderedDict([
-            ('NAME', String),
-            ('LOGIN', String),
-            ('AGE', IntObject),
-            ('GPA', DoubleObject),
-        ])
-    ):
-        pass
 
     student_cache.put(
         1,

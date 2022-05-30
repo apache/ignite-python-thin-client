@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pprint import pprint
+
 from pyignite import Client
 
 client = Client()
@@ -39,7 +41,7 @@ with client.connect('127.0.0.1', 10800):
     # 'key_12' 12
 
     with my_cache.scan() as cursor:
-        print(dict(cursor))
+        pprint(dict(cursor))
     # {
     #     'key_17': 17,
     #     'key_10': 10,

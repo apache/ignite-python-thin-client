@@ -71,7 +71,7 @@ File: `type_hints.py`_
 .. literalinclude:: ../examples/type_hints.py
   :language: python
   :dedent: 4
-  :lines: 24-48
+  :lines: 23-47
 
 As a rule of thumb:
 
@@ -97,12 +97,12 @@ in cache settings dictionary on creation.
 .. literalinclude:: ../examples/expiry_policy.py
   :language: python
   :dedent: 12
-  :lines: 32-35
+  :lines: 33-36
 
 .. literalinclude:: ../examples/expiry_policy.py
   :language: python
   :dedent: 12
-  :lines: 41-47
+  :lines: 42-48
 
 Secondly, expiry policy can be set for all cache operations, which are done under decorator. To create it use
 :py:meth:`~pyignite.cache.BaseCache.with_expire_policy`
@@ -110,7 +110,7 @@ Secondly, expiry policy can be set for all cache operations, which are done unde
 .. literalinclude:: ../examples/expiry_policy.py
   :language: python
   :dedent: 12
-  :lines: 54-61
+  :lines: 55-62
 
 Scan
 ====
@@ -124,7 +124,7 @@ Let us put some data in cache.
 .. literalinclude:: ../examples/scans.py
   :language: python
   :dedent: 4
-  :lines: 20-29
+  :lines: 22-31
 
 :py:meth:`~pyignite.cache.Cache.scan` returns a cursor, that yields
 two-tuples of key and value. You can iterate through the generated pairs
@@ -133,14 +133,14 @@ in a safe manner:
 .. literalinclude:: ../examples/scans.py
   :language: python
   :dedent: 4
-  :lines: 31-39
+  :lines: 33-41
 
 Or, alternatively, you can convert the cursor to dictionary in one go:
 
 .. literalinclude:: ../examples/scans.py
   :language: python
   :dedent: 4
-  :lines: 41-50
+  :lines: 43-52
 
 But be cautious: if the cache contains a large set of data, the dictionary
 may consume too much memory!
@@ -158,7 +158,7 @@ each of the collection type. Second comes the data value.
 
 .. literalinclude:: ../examples/get_and_put_complex.py
   :language: python
-  :lines: 19
+  :lines: 17
 
 Map
 ===
@@ -175,7 +175,7 @@ Since CPython 3.6 all dictionaries became de facto ordered. You can always use
 .. literalinclude:: ../examples/get_and_put_complex.py
   :language: python
   :dedent: 4
-  :lines: 26-38
+  :lines: 22-36
 
 Collection
 ==========
@@ -192,7 +192,7 @@ and you always get `list` back.
 .. literalinclude:: ../examples/get_and_put_complex.py
   :language: python
   :dedent: 4
-  :lines: 40-54
+  :lines: 38-52
 
 Object array
 ============
@@ -204,7 +204,7 @@ contents. But it still can be used for interoperability with Java.
 .. literalinclude:: ../examples/get_and_put_complex.py
   :language: python
   :dedent: 4
-  :lines: 56-65
+  :lines: 54-63
 
 
 Transactions
@@ -265,41 +265,44 @@ First let us establish a connection.
 
 .. literalinclude:: ../examples/sql.py
   :language: python
-  :lines: 195-196
+  :lines: 20-21
 
 Then create tables. Begin with `Country` table, than proceed with related
 tables `City` and `CountryLanguage`.
 
-.. literalinclude:: ../examples/sql.py
+.. literalinclude:: ../examples/helpers/sql_helper.py
   :language: python
-  :lines: 25-42, 51-59, 67-74
+  :dedent: 4
+  :lines: 27-43, 53-60, 68-74
 
 .. literalinclude:: ../examples/sql.py
   :language: python
   :dedent: 4
-  :lines: 199-204
+  :lines: 23-28
 
 Create indexes.
 
-.. literalinclude:: ../examples/sql.py
+.. literalinclude:: ../examples/helpers/sql_helper.py
   :language: python
-  :lines: 60-62, 75-77
+  :dedent: 4
+  :lines: 62, 76
 
 .. literalinclude:: ../examples/sql.py
   :language: python
   :dedent: 4
-  :lines: 207-208
+  :lines: 31-32
 
 Fill tables with data.
 
-.. literalinclude:: ../examples/sql.py
+.. literalinclude:: ../examples/helpers/sql_helper.py
   :language: python
-  :lines: 43-50, 63-66, 78-81
+  :dedent: 4
+  :lines: 45-51, 64-66, 78-80
 
 .. literalinclude:: ../examples/sql.py
   :language: python
   :dedent: 4
-  :lines: 211-218
+  :lines: 35-42
 
 Data samples are taken from `PyIgnite GitHub repository`_.
 
@@ -311,7 +314,7 @@ What are the 10 largest cities in our data sample (population-wise)?
 .. literalinclude:: ../examples/sql.py
   :language: python
   :dedent: 4
-  :lines: 24, 221-238
+  :lines: 45-59
 
 The :py:meth:`~pyignite.client.Client.sql` method returns a generator,
 that yields the resulting rows.
@@ -327,7 +330,7 @@ column names as a first yield. You can access field names with Python built-in
 .. literalinclude:: ../examples/sql.py
   :language: python
   :dedent: 4
-  :lines: 241-266
+  :lines: 62-88
 
 Display all the information about a given city
 ==============================================
@@ -335,18 +338,18 @@ Display all the information about a given city
 .. literalinclude:: ../examples/sql.py
   :language: python
   :dedent: 4
-  :lines: 268-283
+  :lines: 92-103
 
 Finally, delete the tables used in this example with the following queries:
 
-.. literalinclude:: ../examples/sql.py
+.. literalinclude:: ../examples/helpers/sql_helper.py
   :language: python
-  :lines: 82-83
+  :lines: 82
 
 .. literalinclude:: ../examples/sql.py
   :language: python
   :dedent: 4
-  :lines: 285-291
+  :lines: 106-107
 
 .. _complex_object_usage:
 
@@ -389,7 +392,7 @@ automatically when reading Complex objects.
 .. literalinclude:: ../examples/binary_basics.py
   :language: python
   :dedent: 4
-  :lines: 32-34, 39-42, 48-49
+  :lines: 36-38, 40-43, 45-46
 
 Here you can see how :class:`~pyignite.binary.GenericObjectMeta` uses
 `attrs`_ package internally for creating nice `__init__()` and `__repr__()`
@@ -416,14 +419,14 @@ Anyway, you can reuse the autogenerated dataclass for subsequent writes:
 .. literalinclude:: ../examples/binary_basics.py
   :language: python
   :dedent: 4
-  :lines: 52, 33-37
+  :lines: 50, 32-34
 
 :class:`~pyignite.binary.GenericObjectMeta` can also be used directly
 for creating custom classes:
 
 .. literalinclude:: ../examples/binary_basics.py
   :language: python
-  :lines: 18-27
+  :lines: 20-25
 
 Note how the `Person` class is defined. `schema` is a
 :class:`~pyignite.binary.GenericObjectMeta` metaclass parameter.
@@ -443,7 +446,7 @@ register said class explicitly with your client:
 .. literalinclude:: ../examples/binary_basics.py
   :language: python
   :dedent: 4
-  :lines: 50
+  :lines: 48
 
 Now, when we dealt with the basics of `pyignite` implementation of Complex
 Objects, let us move on to more elaborate examples.
@@ -465,7 +468,7 @@ Let us do it again and examine the Ignite storage afterwards.
 .. literalinclude:: ../examples/read_binary.py
   :language: python
   :dedent: 4
-  :lines: 222-229
+  :lines: 49-51
 
 We can see that Ignite created a cache for each of our tables. The caches are
 conveniently named using ‘`SQL_<schema name>_<table name>`’ pattern.
@@ -476,7 +479,7 @@ using a :py:attr:`~pyignite.cache.Cache.settings` property.
 .. literalinclude:: ../examples/read_binary.py
   :language: python
   :dedent: 4
-  :lines: 231-251
+  :lines: 53-103
 
 The values of `value_type_name` and `key_type_name` are names of the binary
 types. The `City` table's key fields are stored using `key_type_name` type,
@@ -489,7 +492,7 @@ functions and verify the correctness of the result.
 .. literalinclude:: ../examples/read_binary.py
   :language: python
   :dedent: 4
-  :lines: 253-267
+  :lines: 106-115
 
 What we see is a tuple of key and value, extracted from the cache. Both key
 and value are represent Complex objects. The dataclass names are the same
@@ -525,28 +528,27 @@ These are the necessary steps to perform the task.
 .. literalinclude:: ../examples/create_binary.py
   :language: python
   :dedent: 4
-  :lines: 24-63
+  :lines: 31-69
 
 2. Define Complex object data class.
 
 .. literalinclude:: ../examples/create_binary.py
   :language: python
-  :dedent: 4
-  :lines: 64-75
+  :lines: 21-26
 
 3. Insert row.
 
 .. literalinclude:: ../examples/create_binary.py
   :language: python
   :dedent: 4
-  :lines: 76-80
+  :lines: 71-75
 
 Now let us make sure that our cache really can be used with SQL functions.
 
 .. literalinclude:: ../examples/create_binary.py
   :language: python
   :dedent: 4
-  :lines: 82-87
+  :lines: 77-82
 
 Note, however, that the cache we create can not be dropped with DDL command.
 It should be deleted as any other key-value cache.
@@ -554,7 +556,7 @@ It should be deleted as any other key-value cache.
 .. literalinclude:: ../examples/create_binary.py
   :language: python
   :dedent: 4
-  :lines: 89-96
+  :lines: 84-91
 
 Migrate
 =======
@@ -574,7 +576,7 @@ First get the vouchers' cache.
 .. literalinclude:: ../examples/migrate_binary.py
   :language: python
   :dedent: 4
-  :lines: 111
+  :lines: 109
 
 If you do not store the schema of the Complex object in code, you can obtain
 it as a dataclass property with
@@ -583,20 +585,20 @@ it as a dataclass property with
 .. literalinclude:: ../examples/migrate_binary.py
   :language: python
   :dedent: 4
-  :lines: 116-120
+  :lines: 115-119
 
 Let us modify the schema and create a new Complex object class with an updated
 schema.
 
 .. literalinclude:: ../examples/migrate_binary.py
   :language: python
-  :lines: 122-138
+  :lines: 121-137
 
 Now migrate the data from the old schema to the new one.
 
 .. literalinclude:: ../examples/migrate_binary.py
   :language: python
-  :lines: 141-190
+  :lines: 140-190
 
 At this moment all the fields, defined in both of our schemas, can be
 available in the resulting binary object, depending on which schema was used
