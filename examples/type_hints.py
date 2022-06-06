@@ -18,7 +18,6 @@ from pyignite.datatypes import CharObject, ShortObject
 
 client = Client()
 with client.connect('127.0.0.1', 10800):
-
     my_cache = client.get_or_create_cache('my cache')
 
     my_cache.put('my key', 42)
@@ -43,7 +42,7 @@ with client.connect('127.0.0.1', 10800):
 
     # now let us delete both keys at once
     my_cache.remove_keys([
-        'a',                # a default type key
+        'a',  # a default type key
         ('a', CharObject),  # a key of type CharObject
     ])
 

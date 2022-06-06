@@ -32,14 +32,14 @@ Firstly, import dependencies.
 
 .. literalinclude:: ../examples/async_key_value.py
   :language: python
-  :lines: 18
+  :lines: 19
 
 Let's connect to cluster and perform key-value queries.
 
 .. literalinclude:: ../examples/async_key_value.py
   :language: python
   :dedent: 4
-  :lines: 23-38
+  :lines: 23-47
 
 Scan
 ====
@@ -49,7 +49,7 @@ that yields the resulting rows.
 .. literalinclude:: ../examples/async_key_value.py
   :language: python
   :dedent: 8
-  :lines: 39-50
+  :lines: 49-60
 
 ExpiryPolicy
 ============
@@ -63,12 +63,12 @@ in cache settings dictionary on creation.
 .. literalinclude:: ../examples/expiry_policy.py
   :language: python
   :dedent: 12
-  :lines: 73-76
+  :lines: 74-77
 
 .. literalinclude:: ../examples/expiry_policy.py
   :language: python
   :dedent: 12
-  :lines: 82-90
+  :lines: 83-91
 
 Secondly, expiry policy can be set for all cache operations, which are done under decorator. To create it use
 :py:meth:`~pyignite.cache.BaseCache.with_expire_policy`
@@ -76,7 +76,7 @@ Secondly, expiry policy can be set for all cache operations, which are done unde
 .. literalinclude:: ../examples/expiry_policy.py
   :language: python
   :dedent: 12
-  :lines: 97-106
+  :lines: 98-107
 
 Transactions
 ------------
@@ -132,41 +132,44 @@ First let us establish a connection.
 .. literalinclude:: ../examples/async_sql.py
   :language: python
   :dedent: 4
-  :lines: 197-198
+  :lines: 24-25
 
 Then create tables. Begin with `Country` table, than proceed with related
 tables `City` and `CountryLanguage`.
 
-.. literalinclude:: ../examples/async_sql.py
+.. literalinclude:: ../examples/helpers/sql_helper.py
   :language: python
-  :lines: 25-42, 51-59, 67-74
+  :dedent: 4
+  :lines: 27-43, 53-60, 68-74
 
 .. literalinclude:: ../examples/async_sql.py
   :language: python
   :dedent: 4
-  :lines: 199-205
+  :lines: 27-32
 
 Create indexes.
 
-.. literalinclude:: ../examples/async_sql.py
+.. literalinclude:: ../examples/helpers/sql_helper.py
   :language: python
-  :lines: 60-62, 75-77
+  :dedent: 4
+  :lines: 62, 76
 
 .. literalinclude:: ../examples/async_sql.py
   :language: python
   :dedent: 8
-  :lines: 207-209
+  :lines: 35-36
 
 Fill tables with data.
 
-.. literalinclude:: ../examples/async_sql.py
+.. literalinclude:: ../examples/helpers/sql_helper.py
   :language: python
-  :lines: 43-50, 63-66, 78-81
+  :dedent: 4
+  :lines: 45-51, 64-66, 78-80
 
 .. literalinclude:: ../examples/async_sql.py
   :language: python
   :dedent: 8
-  :lines: 212-223
+  :lines: 39-49
 
 Now let us answer some questions.
 
@@ -176,7 +179,7 @@ What are the 10 largest cities in our data sample (population-wise)?
 .. literalinclude:: ../examples/async_sql.py
   :language: python
   :dedent: 8
-  :lines: 225-243
+  :lines: 52-66
 
 The :py:meth:`~pyignite.aio_client.AioClient.sql` method returns :py:class:`~pyignite.cursors.AioSqlFieldsCursor`,
 that yields the resulting rows.
@@ -193,7 +196,7 @@ of :py:class:`~pyignite.cursors.AioSqlFieldsCursor`
 .. literalinclude:: ../examples/async_sql.py
   :language: python
   :dedent: 8
-  :lines: 246-271
+  :lines: 69-95
 
 Display all the information about a given city
 ==============================================
@@ -201,18 +204,19 @@ Display all the information about a given city
 .. literalinclude:: ../examples/async_sql.py
   :language: python
   :dedent: 8
-  :lines: 273-288
+  :lines: 98-110
 
 Finally, delete the tables used in this example with the following queries:
 
-.. literalinclude:: ../examples/async_sql.py
+.. literalinclude:: ../examples/helpers/sql_helper.py
   :language: python
-  :lines: 83
+  :dedent: 4
+  :lines: 82
 
 .. literalinclude:: ../examples/async_sql.py
   :language: python
   :dedent: 8
-  :lines: 290-297
+  :lines: 113-115
 
 
 

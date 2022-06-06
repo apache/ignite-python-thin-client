@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import asyncio
+from pprint import pprint
 
 from pyignite import AioClient
 
@@ -32,9 +33,18 @@ async def main():
 
         # Key-value queries.
         print(await cache.get('key_10'))
-        print(await cache.get_all([f'key_{i}' for i in range(0, 10)]))
         # value_10
-        # {'key_3': 'value_3', 'key_2': 'value_2', 'key_1': 'value_1','....}
+        pprint(await cache.get_all([f'key_{i}' for i in range(0, 10)]))
+        # {'key_0': 'value_0',
+        #  'key_1': 'value_1',
+        #  'key_2': 'value_2',
+        #  'key_3': 'value_3',
+        #  'key_4': 'value_4',
+        #  'key_5': 'value_5',
+        #  'key_6': 'value_6',
+        #  'key_7': 'value_7',
+        #  'key_8': 'value_8',
+        #  'key_9': 'value_9'}
 
         # Scan query.
         async with cache.scan() as cursor:
@@ -52,5 +62,6 @@ async def main():
         # Clean up.
         await cache.destroy()
 
-loop = asyncio.get_event_loop()
-loop.run_until_complete(main())
+
+if __name__ == '__main__':
+    asyncio.run(main())
