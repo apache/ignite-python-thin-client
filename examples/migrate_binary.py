@@ -115,7 +115,7 @@ with client.connect('127.0.0.1', 10800):
     data_classes = client.query_binary_type('ExpenseVoucher')
     print(data_classes)
     # {
-    #     {547629991: <class 'pygridgain.binary.ExpenseVoucher'>, -231598180: <class '__main__.ExpenseVoucher'>}
+    #     {547629991: <class 'pyignite.binary.ExpenseVoucher'>, -231598180: <class '__main__.ExpenseVoucher'>}
     # }
 
 s_id, data_class = data_classes.popitem()
