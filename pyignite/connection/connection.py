@@ -48,9 +48,6 @@ class BaseConnection:
 
         check_ssl_params(ssl_params)
 
-        if self.username and self.password and 'use_ssl' not in ssl_params:
-            ssl_params['use_ssl'] = True
-
         self.ssl_params = ssl_params
         self._failed = False
 
