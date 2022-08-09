@@ -46,8 +46,7 @@ def cleanup():
     clear_ignite_work_dir()
 
 
-def test_auth_success(with_ssl, ssl_params, caplog):
-    ssl_params['use_ssl'] = with_ssl
+def check_auth_success(ssl_params, caplog):
     listener = AccumulatingConnectionListener()
     client = Client(username=DEFAULT_IGNITE_USERNAME, password=DEFAULT_IGNITE_PASSWORD,
                     event_listeners=[listener], **ssl_params)
@@ -60,9 +59,18 @@ def test_auth_success(with_ssl, ssl_params, caplog):
         __assert_successful_connect_events(conn, listener)
 
 
-@pytest.mark.asyncio
-async def test_auth_success_async(with_ssl, ssl_params, caplog):
+def test_auth_success_no_explicit_ssl(with_ssl, ssl_params, caplog):
+    if with_ssl:
+        ssl_params['use_ssl'] = with_ssl
+    check_auth_success(ssl_params, caplog)
+
+
+def test_auth_success(with_ssl, ssl_params, caplog):
     ssl_params['use_ssl'] = with_ssl
+    check_auth_success(ssl_params, caplog)
+
+
+async def check_auth_success_async(ssl_params, caplog):
     listener = AccumulatingConnectionListener()
     client = AioClient(username=DEFAULT_IGNITE_USERNAME, password=DEFAULT_IGNITE_PASSWORD,
                        event_listeners=[listener], **ssl_params)
@@ -73,6 +81,19 @@ async def test_auth_success_async(with_ssl, ssl_params, caplog):
 
         __assert_successful_connect_log(conn, caplog)
         __assert_successful_connect_events(conn, listener)
+
+
+@pytest.mark.asyncio
+async def test_auth_success_no_explicit_ssl_async(with_ssl, ssl_params, caplog):
+    if with_ssl:
+        ssl_params['use_ssl'] = with_ssl
+    await check_auth_success_async(ssl_params, caplog)
+
+
+@pytest.mark.asyncio
+async def test_auth_success_async(with_ssl, ssl_params, caplog):
+    ssl_params['use_ssl'] = with_ssl
+    await check_auth_success_async(ssl_params, caplog)
 
 
 def __assert_successful_connect_log(conn, caplog):
