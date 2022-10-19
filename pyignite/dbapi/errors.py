@@ -13,11 +13,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pyignite.client import Client
-from pyignite.aio_client import AioClient
-from pyignite.binary import GenericObjectMeta
-from .dbapi import connect
+class Warning(Exception):
+    pass
 
-__version__ = '0.6.0-dev'
+class Error(Exception):
+    pass
 
-__all__ = [ 'Client', 'connect' ]
+class InterfaceError(Error):
+    pass
+
+class DatabaseError(Error):
+    pass
+
+class InternalError(DatabaseError):
+    pass
+
+class OperationalError(DatabaseError):
+    pass
+
+class ProgrammingError(DatabaseError):
+    pass
+
+class IntegrityError(DatabaseError):
+    pass
+
+class DataError(DatabaseError):
+    pass
+
+class NotSupportedError(DatabaseError):
+    pass

@@ -13,11 +13,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pyignite.client import Client
-from pyignite.aio_client import AioClient
-from pyignite.binary import GenericObjectMeta
-from .dbapi import connect
+from ..client import Client
+from .dbcursor import DBCursor
 
-__version__ = '0.6.0-dev'
+class DBClient (Client):
 
-__all__ = [ 'Client', 'connect' ]
+
+    def close(self):
+        """
+        """
+        # TODO: close open cursors
+        super.close()
+    
+    def commit(self):
+        """
+        Ignite doesn't have SQL transactions
+        """
+        pass
+    
+    def rollback(self):
+        """
+        Ignite doesn't have SQL transactions
+        """
+        pass
+    
+    def cursor(self):
+        """
+        Cursors work slightly differently in Ignite versus DBAPI, so
+        we map from one to the other
+        """
+        return DBCursor(self)
+        
