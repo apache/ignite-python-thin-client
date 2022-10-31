@@ -29,6 +29,7 @@
 # limitations under the License.
 
 import asyncio
+from asyncio import CancelledError
 from collections import OrderedDict
 from typing import Union
 
@@ -57,7 +58,8 @@ class BaseProtocol(asyncio.Protocol):
         try:
             self.__send_handshake(transport, self._conn)
         except Exception as e:
-            self._handshake_fut.set_exception(e)
+            if not self._handshake_fut.done():
+                self._handshake_fut.set_exception(e)
 
     def data_received(self, data: bytes) -> None:
         self._buffer += data
@@ -67,7 +69,7 @@ class BaseProtocol(asyncio.Protocol):
             if not self._handshake_fut.done():
                 hs_response = self.__parse_handshake(packet, self._conn.client)
                 self._handshake_fut.set_result(hs_response)
-            else:
+            elif not self._handshake_fut.cancelled() or not self._handshake_fut.exception():
                 self._conn.process_message(packet)
             self._buffer = self._buffer[packet_sz:len(self._buffer)]
 
@@ -203,7 +205,8 @@ class AioConnection(BaseConnection):
     def process_connection_lost(self, err, reconnect=False):
         self.failed = True
         for _, fut in self._pending_reqs.items():
-            fut.set_exception(err)
+            if not fut.done():
+                fut.set_exception(err)
         self._pending_reqs.clear()
 
         if self._transport_closed_fut and not self._transport_closed_fut.done():
@@ -215,8 +218,11 @@ class AioConnection(BaseConnection):
 
     def process_message(self, data):
         req_id = int.from_bytes(data[4:12], byteorder=PROTOCOL_BYTE_ORDER, signed=True)
-        if req_id in self._pending_reqs:
-            self._pending_reqs[req_id].set_result(data)
+
+        req_fut = self._pending_reqs.get(req_id)
+        if req_fut:
+            if not req_fut.done():
+                req_fut.set_result(data)
             del self._pending_reqs[req_id]
 
     async def _connect_version(self) -> Union[dict, OrderedDict]:
