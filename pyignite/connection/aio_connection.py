@@ -29,7 +29,6 @@
 # limitations under the License.
 
 import asyncio
-from asyncio import CancelledError
 from collections import OrderedDict
 from typing import Union
 
