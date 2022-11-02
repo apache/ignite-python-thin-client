@@ -14,8 +14,7 @@
 # limitations under the License.
 import asyncio
 import sys
-import time
-from asyncio.exceptions import TimeoutError, InvalidStateError
+from asyncio import TimeoutError, InvalidStateError
 
 import pytest
 
@@ -73,10 +72,12 @@ async def test_cancellation_on_slow_response(event_loop, proxy, invalid_states_e
     c = AioClient(partition_aware=False)
     async with c.connect("127.0.0.1", 10802):
         cache = await c.get_cache("test")
-        proxy.slow_response = True
+        proxy.discard_response = True  # Simulate slow response by discarding it
+
         with pytest.raises(TimeoutError):
             await asyncio.wait_for(cache.put(1, 2), 0.1)
 
+        proxy.discard_response = False
         assert len(invalid_states_errors) == 0
 
 
@@ -96,15 +97,14 @@ async def test_cancellation_on_disconnect(event_loop, proxy, invalid_states_erro
 
 class ProxyServer:
     """
-    Proxy for simulating slow or discarding response ignite server
-    Set `slow_response`, `discard_response` to `True` to simulate these conditions.
+    Proxy for simulating discarding response from ignite server
+    Set `discard_response` to `True` to simulate this condition.
     Call `disconnect_peers()` in order to simulate lost connection to Ignite server.
     """
     def __init__(self, local_host, remote_host):
         self.local_host = local_host
         self.remote_host = remote_host
         self.peers = {}
-        self.slow_response = False
         self.discard_response = False
         self.server = None
 
@@ -205,8 +205,5 @@ class RemoteTcpProtocol(asyncio.Protocol):
     def data_received(self, data):
         if self.proxy.discard_response:
             return
-
-        if self.proxy.slow_response:
-            time.sleep(0.5)
 
         self.proxy_protocol.transport.write(data)
