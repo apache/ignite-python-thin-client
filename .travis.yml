@@ -23,7 +23,7 @@ addons:
 
 env:
   global:
-    - IGNITE_VERSION=2.13.0
+    - IGNITE_VERSION=2.14.0
     - IGNITE_HOME=/opt/ignite
 
 before_install:
@@ -49,6 +49,9 @@ jobs:
     - python: '3.10'
       arch: amd64
       env: TOXENV=py310
+    - python: '3.11'
+      arch: amd64
+      env: TOXENV=py311
 
 install: pip install tox
 script: tox
