@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import asyncio
 import ctypes
 import decimal
 import inspect
@@ -225,12 +225,13 @@ def datetime_hashcode(value: int) -> int:
     return (value & LONG_MASK) ^ (unsigned(value, ctypes.c_ulonglong) >> 32)
 
 
-def status_to_exception(exc: Type[Exception]):
+def status_to_exception(exc: Type[Exception], ignore_timeout=False):
     """
-    Converts erroneous status code with error message to an exception
-    of the given class. Supports coroutines.
+    Converts erroneous status code with error message to an exception with type of the given class. Supports coroutines.
+    Also, support `timeout` argument for decorated async function.
 
     :param exc: the class of exception to raise,
+    :param ignore_timeout: If set, ignore `timeout` argument.
     :return: decorated function.
     """
     def process_result(result):
@@ -242,7 +243,14 @@ def status_to_exception(exc: Type[Exception]):
         if inspect.iscoroutinefunction(fn):
             @wraps(fn)
             async def ste_wrapper_async(*args, **kwargs):
-                return process_result(await fn(*args, **kwargs))
+                timeout = kwargs.pop('timeout', 0)
+                if timeout and not ignore_timeout:
+                    result = await asyncio.wait_for(fn(*args, **kwargs), timeout)
+                else:
+                    result = await fn(*args, **kwargs)
+
+                return process_result(result)
+
             return ste_wrapper_async
         else:
             @wraps(fn)

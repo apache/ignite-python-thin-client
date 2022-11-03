@@ -97,18 +97,24 @@ class AioCache(BaseCache):
             return tx_conn
         return await self.client.get_best_node(self, key, key_hint)
 
-    async def settings(self) -> Optional[dict]:
+    async def settings(self, timeout=0) -> Optional[dict]:
         """
         Lazy Cache settings. See the :ref:`example <sql_cache_read>`
         of reading this property.
 
         All cache properties are documented here: :ref:`cache_props`.
 
+        :param timeout: (optional) request timeout.
         :return: dict of cache properties and their values.
         """
         if self._settings is None:
             conn = await self._get_best_node()
-            config_result = await cache_get_configuration_async(conn, self.cache_info)
+
+            config_result_coro = cache_get_configuration_async(conn, self.cache_info)
+            if timeout:
+                config_result = await asyncio.wait_for(config_result_coro, timeout)
+            else:
+                config_result = await config_result_coro
 
             if config_result.status == 0:
                 self._settings = config_result.value
@@ -121,6 +127,8 @@ class AioCache(BaseCache):
     async def destroy(self):
         """
         Destroys cache with a given name.
+
+        :param timeout: (optional) request timeout.
         """
         conn = await self._get_best_node()
         return await cache_destroy_async(conn, self.cache_id)
@@ -133,6 +141,7 @@ class AioCache(BaseCache):
         :param key: key for the cache entry. Can be of any supported type,
         :param key_hint: (optional) Ignite data type, for which the given key
          should be converted,
+        :param timeout: (optional) request timeout.
         :return: value retrieved.
         """
         if key_hint is None:
@@ -154,7 +163,8 @@ class AioCache(BaseCache):
         :param key_hint: (optional) Ignite data type, for which the given key
          should be converted,
         :param value_hint: (optional) Ignite data type, for which the given
-         value should be converted.
+         value should be converted,
+        :param timeout: (optional) request timeout.
         """
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
@@ -168,6 +178,7 @@ class AioCache(BaseCache):
         Retrieves multiple key-value pairs from cache.
 
         :param keys: list of keys or tuples of (key, key_hint),
+        :param timeout: (optional) request timeout,
         :return: a dict of key-value pairs.
         """
         conn = await self._get_best_node()
@@ -189,6 +200,7 @@ class AioCache(BaseCache):
         :param pairs: dictionary type parameters, contains key-value pairs
          to save. Each key or value can be an item of representable
          Python type or a tuple of (item, hint),
+        :param timeout: (optional) request timeout.
         """
         conn = await self._get_best_node()
         return await cache_put_all_async(conn, self.cache_info, pairs)
@@ -203,7 +215,8 @@ class AioCache(BaseCache):
         :param key_hint: (optional) Ignite data type, for which the given key
          should be converted,
         :param value_hint: (optional) Ignite data type, for which the given
-         value should be converted.
+         value should be converted,
+        :param timeout: (optional) request timeout.
         """
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
@@ -220,6 +233,7 @@ class AioCache(BaseCache):
 
         :param keys: (optional) list of cache keys or (key, key type
          hint) tuples to clear (default: clear all).
+        :param timeout: (optional) request timeout.
         """
         conn = await self._get_best_node()
         if keys:
@@ -235,6 +249,7 @@ class AioCache(BaseCache):
         :param key: key for the cache entry,
         :param key_hint: (optional) Ignite data type, for which the given key
          should be converted,
+        :param timeout: (optional) request timeout.
         """
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
@@ -248,6 +263,7 @@ class AioCache(BaseCache):
         Clears the cache key without notifying listeners or cache writers.
 
         :param keys: a list of keys or (key, type hint) tuples
+        :param timeout: (optional) request timeout.
         """
         conn = await self._get_best_node()
         return await cache_clear_keys_async(conn, self.cache_info, keys)
@@ -260,6 +276,7 @@ class AioCache(BaseCache):
         :param key: key for the cache entry. Can be of any supported type,
         :param key_hint: (optional) Ignite data type, for which the given key
          should be converted,
+        :param timeout: (optional) request timeout,
         :return: boolean `True` when key is present, `False` otherwise.
         """
         if key_hint is None:
@@ -274,6 +291,7 @@ class AioCache(BaseCache):
         Returns a value indicating whether all given keys are present in cache.
 
         :param keys: a list of keys or (key, type hint) tuples,
+        :param timeout: (optional) request timeout,
         :return: boolean `True` when all keys are present, `False` otherwise.
         """
         conn = await self._get_best_node()
@@ -290,7 +308,8 @@ class AioCache(BaseCache):
         :param key_hint: (optional) Ignite data type, for which the given key
          should be converted,
         :param value_hint: (optional) Ignite data type, for which the given
-         value should be converted.
+         value should be converted,
+        :param timeout: (optional) request timeout,
         :return: old value or None.
         """
         if key_hint is None:
@@ -314,6 +333,7 @@ class AioCache(BaseCache):
          should be converted,
         :param value_hint: (optional) Ignite data type, for which the given
          value should be converted,
+        :param timeout: (optional) request timeout,
         :return: old value or None.
         """
         if key_hint is None:
@@ -335,7 +355,8 @@ class AioCache(BaseCache):
         :param key_hint: (optional) Ignite data type, for which the given key
          should be converted,
         :param value_hint: (optional) Ignite data type, for which the given
-         value should be converted.
+         value should be converted,
+        :param timeout: (optional) request timeout,
         """
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
@@ -351,6 +372,7 @@ class AioCache(BaseCache):
         :param key: key for the cache entry. Can be of any supported type,
         :param key_hint: (optional) Ignite data type, for which the given key
          should be converted,
+        :param timeout: (optional) request timeout,
         :return: old value or None.
         """
         if key_hint is None:
@@ -373,7 +395,8 @@ class AioCache(BaseCache):
         :param key_hint: (optional) Ignite data type, for which the given key
          should be converted,
         :param value_hint: (optional) Ignite data type, for which the given
-         value should be converted.
+         value should be converted,
+        :param timeout: (optional) request timeout,
         :return: old value or None.
         """
         if key_hint is None:
@@ -392,6 +415,7 @@ class AioCache(BaseCache):
         :param key: key for the cache entry,
         :param key_hint: (optional) Ignite data type, for which the given key
          should be converted,
+        :param timeout: (optional) request timeout.
         """
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
@@ -405,7 +429,8 @@ class AioCache(BaseCache):
         Removes cache entries by given list of keys, notifying listeners
         and cache writers.
 
-        :param keys: list of keys or tuples of (key, key_hint) to remove.
+        :param keys: list of keys or tuples of (key, key_hint) to remove,
+        :param timeout: (optional) request timeout.
         """
         conn = await self._get_best_node()
         return await cache_remove_keys_async(conn, self.cache_info, keys)
@@ -414,6 +439,8 @@ class AioCache(BaseCache):
     async def remove_all(self):
         """
         Removes all cache entries, notifying listeners and cache writers.
+
+        :param timeout: (optional) request timeout.
         """
         conn = await self._get_best_node()
         return await cache_remove_all_async(conn, self.cache_info)
@@ -429,7 +456,8 @@ class AioCache(BaseCache):
         :param key_hint: (optional) Ignite data type, for which the given key
          should be converted,
         :param sample_hint: (optional) Ignite data type, for whic
-         the given sample should be converted.
+         the given sample should be converted,
+        :param timeout: (optional) request timeout.
         """
         if key_hint is None:
             key_hint = AnyDataObject.map_python_type(key)
@@ -452,6 +480,7 @@ class AioCache(BaseCache):
          the given sample should be converted
         :param value_hint: (optional) Ignite data type, for which the given
          value should be converted,
+        :param timeout: (optional) request timeout,
         :return: boolean `True` when key is present, `False` otherwise.
         """
         if key_hint is None:
@@ -471,6 +500,7 @@ class AioCache(BaseCache):
         :param peek_modes: (optional) limit count to near cache partition
          (PeekModes.NEAR), primary cache (PeekModes.PRIMARY), or backup cache
          (PeekModes.BACKUP). Defaults to primary cache partitions (PeekModes.PRIMARY),
+        :param timeout: (optional) request timeout,
         :return: integer number of cache entries.
         """
         conn = await self._get_best_node()

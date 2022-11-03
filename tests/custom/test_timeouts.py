@@ -20,10 +20,12 @@ from asyncio import TimeoutError, InvalidStateError
 import pytest
 
 from pyignite import AioClient
+from pyignite.aio_cache import AioCache
+from pyignite.datatypes.key_value import PeekModes
 from tests.util import start_ignite_gen
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope='module', autouse=True)
 def server1():
     yield from start_ignite_gen(idx=1)
 
@@ -38,7 +40,7 @@ async def proxy(event_loop, server1, cache):
         await proxy.close()
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope='module', autouse=True)
 async def cache(server1):
     c = AioClient(partition_aware=False)
     async with c.connect("127.0.0.1", 10801):
@@ -68,30 +70,67 @@ def invalid_states_errors():
         sys.settrace(None)
 
 
+cache_method_params = (
+    "method,targs",
+    [
+        (AioCache.get, (1,)),
+        (AioCache.put, (1, 1)),
+        (AioCache.get_all, ([1, 1],)),
+        (AioCache.put_all, ({1: 1},)),
+        (AioCache.replace, (1, 1)),
+        (AioCache.clear, ()),
+        (AioCache.clear_key, (1,)),
+        (AioCache.clear_keys, ([1, 1],)),
+        (AioCache.contains_key, (1,)),
+        (AioCache.contains_keys, ([1, 1],)),
+        (AioCache.get_and_put, (1, 1)),
+        (AioCache.get_and_put_if_absent, (1, 1)),
+        (AioCache.put_if_absent, (1, 1)),
+        (AioCache.get_and_remove, (1,)),
+        (AioCache.get_and_replace, (1, 1)),
+        (AioCache.remove_key, (1,)),
+        (AioCache.remove_keys, ([1, 1],)),
+        (AioCache.remove_all, ()),
+        (AioCache.remove_if_equals, (1, 1)),
+        (AioCache.replace_if_equals, (1, 1, 1)),
+        (AioCache.get_size, ([PeekModes.PRIMARY, PeekModes.BACKUP],)),
+        (AioCache.get_size, ()),
+        (AioCache.settings, ())
+    ]
+)
+
+
+@pytest.mark.parametrize(*cache_method_params)
 @pytest.mark.asyncio
-async def test_cancellation_on_slow_response(event_loop, proxy, invalid_states_errors):
+async def test_cancellation_on_slow_response(event_loop, proxy, invalid_states_errors,
+                                             method, targs):
     c = AioClient(partition_aware=False)
     async with c.connect("127.0.0.1", 10802):
         cache = await c.get_cache("test")
 
         proxy.slow_response = True
         with pytest.raises(TimeoutError):
-            await asyncio.wait_for(cache.put(1, 2), 0.1)
+            await method(cache, *targs, timeout=0.1)
 
         proxy.slow_response = False
         assert len(invalid_states_errors) == 0
 
 
+@pytest.mark.parametrize(*cache_method_params)
 @pytest.mark.asyncio
-async def test_cancellation_on_disconnect(event_loop, proxy, invalid_states_errors):
+async def test_cancellation_on_disconnect(event_loop, proxy, invalid_states_errors,
+                                          method, targs):
     c = AioClient(partition_aware=False)
     async with c.connect("127.0.0.1", 10802):
         cache = await c.get_cache("test")
         proxy.discard_response = True
 
-        asyncio.ensure_future(asyncio.wait_for(cache.put(1, 2), 0.1))
+        result = asyncio.ensure_future(method(cache, *targs, timeout=0.1))
         await asyncio.sleep(0.2)
         await proxy.disconnect_peers()
+
+        with pytest.raises(TimeoutError):
+            await result
 
     assert len(invalid_states_errors) == 0
 

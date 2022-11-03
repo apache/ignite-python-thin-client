@@ -28,11 +28,6 @@ from pyignite.datatypes.prop_codes import PROP_NAME, PROP_BACKUPS_NUMBER, PROP_C
 from pyignite.monitoring import QueryEventListener
 from tests.util import wait_for_condition, wait_for_condition_async, start_ignite, kill_process_tree
 
-try:
-    from contextlib import asynccontextmanager
-except ImportError:
-    from async_generator import asynccontextmanager
-
 requests = deque()
 
 
@@ -401,7 +396,7 @@ def create_caches(client):
                 pass
 
 
-@asynccontextmanager
+@contextlib.asynccontextmanager
 async def create_caches_async(client):
     caches = []
     try:

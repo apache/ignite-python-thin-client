@@ -27,12 +27,6 @@ import subprocess
 import time
 
 
-try:
-    from contextlib import asynccontextmanager
-except ImportError:
-    from async_generator import asynccontextmanager
-
-
 @contextlib.contextmanager
 def get_or_create_cache(client, settings):
     cache = client.get_or_create_cache(settings)
@@ -42,7 +36,7 @@ def get_or_create_cache(client, settings):
         cache.destroy()
 
 
-@asynccontextmanager
+@contextlib.asynccontextmanager
 async def get_or_create_cache_async(client, settings):
     cache = await client.get_or_create_cache(settings)
     try:
@@ -112,15 +106,6 @@ def get_ignite_runner():
             return runner
 
     raise Exception(f"Ignite not found. IGNITE_HOME {os.getenv('IGNITE_HOME')}")
-
-
-def get_ignite_config_path(use_ssl=False):
-    if use_ssl:
-        file_name = "ignite-config-ssl.xml"
-    else:
-        file_name = "ignite-config.xml.jinja2"
-
-    return os.path.join(get_test_dir(), "config", file_name)
 
 
 def check_server_started(idx=1):
