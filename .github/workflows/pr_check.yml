@@ -14,7 +14,12 @@
 # limitations under the License.
 
 name: Check code style and run tests
-on: [ push, pull_request ]
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - 'pyignite-*'
 
 env:
   IGNITE_VERSION: 2.14.0
