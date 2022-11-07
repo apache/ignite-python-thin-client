@@ -15,7 +15,13 @@
 
 name: Build wheels
 
-on: [ push, pull_request ]
+on:
+  push:
+    branches:
+      - master
+      - 'pyignite-*'
+    tags:
+      - '*.rc[0-9]+'
 
 jobs:
   build_wheels:
