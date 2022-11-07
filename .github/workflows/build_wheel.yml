@@ -15,7 +15,7 @@
 
 name: Build wheels
 
-on: [push, pull_request]
+on: [ push, pull_request ]
 
 jobs:
   build_wheels:
@@ -23,7 +23,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-2019, macos-11]
+        os: [ ubuntu-20.04, windows-2019, macos-12 ]
 
     steps:
       - uses: actions/checkout@v3
@@ -38,6 +38,13 @@ jobs:
         env:
           CIBW_SKIP: "pp* cp36* *-win32 *-manylinux_i686"
 
+      - name: Build source distribution
+        if: ${{ matrix.os == 'ubuntu-20.04' }}
+        run:
+          python setup.py sdist --formats=zip --dist-dir ./wheelhouse
+
       - uses: actions/upload-artifact@v3
         with:
-          path: ./wheelhouse/*.whl
+          path: |
+            ./wheelhouse/*.whl
+            ./wheelhouse/*.zip
