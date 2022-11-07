@@ -1,0 +1,61 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Check code style and run tests
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - 'pyignite-*'
+
+env:
+  IGNITE_VERSION: 2.14.0
+  IGNITE_HOME: /opt/ignite
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cfg:
+          - { python: "3.7", toxenv: "py37" }
+          - { python: "3.8", toxenv: "py38" }
+          - { python: "3.9", toxenv: "py39" }
+          - { python: "3.10", toxenv: "py310" }
+          - { python: "3.11", toxenv: "py311" }
+          - { python: "3.11", toxenv: "codestyle" }
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.cfg.python}}
+      - name: Install Apache Ignite
+        run: |
+          curl -L https://apache-mirror.rbc.ru/pub/apache/ignite/${IGNITE_VERSION}/apache-ignite-slim-${IGNITE_VERSION}-bin.zip > ignite.zip
+          unzip ignite.zip -d /opt
+          mv /opt/apache-ignite-slim-${IGNITE_VERSION}-bin /opt/ignite
+          mv /opt/ignite/libs/optional/ignite-log4j2 /opt/ignite/libs/
+
+      - name: Install tox
+        run: |
+          pip install tox
+
+      - name: Run tests
+        run: |
+          tox -e ${{ matrix.cfg.toxenv }}
