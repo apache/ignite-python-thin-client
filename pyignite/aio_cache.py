@@ -97,7 +97,7 @@ class AioCache(BaseCache):
             return tx_conn
         return await self.client.get_best_node(self, key, key_hint)
 
-    async def settings(self, timeout=0) -> Optional[dict]:
+    async def settings(self, timeout: Union[int, float] = 0) -> Optional[dict]:
         """
         Lazy Cache settings. See the :ref:`example <sql_cache_read>`
         of reading this property.
@@ -124,7 +124,7 @@ class AioCache(BaseCache):
         return self._settings
 
     @status_to_exception(CacheError)
-    async def destroy(self):
+    async def destroy(self, timeout: Union[int, float] = 0):
         """
         Destroys cache with a given name.
 
@@ -134,7 +134,7 @@ class AioCache(BaseCache):
         return await cache_destroy_async(conn, self.cache_id)
 
     @status_to_exception(CacheError)
-    async def get(self, key, key_hint: object = None) -> Any:
+    async def get(self, key, key_hint: object = None, timeout: Union[int, float] = 0) -> Any:
         """
         Retrieves a value from cache by key.
 
@@ -153,7 +153,7 @@ class AioCache(BaseCache):
         return result
 
     @status_to_exception(CacheError)
-    async def put(self, key, value, key_hint: object = None, value_hint: object = None):
+    async def put(self, key, value, key_hint: object = None, value_hint: object = None, timeout: Union[int, float] = 0):
         """
         Puts a value with a given key to cache (overwriting existing value
         if any).
@@ -173,7 +173,7 @@ class AioCache(BaseCache):
         return await cache_put_async(conn, self.cache_info, key, value, key_hint=key_hint, value_hint=value_hint)
 
     @status_to_exception(CacheError)
-    async def get_all(self, keys: list) -> dict:
+    async def get_all(self, keys: list, timeout: Union[int, float] = 0) -> dict:
         """
         Retrieves multiple key-value pairs from cache.
 
@@ -192,7 +192,7 @@ class AioCache(BaseCache):
         return result
 
     @status_to_exception(CacheError)
-    async def put_all(self, pairs: dict):
+    async def put_all(self, pairs: dict, timeout: Union[int, float] = 0):
         """
         Puts multiple key-value pairs to cache (overwriting existing
         associations if any).
@@ -206,7 +206,8 @@ class AioCache(BaseCache):
         return await cache_put_all_async(conn, self.cache_info, pairs)
 
     @status_to_exception(CacheError)
-    async def replace(self, key, value, key_hint: object = None, value_hint: object = None):
+    async def replace(self, key, value, key_hint: object = None, value_hint: object = None,
+                      timeout: Union[int, float] = 0):
         """
         Puts a value with a given key to cache only if the key already exist.
 
@@ -227,7 +228,7 @@ class AioCache(BaseCache):
         return result
 
     @status_to_exception(CacheError)
-    async def clear(self, keys: Optional[list] = None):
+    async def clear(self, keys: Optional[list] = None, timeout: Union[int, float] = 0):
         """
         Clears the cache without notifying listeners or cache writers.
 
@@ -242,7 +243,7 @@ class AioCache(BaseCache):
             return await cache_clear_async(conn, self.cache_info)
 
     @status_to_exception(CacheError)
-    async def clear_key(self, key, key_hint: object = None):
+    async def clear_key(self, key, key_hint: object = None, timeout: Union[int, float] = 0):
         """
         Clears the cache key without notifying listeners or cache writers.
 
@@ -258,7 +259,7 @@ class AioCache(BaseCache):
         return await cache_clear_key_async(conn, self.cache_info, key, key_hint=key_hint)
 
     @status_to_exception(CacheError)
-    async def clear_keys(self, keys: Iterable):
+    async def clear_keys(self, keys: Iterable, timeout: Union[int, float] = 0):
         """
         Clears the cache key without notifying listeners or cache writers.
 
@@ -269,7 +270,7 @@ class AioCache(BaseCache):
         return await cache_clear_keys_async(conn, self.cache_info, keys)
 
     @status_to_exception(CacheError)
-    async def contains_key(self, key, key_hint=None) -> bool:
+    async def contains_key(self, key, key_hint=None, timeout: Union[int, float] = 0) -> bool:
         """
         Returns a value indicating whether given key is present in cache.
 
@@ -286,7 +287,7 @@ class AioCache(BaseCache):
         return await cache_contains_key_async(conn, self.cache_info, key, key_hint=key_hint)
 
     @status_to_exception(CacheError)
-    async def contains_keys(self, keys: Iterable) -> bool:
+    async def contains_keys(self, keys: Iterable, timeout: Union[int, float] = 0) -> bool:
         """
         Returns a value indicating whether all given keys are present in cache.
 
@@ -298,7 +299,7 @@ class AioCache(BaseCache):
         return await cache_contains_keys_async(conn, self.cache_info, keys)
 
     @status_to_exception(CacheError)
-    async def get_and_put(self, key, value, key_hint=None, value_hint=None) -> Any:
+    async def get_and_put(self, key, value, key_hint=None, value_hint=None, timeout: Union[int, float] = 0) -> Any:
         """
         Puts a value with a given key to cache, and returns the previous value
         for that key, or null value if there was not such key.
@@ -322,7 +323,7 @@ class AioCache(BaseCache):
         return result
 
     @status_to_exception(CacheError)
-    async def get_and_put_if_absent(self, key, value, key_hint=None, value_hint=None):
+    async def get_and_put_if_absent(self, key, value, key_hint=None, value_hint=None, timeout: Union[int, float] = 0):
         """
         Puts a value with a given key to cache only if the key does not
         already exist.
@@ -345,7 +346,7 @@ class AioCache(BaseCache):
         return result
 
     @status_to_exception(CacheError)
-    async def put_if_absent(self, key, value, key_hint=None, value_hint=None):
+    async def put_if_absent(self, key, value, key_hint=None, value_hint=None, timeout: Union[int, float] = 0):
         """
         Puts a value with a given key to cache only if the key does not
         already exist.
@@ -365,7 +366,7 @@ class AioCache(BaseCache):
         return await cache_put_if_absent_async(conn, self.cache_info, key, value, key_hint, value_hint)
 
     @status_to_exception(CacheError)
-    async def get_and_remove(self, key, key_hint=None) -> Any:
+    async def get_and_remove(self, key, key_hint=None, timeout: Union[int, float] = 0) -> Any:
         """
         Removes the cache entry with specified key, returning the value.
 
@@ -384,7 +385,7 @@ class AioCache(BaseCache):
         return result
 
     @status_to_exception(CacheError)
-    async def get_and_replace(self, key, value, key_hint=None, value_hint=None) -> Any:
+    async def get_and_replace(self, key, value, key_hint=None, value_hint=None, timeout: Union[int, float] = 0) -> Any:
         """
         Puts a value with a given key to cache, returning previous value
         for that key, if and only if there is a value currently mapped
@@ -408,7 +409,7 @@ class AioCache(BaseCache):
         return result
 
     @status_to_exception(CacheError)
-    async def remove_key(self, key, key_hint=None):
+    async def remove_key(self, key, key_hint=None, timeout: Union[int, float] = 0):
         """
         Clears the cache key without notifying listeners or cache writers.
 
@@ -424,7 +425,7 @@ class AioCache(BaseCache):
         return await cache_remove_key_async(conn, self.cache_info, key, key_hint)
 
     @status_to_exception(CacheError)
-    async def remove_keys(self, keys: list):
+    async def remove_keys(self, keys: list, timeout: Union[int, float] = 0):
         """
         Removes cache entries by given list of keys, notifying listeners
         and cache writers.
@@ -436,7 +437,7 @@ class AioCache(BaseCache):
         return await cache_remove_keys_async(conn, self.cache_info, keys)
 
     @status_to_exception(CacheError)
-    async def remove_all(self):
+    async def remove_all(self, timeout: Union[int, float] = 0):
         """
         Removes all cache entries, notifying listeners and cache writers.
 
@@ -446,7 +447,7 @@ class AioCache(BaseCache):
         return await cache_remove_all_async(conn, self.cache_info)
 
     @status_to_exception(CacheError)
-    async def remove_if_equals(self, key, sample, key_hint=None, sample_hint=None):
+    async def remove_if_equals(self, key, sample, key_hint=None, sample_hint=None, timeout: Union[int, float] = 0):
         """
         Removes an entry with a given key if provided value is equal to
         actual value, notifying listeners and cache writers.
@@ -466,7 +467,8 @@ class AioCache(BaseCache):
         return await cache_remove_if_equals_async(conn, self.cache_info, key, sample, key_hint, sample_hint)
 
     @status_to_exception(CacheError)
-    async def replace_if_equals(self, key, sample, value, key_hint=None, sample_hint=None, value_hint=None) -> Any:
+    async def replace_if_equals(self, key, sample, value, key_hint=None, sample_hint=None, value_hint=None,
+                                timeout: Union[int, float] = 0) -> Any:
         """
         Puts a value with a given key to cache only if the key already exists
         and value equals provided sample.
@@ -493,7 +495,7 @@ class AioCache(BaseCache):
         return result
 
     @status_to_exception(CacheError)
-    async def get_size(self, peek_modes=None):
+    async def get_size(self, peek_modes=None, timeout: Union[int, float] = 0):
         """
         Gets the number of entries in cache.
 
@@ -506,7 +508,8 @@ class AioCache(BaseCache):
         conn = await self._get_best_node()
         return await cache_get_size_async(conn, self.cache_info, peek_modes)
 
-    def scan(self, page_size: int = 1, partitions: int = -1, local: bool = False) -> AioScanCursor:
+    def scan(self, page_size: int = 1, partitions: int = -1, local: bool = False,
+             timeout: Union[int, float] = 0) -> AioScanCursor:
         """
         Returns all key-value pairs from the cache, similar to `get_all`, but
         with internal pagination, which is slower, but safer.
