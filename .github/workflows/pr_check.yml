@@ -58,5 +58,4 @@ jobs:
 
       - name: Run tests
         run: |
-          pip install tox
           tox -e ${{ matrix.cfg.toxenv }}
