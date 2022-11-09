@@ -3,9 +3,9 @@ Apache Ignite thin (binary protocol) client, written in Python 3.
 
 ## Prerequisites
 
-- Python 3.7 or above (3.7, 3.8, 3.9 and 3.10 are tested),
+- Python 3.7 or above (3.7, 3.8, 3.9, 3.10 and 3.11 are tested),
 - Access to Apache Ignite node, local or remote. The current thin client
-  version was tested on Apache Ignite 2.10 (binary client protocol 1.7.0).
+  version was tested on Apache Ignite 2.14 (binary client protocol 1.7.0).
 
 ## Installation
 
@@ -45,7 +45,7 @@ There is an optional C extension to speedup some computational intensive tasks. 
   
   ***NB!* Docker is required.**
   
-- On Windows MSVC 14.x required, and it should be in path, also python versions 3.7, 3.8, 3.9 and 3.10 both for x86 and
+- On Windows MSVC 14.x required, and it should be in path, also python versions 3.7, 3.8, 3.9, 3.10 and 3.11 both for x86 and
   x86-64 should be installed. You can disable some of these versions but you'd need to edit script for that.
 - For building `wheels` for Windows, invoke script `.\scripts\BuildWheels.ps1` using PowerShell. Just make sure that
   your execution policy allows execution of scripts in your environment.
@@ -67,7 +67,7 @@ pip install pyignite
 
 To install a specific version:
 ```bash
-pip install pyignite==0.5.1
+pip install pyignite==0.6.0
 ```
 
 ## Documentation
