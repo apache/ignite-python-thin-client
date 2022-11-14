@@ -5,7 +5,7 @@ Apache Ignite python thin client
 --------------------------------
 * Added support of python 3.11
 * Dropped support of python 3.6
-* Fixed non-intuitive automatically setting of flag use_ssl whet the authentication is enabled.
+* Fixed non-intuitive automatically setting of flag use_ssl when the authentication is enabled.
 * Added timeout support for cache operations in the async client.
 * Fixed incorrect result setting of already completed futures in async connection implementation.
 * Fixed examples and documentation.
