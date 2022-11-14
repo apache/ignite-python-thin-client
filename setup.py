@@ -99,7 +99,7 @@ def run_setup(with_binary=True):
         long_description=long_description,
         long_description_content_type='text/markdown',
         url='https://github.com/apache/ignite-python-thin-client',
-        packages=setuptools.find_packages(),
+        packages=setuptools.find_packages(exclude=["tests*"]),
         install_requires=install_requirements,
         license="Apache License 2.0",
         license_files=('LICENSE', 'NOTICE'),
