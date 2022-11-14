@@ -16,6 +16,7 @@
 name: Build wheels
 
 on:
+  pull_request:
   push:
     branches:
       - master
