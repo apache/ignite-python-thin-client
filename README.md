@@ -50,7 +50,7 @@ There is an optional C extension to speedup some computational intensive tasks. 
 - For building `wheels` for Windows, invoke script `.\scripts\BuildWheels.ps1` using PowerShell. Just make sure that
   your execution policy allows execution of scripts in your environment.
   
-  Ready wheels for `x86` and `x86-64` for different python versions (3.7, 3.8, 3.9, 3.10 and 3.11) will be
+  Ready wheels for `x86` and `x86-64` for different python versions (3.7, 3.8, 3.9 and 3.10) will be
   located in `distr` directory.
 
 ### Updating from older version
