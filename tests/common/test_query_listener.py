@@ -36,6 +36,18 @@ class QueryRouteListener(QueryEventListener):
             events.append(event)
 
 
+@pytest.fixture(autouse=True)
+def setup_logger():
+    from pyignite.queries.query import logger
+
+    try:
+        # Disable logger in order to test events with disabled debug logging.
+        logger.disabled = True
+        yield logger
+    finally:
+        logger.disabled = False
+
+
 @pytest.fixture
 def client():
     client = Client(event_listeners=[QueryRouteListener()])

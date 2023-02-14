@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v4.3.0
         with:
           python-version: ${{ matrix.cfg.python}}
       - name: Install Apache Ignite
@@ -54,7 +54,7 @@ jobs:
 
       - name: Install tox
         run: |
-          pip install tox
+          pip install tox==3.28.0
 
       - name: Run tests
         run: |

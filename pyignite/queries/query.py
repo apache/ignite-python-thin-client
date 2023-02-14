@@ -247,26 +247,27 @@ class Query:
                                                            self.op_code, _get_op_code_name(self.op_code))
 
     def _on_query_finished(self, conn, result=None, err=None):
-        if logger.isEnabledFor(logging.DEBUG):
-            dur_ms = _sec_to_millis(time.monotonic() - self._start_ts)
-            if result and result.status != 0:
-                err = result.message
-            if err:
+        dur_ms = _sec_to_millis(time.monotonic() - self._start_ts)
+        if result and result.status != 0:
+            err = result.message
+        if err:
+            if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Failed to perform query(query_id=%d, op_type=%s, host=%s, port=%d, node_id=%s) "
                              "in %d ms: %s", self.query_id, _get_op_code_name(self.op_code),
                              conn.host, conn.port, conn.uuid, dur_ms, err)
-                if self._enabled_query_listener(conn):
-                    self._event_listener(conn).publish_query_fail(conn.host, conn.port, conn.uuid, self.query_id,
-                                                                  self.op_code, _get_op_code_name(self.op_code),
-                                                                  dur_ms, err)
-            else:
+            if self._enabled_query_listener(conn):
+                self._event_listener(conn).publish_query_fail(conn.host, conn.port, conn.uuid, self.query_id,
+                                                              self.op_code, _get_op_code_name(self.op_code),
+                                                              dur_ms, err)
+        else:
+            if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("Finished query(query_id=%d, op_type=%s, host=%s, port=%d, node_id=%s) "
                              "successfully in %d ms", self.query_id, _get_op_code_name(self.op_code),
                              conn.host, conn.port, conn.uuid, dur_ms)
-                if self._enabled_query_listener(conn):
-                    self._event_listener(conn).publish_query_success(conn.host, conn.port, conn.uuid, self.query_id,
-                                                                     self.op_code, _get_op_code_name(self.op_code),
-                                                                     dur_ms)
+            if self._enabled_query_listener(conn):
+                self._event_listener(conn).publish_query_success(conn.host, conn.port, conn.uuid, self.query_id,
+                                                                 self.op_code, _get_op_code_name(self.op_code),
+                                                                 dur_ms)
 
 
 class ConfigQuery(Query):
