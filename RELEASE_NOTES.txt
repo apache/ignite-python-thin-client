@@ -1,6 +1,10 @@
 Apache Ignite python thin client
 ================================
 
+0.6.1
+--------------------------------
+* Fixed query listener fires events only if debug logging level enabled.
+
 0.6.0
 --------------------------------
 * Added support of python 3.11
