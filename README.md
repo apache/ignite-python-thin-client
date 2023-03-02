@@ -1,6 +1,14 @@
 # ignite-python-client
 Apache Ignite thin (binary protocol) client, written in Python 3.
 
+<a href="https://ignite.apache.org/"><img src="https://github.com/apache/ignite-website/blob/master/assets/images/apache_ignite_logo.svg" hspace="20"/></a>
+
+![Build Status](https://github.com/apache/ignite-python-thin-client/actions/workflows/pr_check.yml/badge.svg)
+[![License](https://img.shields.io/github/license/apache/ignite-python-thin-client?color=blue)](https://www.apache.org/licenses/LICENSE-2.0.html)
+[![Pypi](https://img.shields.io/pypi/v/pyignite)](https://pypi.org/project/pyignite/)
+[![Downloads](https://static.pepy.tech/badge/pyignite/month)](https://pepy.tech/project/pyignite)
+
+
 ## Prerequisites
 
 - Python 3.7 or above (3.7, 3.8, 3.9, 3.10 and 3.11 are tested),
@@ -50,7 +58,7 @@ There is an optional C extension to speedup some computational intensive tasks. 
 - For building `wheels` for Windows, invoke script `.\scripts\BuildWheels.ps1` using PowerShell. Just make sure that
   your execution policy allows execution of scripts in your environment.
   
-  Ready wheels for `x86` and `x86-64` for different python versions (3.7, 3.8, 3.9 and 3.10) will be
+  Ready wheels for `x86` and `x86-64` for different python versions (3.7, 3.8, 3.9, 3.10 and 3.11) will be
   located in `distr` directory.
 
 ### Updating from older version
@@ -67,7 +75,7 @@ pip install pyignite
 
 To install a specific version:
 ```bash
-pip install pyignite==0.6.0
+pip install pyignite==0.6.1
 ```
 
 ## Documentation

@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-$PyVers="37","38","39","310"
+$PyVers="37","38","39","310","311"
 
 [System.Collections.ArrayList]$PyVersFull = $PyVers
 foreach ($Ver in $PyVers)

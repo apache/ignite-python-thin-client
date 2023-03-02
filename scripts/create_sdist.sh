@@ -18,7 +18,7 @@ set -e -u -x
 
 # Create source dist.
 for PYBIN in /opt/python/*/bin; do
-    if [[ $PYBIN =~ ^(.*)cp3[7891](.*)$ ]]; then
+    if [[ $PYBIN =~ ^(.*)cp3[7891]1?(.*)$ ]]; then
         cd pyignite
         "${PYBIN}/python" setup.py sdist --formats=gztar,zip --dist-dir /dist
         break;
