@@ -169,7 +169,7 @@ class Query:
 
             result = self.__post_process_response(conn, response_struct, response)
             if result.status == 0:
-                result.value = response_struct.to_python(response)
+                result.value = response_struct.to_python(response, client=conn.client)
             self._on_query_finished(conn, result=result)
             return result
         except Exception as e:
@@ -207,7 +207,7 @@ class Query:
 
             result = self.__post_process_response(conn, response_struct, response)
             if result.status == 0:
-                result.value = await response_struct.to_python_async(response)
+                result.value = await response_struct.to_python_async(response, client=conn.client)
             self._on_query_finished(conn, result=result)
             return result
         except Exception as e:
