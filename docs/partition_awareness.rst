@@ -45,7 +45,7 @@ For example:
     from pyignite import Client
 
     client = Client(
-        partition_awareness=True
+        partition_aware=True
     )
     nodes = [('10.128.0.1', 10800), ('10.128.0.2', 10800),...]
     with client.connect(nodes):
@@ -56,7 +56,7 @@ For example:
     from pyignite import AioClient
 
     client = AioClient(
-        partition_awareness=True
+        partition_aware=True
     )
     nodes = [('10.128.0.1', 10800), ('10.128.0.2', 10800),...]
     async with client.connect(nodes):
